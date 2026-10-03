@@ -9,6 +9,8 @@
 <link rel="icon" href="sprites/coin.png">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="css/catch.css">
+<link rel="stylesheet" href="css/battle.css">
 </head>
 <body>
 
@@ -18,12 +20,15 @@
     <span id="badge" class="badge hidden" title="Herrscher aller Rüthers">👑</span>
   </header>
   <div id="banner" class="banner hidden"></div>
-  <div id="map"></div>
-  <div id="toast" class="toast hidden"></div>
+  <div class="map-wrap">
+    <div id="map"></div>
+    <button id="btn-locate" class="locate following" title="Karte folgt dir">📍</button>
+    <div id="toast" class="toast hidden"></div>
+  </div>
   <nav class="bottombar">
     <span id="hud-caught">0/5 gefangen</span>
     <button id="btn-team" class="primary">Team</button>
-    <span id="hud-arenas">0/3 Arenen</span>
+    <span id="hud-arenas">0/3 Trophäen</span>
   </nav>
   <div id="debug" class="debug hidden">
     <strong>Test-Modus</strong>
@@ -33,6 +38,7 @@
     <button id="dbg-gps">GPS wieder an</button>
     <button id="dbg-respawn">Spawns neu würfeln</button>
     <button id="dbg-catchall">Alle Rüthers fangen</button>
+    <button id="dbg-weakboss">Boss fast tot: aus</button>
     <button id="dbg-reset">Spielstand löschen</button>
     <button id="dbg-close">Schließen</button>
   </div>
@@ -41,20 +47,26 @@
 <section id="screen-catch" class="screen">
   <button class="back">✕</button>
   <div class="catch-stage">
-    <img class="sprite wobble" alt="">
+    <div class="target">
+      <img class="sprite" alt="">
+      <div class="ring"></div>
+    </div>
+    <div class="catch-fx"></div>
+    <div class="catch-msg"></div>
+    <img class="coin" src="sprites/coin.png" alt="Bitcoin">
+  </div>
+  <div class="catch-info">
     <h2 class="name"></h2>
     <p class="title"></p>
     <p class="desc"></p>
+    <p class="throws"></p>
+    <p class="hint">Münze nach oben schnippen. Kleiner Ring = bessere Chance.</p>
   </div>
-  <p class="msg"></p>
-  <p class="throws"></p>
-  <img class="coin" src="sprites/coin.png" alt="Bitcoin werfen">
-  <p class="hint">Nach oben wischen oder Münze antippen</p>
 </section>
 
 <section id="screen-team" class="screen">
   <header class="topbar"><button class="back">‹ Karte</button><h2>Team</h2></header>
-  <p class="hint">Bis zu drei antippen. Reihenfolge = Einsatzreihenfolge.</p>
+  <p class="hint">Bis zu drei antippen. Der erste wird Arena-Besitzer.</p>
   <div class="slots"></div>
 </section>
 
@@ -65,33 +77,53 @@
     <h3 class="boss-name"></h3>
     <p class="address"></p>
     <p class="distance"></p>
+    <p class="owner"></p>
     <p class="status"></p>
     <button class="fight primary">Kämpfen</button>
   </div>
 </section>
 
 <section id="screen-battle" class="screen">
-  <div class="fighter enemy">
-    <img class="sprite" alt="">
-    <div class="info">
-      <div class="fname"></div>
-      <div class="bar"><div class="fill"></div></div>
-      <div class="btc"></div>
-      <div class="status"></div>
+  <div class="flash"></div>
+  <div class="battle-top">
+    <div class="fighter enemy">
+      <div class="info">
+        <div class="fname"></div>
+        <div class="bar hp"><div class="fill"></div></div>
+        <div class="btc"></div>
+        <div class="status"></div>
+      </div>
+      <div class="timer">90</div>
     </div>
+  </div>
+  <div class="stage">
+    <img class="enemy-sprite sprite" alt="">
+    <div class="helpers hidden"></div>
+    <div class="fx"></div>
+    <p class="stage-hint">Tippen = Angriff · Wischen = Ausweichen</p>
   </div>
   <div class="fighter me">
     <img class="sprite" alt="">
     <div class="info">
       <div class="fname"></div>
-      <div class="bar"><div class="fill"></div></div>
+      <div class="bar hp"><div class="fill"></div></div>
       <div class="btc"></div>
+      <div class="bar energy"><div class="fill"></div></div>
       <div class="status"></div>
     </div>
   </div>
-  <div class="log"></div>
-  <div class="actions"></div>
+  <div class="specials"></div>
   <div class="switch hidden"></div>
+  <div class="overlay hidden">
+    <img class="boss sprite" alt="">
+    <div class="trophy">🏆</div>
+    <h2 class="title"></h2>
+    <p class="sub"></p>
+    <div class="overlay-buttons">
+      <button class="retry">Nochmal</button>
+      <button class="done primary">Weiter</button>
+    </div>
+  </div>
 </section>
 
 <section id="screen-victory" class="screen">

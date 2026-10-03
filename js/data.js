@@ -1,4 +1,4 @@
-// Reine Daten. Lebensenergie heißt BTC.
+// Reine Daten. Lebensenergie heißt BTC. Zeiten in Millisekunden.
 export const CONST = {
   SPAWN_INTERVAL: 60_000,
   SPAWN_LIFETIME: 600_000,
@@ -8,14 +8,25 @@ export const CONST = {
   LOCAL_ZONE: 500,
   LOCAL_SPAWN_RING: [30, 150],
   SPAWN_FORGET: 1000,
+  SPAWN_WALK: 50,          // so viele Meter gelaufen → Spawns auffüllen
   CATCH_RANGE: 50,
   ARENA_RANGE: 100,
-  THROWS: 3,
-  HIT_CHANCE: 0.9,
+  BREAKOUTS: 3,            // Ausbrüche, bis der Rüther abhaut
+  MAX_CATCH_CHANCE: 0.95,
   DUP_BONUS: 10,
   DUP_CAP: 50,
   TEAM_SIZE: 3,
-  SUMMON_TURNS: 3,
+  // Kampf (Echtzeit)
+  BATTLE_DURATION: 90_000,
+  FAST_DAMAGE: 3,
+  FAST_ENERGY: 10,
+  FAST_COOLDOWN: 250,
+  MAX_ENERGY: 100,
+  DODGE_FACTOR: 0.25,
+  WEAKEN_FACTOR: 0.75,
+  SUMMON_INTERVAL: 1000,
+  CHARGED_EVERY: 10_000,
+  STUN_GRACE: 500,
 };
 
 export const ARENAS = [
@@ -24,74 +35,76 @@ export const ARENAS = [
   { id: 'pcsale', name: 'PC Sale', address: 'Augustastraße 1, 58089 Hagen', lat: 51.3589214, lon: 7.4631893, boss: 'ps3' },
 ];
 
-// spawn: 'anywhere' oder die id der Arena, um die der Rüther auftaucht
+// spawn: 'anywhere' oder die id der Arena, um die der Rüther auftaucht.
+// attacks = Spezial-Attacken: cost = Energie, fx = Animation (siehe battle-ui.js)
 export const RUETHERS = [
   {
     id: 'christian', name: 'Christian', title: 'Herr der Netzwerke', btc: 100, catchChance: 0.5, spawn: 'anywhere',
     desc: 'Handelt mit Bitcoin, bei ihm steigt der Kurs immer um 70 %. Ex-Vice-President der Deutschen Bank.',
     attacks: [
-      { name: 'Plus 70 Prozent', damage: 30, alwaysHit: true },
-      { name: 'Vice-President-Handschlag', damage: 10, weaken: 3 },
-      { name: 'Werfen mit Dosenbier', damage: 20 },
+      { name: 'Plus 70 Prozent', cost: 100, damage: 40, fx: 'chart-up' },
+      { name: 'Vice-President-Handschlag', cost: 50, damage: 10, weaken: 8000, fx: 'handshake' },
+      { name: 'Werfen mit Dosenbier', cost: 50, damage: 20, fx: 'can' },
     ],
   },
   {
     id: 'hildegard', name: 'Hildegard', title: 'Herrscherin der Schanze', btc: 120, catchChance: 0.35, spawn: 'huettenberg',
     desc: 'Herrscht über die Rütherschanze. Ruft die Familie zu Hilfe.',
     attacks: [
-      { name: 'Familientreffen', damage: 0, once: true, summon: [{ name: 'Christian', damage: 10 }, { name: 'Onkel Micha', damage: 10 }] },
-      { name: 'Handtaschen-Hieb', damage: 20 },
+      { name: 'Familientreffen', cost: 100, damage: 0, once: true, summonMs: 10_000, summon: [{ id: 'christian', name: 'Christian', damage: 4 }, { id: 'micha', name: 'Onkel Micha', damage: 4 }], fx: 'family' },
+      { name: 'Handtaschen-Hieb', cost: 50, damage: 20, fx: 'handbag' },
     ],
   },
   {
     id: 'micha', name: 'Onkel Micha', title: 'Herrscher des PC Sale', btc: 100, catchChance: 0.35, spawn: 'pcsale',
     desc: 'Hat eine PS3 und baut sie zur Hardware-Wallet um.',
     attacks: [
-      { name: 'Hardware-Wallet-Umbau', damage: 20, drain: true },
-      { name: 'Controllerwurf', damage: 25 },
+      { name: 'Hardware-Wallet-Umbau', cost: 100, damage: 30, drain: true, fx: 'wallet' },
+      { name: 'Controllerwurf', cost: 50, damage: 25, fx: 'controller' },
     ],
   },
   {
     id: 'viktor', name: 'Viktor', title: 'Möchtegern-Herrscher der Börse', btc: 90, catchChance: 0.5, spawn: 'anywhere',
     desc: 'Stinkt stark. Hat vor der Börse in New York gestanden.',
     attacks: [
-      { name: 'Giftgas', damage: 10, poison: { perTurn: 10, turns: 3 } },
-      { name: 'Ungeschlagene Argumentationslogik', damage: 10, skip: true, flavour: 'Deutsche Bank ist kein Geringverdiener.' },
+      { name: 'Giftgas', cost: 100, damage: 10, poison: { perSec: 5, ms: 8000 }, fx: 'gas' },
+      { name: 'Ungeschlagene Argumentationslogik', cost: 50, damage: 10, stun: 3000, flavour: 'Deutsche Bank ist kein Geringverdiener.', fx: 'speech' },
     ],
   },
   {
     id: 'ramona', name: 'Ramona Rüther', title: 'Herrscherin der Arbeitslosigkeit', btc: 90, catchChance: 0.35, spawn: 'worringen',
     desc: 'Frau von Christian. Hat seit sieben Jahren offene M&Ms.',
     attacks: [
-      { name: 'Abgelaufene M&Ms', damage: 15, poison: { perTurn: 8, turns: 3 } },
-      { name: 'Unlimited Credits', damage: 0, heal: 40 },
+      { name: 'Abgelaufene M&Ms', cost: 100, damage: 15, poison: { perSec: 4, ms: 8000 }, fx: 'mms' },
+      { name: 'Unlimited Credits', cost: 50, damage: 0, heal: 40, fx: 'bags' },
     ],
   },
 ];
 
+// fast: schneller Angriff (every = Abstand, warn = Warnzeit). charged: Lade-Attacken, abwechselnd.
 export const BOSSES = {
   ps3: {
-    id: 'ps3', name: 'Playstation 3', btc: 130,
-    attacks: [
-      { name: 'Blu-ray-Wurf', damage: 25 },
-      { name: 'Yellow Light of Death', damage: 20, poison: { perTurn: 5, turns: 3 } },
-      { name: 'Firmware-Update', damage: 0, skip: true },
+    id: 'ps3', name: 'Playstation 3', btc: 260,
+    fast: { name: 'Blu-ray-Wurf', damage: 12, every: 2500, warn: 600, fx: 'disc' },
+    charged: [
+      { name: 'Yellow Light of Death', damage: 25, warn: 1200, poison: { perSec: 3, ms: 6000 }, fx: 'yellow' },
+      { name: 'Firmware-Update', damage: 0, warn: 1200, stun: 2000, fx: 'firmware' },
     ],
   },
   schanze: {
-    id: 'schanze', name: 'Herr der Rütherschanze', btc: 180,
-    attacks: [
-      { name: 'Kurssturz', damage: 30 },
-      { name: 'Mining', damage: 0, heal: 25 },
-      { name: 'Blockchain-Kette', damage: 15, poison: { perTurn: 10, turns: 3 } },
+    id: 'schanze', name: 'Herr der Rütherschanze', btc: 360,
+    fast: { name: 'Kurssturz', damage: 15, every: 2500, warn: 600, fx: 'crash' },
+    charged: [
+      { name: 'Blockchain-Kette', damage: 25, warn: 1200, poison: { perSec: 5, ms: 6000 }, fx: 'chain' },
+      { name: 'Mining', damage: 0, warn: 1200, heal: 40, fx: 'mining' },
     ],
   },
   satoshi: {
-    id: 'satoshi', name: 'Satoshi Nakamoto', btc: 220,
-    attacks: [
-      { name: 'Genesis Block', damage: 25 },
-      { name: 'Halving', damage: 35, everyN: 3 },
-      { name: 'Private Key verloren', damage: 0, heal: 30 },
+    id: 'satoshi', name: 'Satoshi Nakamoto', btc: 440,
+    fast: { name: 'Genesis Block', damage: 18, every: 2500, warn: 600, fx: 'block' },
+    charged: [
+      { name: 'Halving', damage: 45, warn: 1200, fx: 'half' },
+      { name: 'Private Key verloren', damage: 0, warn: 1200, heal: 40, fx: 'key' },
     ],
   },
 };
