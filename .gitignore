@@ -1,3 +1,4 @@
-sprites/*.png
-!sprites/.gitkeep
+/*.jpg
+/*.jpeg
+/*.png
 __pycache__/
