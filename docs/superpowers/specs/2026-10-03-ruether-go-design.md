@@ -201,7 +201,9 @@ Attacken-Format in `data.js`:
    `used[attack.name]` nicht gesetzt, danach gesetzt; zweiter Versuch =
    Log "Die Familie ist schon da." und die Runde ist trotzdem verbraucht).
    Bei Fehlschlag: keine Effekte. Wechsel: aktiver Rüther wird getauscht,
-   keine Attacke.
+   keine Attacke. Hat der aktive Rüther selbst `skip` (durch eine
+   Boss-Attacke wie Firmware-Update), setzt er aus: Log "X setzt aus.",
+   `skip = false`, keine Attacke, die Runde läuft trotzdem weiter.
 2. Summons greifen an: je `damage` auf Gegner, kein Trefferwurf, `turns -= 1`,
    bei 0 entfernt.
 3. Gegner `btc <= 0` → `over = true, won = true`, Rest der Runde entfällt.
