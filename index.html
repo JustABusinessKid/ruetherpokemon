@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Rüther GO</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#f7931a">
+<link rel="icon" href="sprites/coin.png">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<section id="screen-map" class="screen active">
+  <header class="topbar">
+    <h1 id="title">Rüther GO</h1>
+    <span id="badge" class="badge hidden" title="Herrscher aller Rüthers">👑</span>
+  </header>
+  <div id="banner" class="banner hidden"></div>
+  <div id="map"></div>
+  <div id="toast" class="toast hidden"></div>
+  <nav class="bottombar">
+    <span id="hud-caught">0/5 gefangen</span>
+    <button id="btn-team" class="primary">Team</button>
+    <span id="hud-arenas">0/3 Arenen</span>
+  </nav>
+  <div id="debug" class="debug hidden">
+    <strong>Test-Modus</strong>
+    <button data-beam="worringen">Beamen: Worringen</button>
+    <button data-beam="huettenberg">Beamen: Hüttenbergstraße</button>
+    <button data-beam="pcsale">Beamen: PC Sale</button>
+    <button id="dbg-gps">GPS wieder an</button>
+    <button id="dbg-respawn">Spawns neu würfeln</button>
+    <button id="dbg-catchall">Alle Rüthers fangen</button>
+    <button id="dbg-reset">Spielstand löschen</button>
+    <button id="dbg-close">Schließen</button>
+  </div>
+</section>
+
+<section id="screen-catch" class="screen">
+  <button class="back">✕</button>
+  <div class="catch-stage">
+    <img class="sprite wobble" alt="">
+    <h2 class="name"></h2>
+    <p class="title"></p>
+    <p class="desc"></p>
+  </div>
+  <p class="msg"></p>
+  <p class="throws"></p>
+  <img class="coin" src="sprites/coin.png" alt="Bitcoin werfen">
+  <p class="hint">Nach oben wischen oder Münze antippen</p>
+</section>
+
+<section id="screen-team" class="screen">
+  <header class="topbar"><button class="back">‹ Karte</button><h2>Team</h2></header>
+  <p class="hint">Bis zu drei antippen. Reihenfolge = Einsatzreihenfolge.</p>
+  <div class="slots"></div>
+</section>
+
+<section id="screen-arena" class="screen">
+  <header class="topbar"><button class="back">‹ Karte</button><h2 class="arena-name"></h2></header>
+  <div class="arena-body">
+    <img class="sprite" alt="">
+    <h3 class="boss-name"></h3>
+    <p class="address"></p>
+    <p class="distance"></p>
+    <p class="status"></p>
+    <button class="fight primary">Kämpfen</button>
+  </div>
+</section>
+
+<section id="screen-battle" class="screen">
+  <div class="fighter enemy">
+    <img class="sprite" alt="">
+    <div class="info">
+      <div class="fname"></div>
+      <div class="bar"><div class="fill"></div></div>
+      <div class="btc"></div>
+      <div class="status"></div>
+    </div>
+  </div>
+  <div class="fighter me">
+    <img class="sprite" alt="">
+    <div class="info">
+      <div class="fname"></div>
+      <div class="bar"><div class="fill"></div></div>
+      <div class="btc"></div>
+      <div class="status"></div>
+    </div>
+  </div>
+  <div class="log"></div>
+  <div class="actions"></div>
+  <div class="switch hidden"></div>
+</section>
+
+<section id="screen-victory" class="screen">
+  <div class="victory">
+    <div class="crown">👑</div>
+    <h2>Du bist der Herrscher aller Rüthers.</h2>
+    <button class="back primary">Zurück zur Karte</button>
+  </div>
+</section>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

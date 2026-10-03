@@ -210,7 +210,8 @@ Attacken-Format in `data.js`:
 4. Gegner-Aktion. `enemy.skip` → Log "X setzt aus.", `skip = false`. Sonst
    Boss-KI: Kandidaten = alle Attacken, minus `everyN`-Attacken wenn
    `turn % everyN !== 0`, minus `heal`-Attacken wenn
-   `enemy.btc >= 0.5 × maxBtc`. Zufällig eine wählen
+   `enemy.btc >= 0.5 × maxBtc`, minus `skip`-Attacken, wenn der Spieler in
+   dieser Runde selbst ausgesetzt hat (verhindert Aussetz-Dauerschleifen). Zufällig eine wählen
    (`floor(rng() × n)`). Auflösen wie Spieler-Attacke, Ziel = aktiver Rüther.
 5. Gift am Rundenende auf beiden Seiten: `btc -= perTurn`, `turns -= 1`,
    bei 0 entfernt. Danach `weakened -= 1` (min 0) bei beiden.
@@ -298,4 +299,4 @@ Neustart mit leerem Stand.
 - Spawns: ortsgebundener Rüther nur in der Zone; Zielzahl 2–4; Ablauf;
   Verfall bei > 1000 m
 
-Ausführen: `node --test test/`.
+Ausführen: `node --test test/*.test.mjs`.

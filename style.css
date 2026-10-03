@@ -1,0 +1,91 @@
+:root {
+  --orange: #f7931a;
+  --bg: #1b1b1f;
+  --panel: #2a2a31;
+  --text: #f2f2f2;
+  --muted: #a0a0ab;
+  --green: #3ddc84;
+  --red: #ff5252;
+  --purple: #b36bff;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; overflow: hidden; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+img { -webkit-user-drag: none; }
+img.sprite, .spawn-icon img, .slot img { image-rendering: pixelated; }
+button { font: inherit; border: 0; border-radius: 10px; padding: 10px 14px; background: var(--panel); color: var(--text); }
+button.primary { background: var(--orange); color: #111; font-weight: 700; }
+button:disabled { opacity: .4; }
+.hidden { display: none !important; }
+
+.screen { position: fixed; inset: 0; display: none; flex-direction: column; }
+.screen.active { display: flex; }
+
+.topbar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; padding-top: calc(10px + env(safe-area-inset-top)); background: var(--panel); z-index: 1000; }
+.topbar h1, .topbar h2 { margin: 0; font-size: 20px; flex: 1; }
+.topbar .back { padding: 6px 10px; }
+.badge { font-size: 22px; }
+
+#map { flex: 1; background: #333; }
+.bottombar { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; padding-bottom: calc(10px + env(safe-area-inset-bottom)); background: var(--panel); z-index: 1000; font-size: 14px; }
+.banner { background: var(--red); color: #fff; padding: 8px 14px; font-size: 14px; z-index: 1000; }
+.toast { position: absolute; left: 50%; bottom: 90px; transform: translateX(-50%); background: rgba(0,0,0,.85); padding: 10px 16px; border-radius: 12px; z-index: 1100; font-size: 14px; white-space: nowrap; pointer-events: none; }
+
+.spawn-icon img { width: 48px; height: 48px; border-radius: 8px; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
+.arena-icon { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: var(--purple); color: #fff; font-size: 22px; border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
+.arena-icon.beaten { background: #d4a017; }
+
+.debug { position: absolute; top: calc(120px + env(safe-area-inset-top)); right: 10px; z-index: 1200; display: flex; flex-direction: column; gap: 6px; background: rgba(0,0,0,.9); padding: 10px; border-radius: 12px; font-size: 13px; }
+.debug button { padding: 8px 10px; font-size: 13px; }
+
+/* Fangen */
+#screen-catch { background: radial-gradient(circle at 50% 30%, #3a3a48, var(--bg)); align-items: center; justify-content: space-between; padding: 20px; padding-top: calc(20px + env(safe-area-inset-top)); text-align: center; }
+#screen-catch .back { position: absolute; top: calc(10px + env(safe-area-inset-top)); left: 10px; }
+.catch-stage .sprite { width: 160px; height: 160px; border-radius: 12px; }
+.catch-stage h2 { margin: 8px 0 0; }
+.catch-stage .title { color: var(--orange); margin: 2px 0; }
+.catch-stage .desc { color: var(--muted); font-size: 14px; margin: 4px 0; }
+.msg { font-size: 18px; min-height: 24px; margin: 0; }
+.throws { color: var(--muted); margin: 0; }
+.coin { width: 96px; height: 96px; transition: opacity .25s; }
+.coin.thrown { transform: translateY(-320px) scale(.4) rotate(540deg); opacity: 0; transition: transform .6s cubic-bezier(.2,.8,.3,1), opacity .6s; }
+/* Beim Entfernen von .thrown gilt die Transition des Zielzustands: transform springt unsichtbar zurück, nur das Einblenden animiert. */
+.hint { color: var(--muted); font-size: 13px; }
+@keyframes wobble { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
+.wobble { animation: wobble 1.6s ease-in-out infinite; }
+
+/* Team */
+#screen-team .hint { padding: 0 14px; }
+.slots { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 14px; overflow: auto; }
+.slot { background: var(--panel); border-radius: 12px; padding: 10px; text-align: center; border: 3px solid transparent; position: relative; }
+.slot.in-team { border-color: var(--orange); }
+.slot.unknown { opacity: .5; }
+.slot img { width: 96px; height: 96px; border-radius: 8px; }
+.slot .order { position: absolute; top: 6px; left: 6px; background: var(--orange); color: #111; font-weight: 700; border-radius: 50%; width: 24px; height: 24px; line-height: 24px; }
+.slot .sub { color: var(--muted); font-size: 13px; }
+
+/* Arena */
+.arena-body { padding: 20px; text-align: center; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.arena-body .sprite { width: 160px; height: 160px; border-radius: 12px; }
+.arena-body p { margin: 0; color: var(--muted); }
+.arena-body .fight { margin-top: 12px; font-size: 18px; padding: 14px 32px; }
+
+/* Kampf */
+#screen-battle { padding: 10px; padding-top: calc(10px + env(safe-area-inset-top)); padding-bottom: calc(10px + env(safe-area-inset-bottom)); gap: 10px; }
+.fighter { display: flex; gap: 12px; align-items: center; background: var(--panel); border-radius: 12px; padding: 10px; }
+.fighter.me { flex-direction: row-reverse; }
+.fighter .sprite { width: 96px; height: 96px; border-radius: 8px; }
+.fighter .info { flex: 1; }
+.fighter .fname { font-weight: 700; }
+.bar { height: 12px; background: #111; border-radius: 6px; overflow: hidden; margin: 4px 0; }
+.bar .fill { height: 100%; background: var(--green); transition: width .4s; }
+.bar .fill.low { background: var(--red); }
+.fighter .btc { font-size: 13px; color: var(--muted); }
+.fighter .status { font-size: 13px; min-height: 18px; }
+.log { flex: 1; overflow: auto; background: #111; border-radius: 12px; padding: 10px; font-size: 14px; line-height: 1.5; }
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.actions button { padding: 12px 8px; font-size: 14px; }
+.switch { display: grid; gap: 8px; }
+
+/* Sieg */
+#screen-victory { align-items: center; justify-content: center; text-align: center; padding: 20px; background: radial-gradient(circle, #5a4a10, var(--bg)); }
+.crown { font-size: 96px; }

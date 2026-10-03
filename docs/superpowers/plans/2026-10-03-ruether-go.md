@@ -13,7 +13,7 @@
 **Allgemeine Regeln für alle Tasks:**
 - Alle Dateien UTF-8 ohne BOM, LF.
 - Kein Commit aus parallel laufenden Agenten; Commits macht der Orchestrator nach jeder abgeschlossenen Task-Gruppe (sonst `index.lock`-Konflikte).
-- Tests laufen mit `node --test test/` im Projektordner `D:\GPTDev\ruetherpokemon`.
+- Tests laufen mit `node --test test/*.test.mjs` im Projektordner `D:\GPTDev\ruetherpokemon`.
 - Lokaler Server zum Prüfen: `python -m http.server 8000` → `http://localhost:8000/?debug=1`.
 
 ---
@@ -786,7 +786,7 @@ export function playerSwitch(state, teamIndex) {
 
 - [ ] **Step 4: Tests laufen lassen**
 
-Run: `node --test test/`
+Run: `node --test test/*.test.mjs`
 Expected: alle Tests in beiden Dateien PASS (16 in battle, 8 in spawn)
 
 ---
@@ -1641,7 +1641,7 @@ man sich an die drei Arenen beamen.
 
 ## Tests
 
-    node --test test/
+    node --test test/*.test.mjs
 
 ## Sprites neu erzeugen
 

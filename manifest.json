@@ -1,0 +1,9 @@
+{
+  "name": "Rüther GO",
+  "short_name": "Rüther GO",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#1b1b1f",
+  "theme_color": "#f7931a",
+  "icons": [{ "src": "sprites/coin.png", "sizes": "256x256", "type": "image/png" }]
+}
