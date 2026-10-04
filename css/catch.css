@@ -1,0 +1,64 @@
+/* Fang-Bildschirm v2: Bühne oben, Info unten. Zustand steht in #screen-catch[data-state]. */
+#screen-catch { padding: 0; align-items: stretch; justify-content: flex-start; text-align: center; background: radial-gradient(ellipse at 50% 30%, #4a4a60 0%, #26262e 55%, var(--bg) 100%); }
+#screen-catch .back { position: absolute; top: calc(10px + env(safe-area-inset-top)); left: 10px; z-index: 3; width: 40px; height: 40px; padding: 0; border-radius: 50%; background: rgba(0,0,0,.5); font-size: 18px; transition: opacity .2s; }
+#screen-catch:not([data-state="idle"]) .back { opacity: .3; }
+
+.catch-stage { position: relative; flex: 1; min-height: 60vh; overflow: hidden; touch-action: none; }
+.catch-stage::after { content: ''; position: absolute; left: -30%; right: -30%; bottom: -90px; height: 150px; border-radius: 50%; background: rgba(0,0,0,.22); pointer-events: none; }
+
+/* Rüther: .target läuft hin und her (roam), der Sprite darin hüpft/wehrt sich/wird eingesaugt. */
+.target { position: absolute; left: 50%; bottom: min(352px, calc(100% - 180px)); width: 160px; height: 160px; margin-left: -80px; animation: roam 4s ease-in-out infinite; }
+.target::after { content: ''; position: absolute; left: 15%; right: 15%; bottom: -16px; height: 18px; border-radius: 50%; background: rgba(0,0,0,.5); filter: blur(4px); transition: opacity .3s; }
+.target .sprite { display: block; width: 160px; height: 160px; border-radius: 12px; position: relative; z-index: 1; }
+.target .ring { position: absolute; inset: -12px; border: 4px solid var(--orange); border-radius: 50%; box-shadow: 0 0 14px rgba(247,147,26,.6), inset 0 0 14px rgba(247,147,26,.3); animation: ring-shrink 2.4s linear infinite; pointer-events: none; z-index: 2; }
+.target.angry .sprite { animation: angry .15s linear 8; filter: sepia(1) saturate(8) hue-rotate(-35deg) drop-shadow(0 0 14px var(--red)); }
+.target.angry .ring { box-shadow: 0 0 0 3px var(--red), 0 0 24px var(--red); }
+.sprite.hop { animation: sprite-hop .5s ease-out; }
+.sprite.suck { animation: suck .4s ease-in forwards; }
+.sprite.pop { animation: pop .4s cubic-bezier(.34,1.56,.64,1) both; }
+.sprite.flee { animation: flee .7s ease-in forwards; }
+#screen-catch[data-state="seq"] .target { animation-play-state: paused; }
+#screen-catch[data-state="seq"] .ring,
+#screen-catch[data-state="seq"] .target::after { opacity: 0; }
+
+/* Effekt-Ebene: Ring-Bewertung und Sterne */
+.catch-fx { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
+.catch-fx .rating { position: absolute; font-size: 30px; font-weight: 800; color: var(--orange); text-shadow: 0 2px 8px rgba(0,0,0,.6); animation: float .9s ease-out forwards; white-space: nowrap; }
+.catch-fx .star { position: absolute; font-size: 26px; color: #ffd54a; text-shadow: 0 0 10px #fff; animation: star .8s ease-out forwards; }
+
+.catch-msg { position: absolute; left: 0; right: 0; bottom: 150px; z-index: 4; font-size: 30px; font-weight: 800; text-shadow: 0 2px 10px rgba(0,0,0,.7); opacity: 0; transform: scale(.7); transition: opacity .15s, transform .3s cubic-bezier(.34,1.56,.64,1); pointer-events: none; }
+.catch-msg.show { opacity: 1; transform: scale(1); }
+
+/* Münze: Position über --x/--y, Drehung --r, Größe --s. Keyframes bauen auf denselben Variablen auf.
+   Auf .catch-stage gescoped, weil auch der Kampf <img class="coin"> nutzt (battle.css). */
+.catch-stage .coin { position: absolute; left: 50%; bottom: 24px; width: 96px; height: 96px; z-index: 3; cursor: grab; touch-action: none; transition: none; filter: drop-shadow(0 6px 8px rgba(0,0,0,.5));
+  transform: translate(calc(-50% + var(--x, 0px)), var(--y, 0px)) rotate(var(--r, 0deg)) scale(var(--s, 1)); }
+.catch-stage .coin.drag { cursor: grabbing; filter: drop-shadow(0 14px 14px rgba(0,0,0,.5)); }
+.catch-stage .coin.return { transition: transform .35s cubic-bezier(.2,.8,.3,1); }
+.catch-stage .coin.fall { animation: coin-miss .3s ease-in forwards; }
+.catch-stage .coin.drop { animation: drop .2s ease-in; }
+.catch-stage .coin.wobble { animation: wobble .6s ease-in-out; }
+.catch-stage .coin.glow { animation: glow .5s ease-in-out infinite; }
+.catch-stage .coin.burst { animation: burst .35s ease-out forwards; }
+
+.catch-info { flex: 0 0 auto; padding: 12px 20px calc(14px + env(safe-area-inset-bottom)); }
+.catch-info .name { margin: 0; font-size: 22px; }
+.catch-info .title { color: var(--orange); margin: 2px 0; }
+.catch-info .desc { color: var(--muted); font-size: 14px; margin: 4px 0; }
+.catch-info .throws { margin: 6px 0 0; font-weight: 600; }
+
+/* ---- Keyframes (Namen sind global; battle.css hat eigene hop/fall, daher sprite-hop/coin-miss) ---- */
+@keyframes roam { 0%, 100% { transform: translateX(-40px); } 50% { transform: translateX(40px); } }
+@keyframes sprite-hop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-30px); } }
+@keyframes angry { 0%, 100% { transform: translateX(0) rotate(0); } 25% { transform: translateX(-7px) rotate(-5deg); } 75% { transform: translateX(7px) rotate(5deg); } }
+@keyframes ring-shrink { from { transform: scale(1); border-color: var(--orange); } to { transform: scale(.3); border-color: var(--green); } }
+@keyframes suck { 30% { filter: brightness(2); } to { transform: translate(var(--sx, 0px), var(--sy, 0px)) scale(0) rotate(90deg); opacity: 0; filter: brightness(3); } }
+@keyframes drop { from { transform: translate(calc(-50% + var(--x)), calc(var(--y) - 60px)) scale(var(--s)); } to { transform: translate(calc(-50% + var(--x)), var(--y)) scale(var(--s)); } }
+@keyframes wobble { 0%, 100% { transform: translate(calc(-50% + var(--x)), var(--y)) rotate(0) scale(var(--s)); } 25% { transform: translate(calc(-50% + var(--x)), var(--y)) rotate(-20deg) scale(var(--s)); } 75% { transform: translate(calc(-50% + var(--x)), var(--y)) rotate(20deg) scale(var(--s)); } }
+@keyframes glow { 0%, 100% { filter: drop-shadow(0 0 8px #ffd54a) brightness(1.1); } 50% { filter: drop-shadow(0 0 30px #fff) brightness(1.8); } }
+@keyframes star { from { transform: translate(-50%, -50%) scale(.5); opacity: 1; } to { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.4) rotate(180deg); opacity: 0; } }
+@keyframes burst { 0% { transform: translate(calc(-50% + var(--x)), var(--y)) scale(var(--s)); opacity: 1; } 60% { transform: translate(calc(-50% + var(--x)), var(--y)) scale(calc(var(--s) * 1.8)); opacity: 1; filter: brightness(2); } 100% { transform: translate(calc(-50% + var(--x)), var(--y)) scale(calc(var(--s) * 2.4)); opacity: 0; } }
+@keyframes pop { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes flee { 0% { transform: translateX(0); } 25% { transform: translate(25vw, -24px) rotate(6deg); } 50% { transform: translate(55vw, 0) rotate(0); } 75% { transform: translate(85vw, -24px) rotate(6deg); } 100% { transform: translateX(130vw); } }
+@keyframes float { from { transform: translate(-50%, 0) scale(.6); opacity: 0; } 25% { transform: translate(-50%, -12px) scale(1.2); opacity: 1; } to { transform: translate(-50%, -60px) scale(1); opacity: 0; } }
+@keyframes coin-miss { to { transform: translate(calc(-50% + var(--x)), calc(var(--y) + 600px)) rotate(var(--r)) scale(var(--s)); opacity: .2; } }

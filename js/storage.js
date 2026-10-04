@@ -1,6 +1,6 @@
 const KEY = 'ruether-go';
 
-export const emptySave = () => ({ version: 1, caught: {}, team: [], arenasBeaten: [], victoryShown: false });
+export const emptySave = () => ({ version: 1, caught: {}, team: [], arenasBeaten: [], arenaOwners: {}, victoryShown: false });
 
 export function load() {
   try {

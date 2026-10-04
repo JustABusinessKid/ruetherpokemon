@@ -10,7 +10,6 @@ export function distance(a, b) {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-// Punkt metersNorth/metersEast von center entfernt
 export function offsetPoint(center, metersNorth, metersEast) {
   return {
     lat: center.lat + metersNorth / M_PER_DEG_LAT,
@@ -18,33 +17,42 @@ export function offsetPoint(center, metersNorth, metersEast) {
   };
 }
 
-// Zufälliger Punkt im Ring [minM, maxM] um center. rng: () => [0,1)
 export function randomPointInRing(center, minM, maxM, rng) {
   const d = minM + rng() * (maxM - minM);
   const ang = rng() * 2 * Math.PI;
   return offsetPoint(center, d * Math.cos(ang), d * Math.sin(ang));
 }
 
-// GPS mit Fake-Position für den Test-Modus.
-// onPosition({lat, lon}) bei jeder Änderung; onError(err) wenn Ortung nicht geht.
+// GPS mit Fake-Position für den Test-Modus. Startet die Beobachtung neu, wenn der
+// Tab wieder sichtbar wird oder die Ortung in einen Timeout läuft.
 export function createLocator({ onPosition, onError }) {
   let fake = null;
   let last = null;
-  if (!navigator.geolocation) {
-    onError(new Error('Keine Ortung verfügbar'));
-  } else {
-    navigator.geolocation.watchPosition(
+  let watchId = null;
+  const geo = navigator.geolocation;
+
+  function start() {
+    if (!geo) { onError(new Error('Keine Ortung verfügbar')); return; }
+    if (watchId !== null) geo.clearWatch(watchId);
+    watchId = geo.watchPosition(
       p => {
-        last = { lat: p.coords.latitude, lon: p.coords.longitude };
+        last = { lat: p.coords.latitude, lon: p.coords.longitude, accuracy: p.coords.accuracy };
         if (!fake) onPosition(last);
       },
-      e => { if (!fake) onError(e); },
+      e => {
+        if (e.code === 3) setTimeout(start, 2000); // TIMEOUT: neu versuchen
+        if (!fake && !last) onError(e);
+      },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 },
     );
   }
+  start();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') start(); });
+
   return {
     setFake(pos) { fake = pos; onPosition(pos); },
     clearFake() { fake = null; if (last) onPosition(last); else onError(new Error('Keine Ortung')); },
+    restart: start,
     get current() { return fake || last; },
     get isFake() { return fake !== null; },
   };

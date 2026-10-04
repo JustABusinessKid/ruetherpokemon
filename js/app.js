@@ -4,13 +4,16 @@ import { createLocator, distance, offsetPoint } from './geo.js';
 import { updateSpawns } from './spawn.js';
 import { createMap } from './map.js';
 import { createCatchScreen } from './catch.js';
-import { createTeamScreen, createArenaScreen, createBattleScreen, createVictoryScreen } from './screens.js';
-import { createBattle, makeFighter } from './battle.js';
+import { createTeamScreen, createArenaScreen, createVictoryScreen } from './screens.js';
+import { createBattleScreen } from './battle-ui.js';
+import { makeFighter, makeBoss } from './battle.js';
 
 const $ = s => document.querySelector(s);
 let save = storage.load();
 let spawns = [];
 let pos = null;
+let lastSpawnPos = null;
+let debugWeakBoss = false;
 
 // ---------- Screens ----------
 const screens = [...document.querySelectorAll('section.screen')];
@@ -37,9 +40,9 @@ function persist() {
 }
 function updateHud() {
   $('#hud-caught').textContent = `${Object.keys(save.caught).length}/${RUETHERS.length} gefangen`;
-  $('#hud-arenas').textContent = `${save.arenasBeaten.length}/${ARENAS.length} Arenen`;
+  $('#hud-arenas').textContent = `${save.arenasBeaten.length}/${ARENAS.length} Trophäen`;
   $('#badge').classList.toggle('hidden', save.arenasBeaten.length < ARENAS.length);
-  for (const a of ARENAS) map.setArenaBeaten(a.id, save.arenasBeaten.includes(a.id));
+  for (const a of ARENAS) map.setArenaOwner(a.id, save.arenaOwners[a.id] || null);
 }
 
 // ---------- Karte ----------
@@ -54,30 +57,34 @@ const map = createMap({
     show('screen-catch');
   },
   onArenaTap(a) {
+    const owner = save.arenaOwners[a.id];
     arenaScreen.show(a, {
       distanceM: pos ? distance(pos, a) : null,
       teamSize: save.team.length,
       beaten: save.arenasBeaten.includes(a.id),
+      ownerName: owner ? RUETHER_BY_ID[owner].name : null,
     });
     show('screen-arena');
   },
+  onFollowChange(following) { $('#btn-locate').classList.toggle('following', following); },
 });
+$('#btn-locate').addEventListener('click', () => map.follow(pos));
 
 // ---------- Spawns ----------
 function refreshSpawns() {
   spawns = updateSpawns({ spawns, player: pos, arenas: ARENAS, ruethers: RUETHERS, now: Date.now(), rng: Math.random });
   map.setSpawns(spawns);
+  lastSpawnPos = pos;
 }
 setInterval(refreshSpawns, CONST.SPAWN_INTERVAL);
 
 // ---------- Ortung ----------
 const locator = createLocator({
   onPosition(p) {
-    const first = !pos;
     pos = p;
     map.setPlayer(p);
     banner('', 'geo');
-    if (first) refreshSpawns();
+    if (!lastSpawnPos || distance(lastSpawnPos, p) > CONST.SPAWN_WALK) refreshSpawns();
   },
   onError() {
     banner('Ortung aus. Erlaube sie in den Browser-Einstellungen oder nutze den Test-Modus.', 'geo');
@@ -114,23 +121,27 @@ $('#btn-team').addEventListener('click', () => { teamScreen.show(save); show('sc
 
 // ---------- Arena + Kampf ----------
 let currentArena = null;
+function startBattle(a) {
+  currentArena = a;
+  const team = save.team.map(id => makeFighter(RUETHER_BY_ID[id], save.caught[id]?.bonusBtc ?? 0));
+  const enemy = makeBoss(BOSSES[a.boss]);
+  if (debugWeakBoss) enemy.btc = 20;
+  show('screen-battle');
+  battleScreen.start({ team, enemy, rng: Math.random });
+}
 const arenaScreen = createArenaScreen({
   el: $('#screen-arena'),
   bosses: BOSSES,
   onBack() { show('screen-map'); },
-  onFight(a) {
-    currentArena = a;
-    const team = save.team.map(id => makeFighter(RUETHER_BY_ID[id], save.caught[id]?.bonusBtc ?? 0));
-    const enemy = makeFighter(BOSSES[a.boss]);
-    battleScreen.start(createBattle({ team, enemy, rng: Math.random }));
-    show('screen-battle');
-  },
+  onFight: startBattle,
 });
 const battleScreen = createBattleScreen({
   el: $('#screen-battle'),
-  onEnd(won) {
-    if (won && !save.arenasBeaten.includes(currentArena.id)) {
-      save.arenasBeaten.push(currentArena.id);
+  onEnd({ won, retry }) {
+    if (retry) return startBattle(currentArena);
+    if (won) {
+      if (!save.arenasBeaten.includes(currentArena.id)) save.arenasBeaten.push(currentArena.id);
+      save.arenaOwners[currentArena.id] = save.team[0];
       persist();
       if (save.arenasBeaten.length === ARENAS.length && !save.victoryShown) {
         save.victoryShown = true;
@@ -155,13 +166,13 @@ debug.querySelectorAll('[data-beam]').forEach(b => b.addEventListener('click', (
   const a = ARENA_BY_ID[b.dataset.beam];
   const p = offsetPoint(a, 40, 0);
   locator.setFake(p);
-  map.center(p);
+  map.follow(p);
   refreshSpawns();
   toast(`Gebeamt: ${a.name}`);
 }));
 $('#dbg-gps').addEventListener('click', () => {
   locator.clearFake();
-  if (!locator.current) { pos = null; map.setSpawns(spawns = []); }
+  if (!locator.current) { pos = null; lastSpawnPos = null; map.setSpawns(spawns = []); }
   toast('GPS wieder an');
 });
 $('#dbg-respawn').addEventListener('click', () => { spawns = []; refreshSpawns(); toast('Spawns neu'); });
@@ -169,6 +180,10 @@ $('#dbg-catchall').addEventListener('click', () => {
   for (const r of RUETHERS) save.caught[r.id] ??= { count: 1, bonusBtc: 0 };
   for (const r of RUETHERS) if (save.team.length < CONST.TEAM_SIZE && !save.team.includes(r.id)) save.team.push(r.id);
   persist(); toast('Alle gefangen');
+});
+$('#dbg-weakboss').addEventListener('click', e => {
+  debugWeakBoss = !debugWeakBoss;
+  e.target.textContent = `Boss fast tot: ${debugWeakBoss ? 'an' : 'aus'}`;
 });
 $('#dbg-reset').addEventListener('click', () => { storage.clear(); save = storage.emptySave(); persist(); toast('Spielstand gelöscht'); });
 $('#dbg-close').addEventListener('click', () => debug.classList.add('hidden'));

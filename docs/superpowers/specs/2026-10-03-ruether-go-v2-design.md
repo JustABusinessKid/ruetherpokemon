@@ -51,10 +51,13 @@ Ziel: anfühlen wie der Fang-Bildschirm in Pokémon GO.
 - Pointer-Events (Finger oder Maus). Die Münze lässt sich ziehen; beim
   Loslassen wird die Geschwindigkeit aus den letzten ~100 ms berechnet.
 - Geht die Bewegung nach oben mit mindestens 0,6 px/ms, fliegt die Münze.
-  Zielpunkt: Startpunkt plus Geschwindigkeit × 450 ms (x und y). Zu schwach =
-  Münze fällt vor dem Rüther runter, zu schräg = daneben. Flug 700 ms,
-  JS-animiert (Parabel: zusätzlicher Bogen von 120 px, Drehung, Verkleinerung
-  auf 50 %).
+  Zielpunkt: Ruheposition der Münze plus Flick-Richtung × Weite, wobei
+  Weite = 160 px + 100 px je px/ms Geschwindigkeit (ab 4 px/ms zählt nicht
+  mehr). Damit treffen Daumen-Schnipps von etwa 1 bis 3 px/ms, langsamer
+  fällt die Münze davor runter, schneller schießt sie drüber, zu schräg =
+  daneben. Die Landung liegt nie höher als 40 px unter der Bühnenoberkante.
+  Flug 700 ms, JS-animiert (Parabel: zusätzlicher Bogen von 120 px, Drehung,
+  Verkleinerung auf 50 %).
 - Treffer, wenn der Zielpunkt im um 20 px vergrößerten Rechteck des Sprites
   liegt. Daneben: „Daneben!", Münze fällt aus dem Bild, nach 500 ms wieder
   bereit. Daneben kostet nichts.
