@@ -1,0 +1,490 @@
+[
+ {
+  "id": "boss-satoshi",
+  "file": "boss-satoshi.png",
+  "kind": "sprite",
+  "role": "boss",
+  "width": 256,
+  "height": 256,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "boss-schanze",
+  "file": "boss-schanze.png",
+  "kind": "sprite",
+  "role": "boss",
+  "width": 256,
+  "height": 256,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "boss-ps3",
+  "file": "boss-ps3.png",
+  "kind": "sprite",
+  "role": "boss",
+  "width": 256,
+  "height": 256,
+  "note": "attempt 2; attempt 1 had text labels (style words leaked into image)",
+  "attempt": 2
+ },
+ {
+  "id": "fx-beer-can",
+  "file": "fx-beer-can.png",
+  "kind": "sprite",
+  "role": "special-fx",
+  "width": 192,
+  "height": 192,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "fx-handshake",
+  "file": "fx-handshake.png",
+  "kind": "sprite",
+  "role": "special-fx",
+  "width": 192,
+  "height": 192,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "fx-chart-up",
+  "file": "fx-chart-up.png",
+  "kind": "sprite",
+  "role": "special-fx",
+  "width": 192,
+  "height": 192,
+  "note": "attempt 2; attempt 1 had house scenery around the chart",
+  "attempt": 2
+ },
+ {
+  "id": "fx-handbag",
+  "file": "fx-handbag.png",
+  "kind": "sprite",
+  "role": "special-fx",
+  "width": 192,
+  "height": 192,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "fx-controller",
+  "file": "fx-controller.png",
+  "kind": "sprite",
+  "role": "special-fx",
+  "width": 192,
+  "height": 192,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "fx-wallet",
+  "file": "fx-wallet.png",
+  "kind": "sprite",
+  "role": "special-fx",
+  "width": 192,
+  "height": 192,
+  "note": "attempt 2; attempt 1 was a leather wallet instead of a hardware device",
+  "attempt": 2
+ },
+ {
+  "id": "fx-gas",
+  "file": "fx-gas.png",
+  "kind": "sprite",
+  "role": "special-fx",
+  "width": 192,
+  "height": 192,
+  "note": "attempt 2; attempt 1 was cropped at all four edges",
+  "attempt": 2
+ },
+ {
+  "id": "fx-speech",
+  "file": "fx-speech.png",
+  "kind": "sprite",
+  "role": "special-fx",
+  "width": 192,
+  "height": 192,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "fx-mms",
+  "file": "fx-mms.png",
+  "kind": "sprite",
+  "role": "special-fx",
+  "width": 192,
+  "height": 192,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "fx-bags",
+  "file": "fx-bags.png",
+  "kind": "sprite",
+  "role": "special-fx",
+  "width": 192,
+  "height": 192,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "fx-family",
+  "file": "fx-family.png",
+  "kind": "sprite",
+  "role": "special-fx",
+  "width": 192,
+  "height": 192,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "fx-disc",
+  "file": "fx-disc.png",
+  "kind": "sprite",
+  "role": "boss-fx",
+  "width": 192,
+  "height": 192,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "fx-yellow-light",
+  "file": "fx-yellow-light.png",
+  "kind": "sprite",
+  "role": "boss-fx",
+  "width": 192,
+  "height": 192,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "fx-firmware",
+  "file": "fx-firmware.png",
+  "kind": "sprite",
+  "role": "boss-fx",
+  "width": 192,
+  "height": 192,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "fx-crash",
+  "file": "fx-crash.png",
+  "kind": "sprite",
+  "role": "boss-fx",
+  "width": 192,
+  "height": 192,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "fx-chain",
+  "file": "fx-chain.png",
+  "kind": "sprite",
+  "role": "boss-fx",
+  "width": 192,
+  "height": 192,
+  "note": "attempt 2; attempt 1 had 'BLOCK CHAIN' text and pub furniture",
+  "attempt": 2
+ },
+ {
+  "id": "fx-pickaxe",
+  "file": "fx-pickaxe.png",
+  "kind": "sprite",
+  "role": "boss-fx",
+  "width": 192,
+  "height": 192,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "fx-block",
+  "file": "fx-block.png",
+  "kind": "sprite",
+  "role": "boss-fx",
+  "width": 192,
+  "height": 192,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "fx-halving",
+  "file": "fx-halving.png",
+  "kind": "sprite",
+  "role": "boss-fx",
+  "width": 192,
+  "height": 192,
+  "note": "attempt 2; attempt 1 was cropped left/right. Model dithered key-magenta speckles into the flash, keyed out as small transparent holes in the sparkle",
+  "attempt": 2
+ },
+ {
+  "id": "fx-key",
+  "file": "fx-key.png",
+  "kind": "sprite",
+  "role": "boss-fx",
+  "width": 192,
+  "height": 192,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "coin-big",
+  "file": "coin-big.png",
+  "kind": "sprite",
+  "role": "catch-coin",
+  "width": 256,
+  "height": 256,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "sheet-impact",
+  "file": "sheet-impact.png",
+  "kind": "sheet",
+  "role": "fx-sheet",
+  "frames": 16,
+  "cols": 4,
+  "rows": 4,
+  "frame": 128,
+  "width": 512,
+  "height": 512,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "sheet-sparkle",
+  "file": "sheet-sparkle.png",
+  "kind": "sheet",
+  "role": "fx-sheet",
+  "frames": 16,
+  "cols": 4,
+  "rows": 4,
+  "frame": 128,
+  "width": 512,
+  "height": 512,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "sheet-smoke",
+  "file": "sheet-smoke.png",
+  "kind": "sheet",
+  "role": "fx-sheet",
+  "frames": 16,
+  "cols": 4,
+  "rows": 4,
+  "frame": 128,
+  "width": 512,
+  "height": 512,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "sheet-coins",
+  "file": "sheet-coins.png",
+  "kind": "sheet",
+  "role": "fx-sheet",
+  "frames": 16,
+  "cols": 4,
+  "rows": 4,
+  "frame": 128,
+  "width": 512,
+  "height": 512,
+  "note": "frames 1-8 rain, 9-14 pile builds, 15-16 scatter; for a pure rain loop play frames 1-8",
+  "attempt": 1
+ },
+ {
+  "id": "bg-pcsale",
+  "file": "bg-pcsale.png",
+  "kind": "background",
+  "role": "arena-bg",
+  "width": 1280,
+  "height": 720,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "bg-huettenberg",
+  "file": "bg-huettenberg.png",
+  "kind": "background",
+  "role": "arena-bg",
+  "width": 1280,
+  "height": 720,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "bg-worringen",
+  "file": "bg-worringen.png",
+  "kind": "background",
+  "role": "arena-bg",
+  "width": 1280,
+  "height": 720,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "bg-catch",
+  "file": "bg-catch.png",
+  "kind": "background",
+  "role": "catch-bg",
+  "width": 1280,
+  "height": 720,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "bg-menu",
+  "file": "bg-menu.png",
+  "kind": "background",
+  "role": "menu-bg",
+  "width": 1280,
+  "height": 720,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "icon-map",
+  "file": "icon-map.png",
+  "kind": "ui",
+  "role": "icon",
+  "width": 64,
+  "height": 64,
+  "note": "attempt 2; attempt 1 had 'WIRTSHAUS' text",
+  "attempt": 2
+ },
+ {
+  "id": "icon-bag",
+  "file": "icon-bag.png",
+  "kind": "ui",
+  "role": "icon",
+  "width": 64,
+  "height": 64,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "icon-quest",
+  "file": "icon-quest.png",
+  "kind": "ui",
+  "role": "icon",
+  "width": 64,
+  "height": 64,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "icon-trophy",
+  "file": "icon-trophy.png",
+  "kind": "ui",
+  "role": "icon",
+  "width": 64,
+  "height": 64,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "icon-profile",
+  "file": "icon-profile.png",
+  "kind": "ui",
+  "role": "icon",
+  "width": 64,
+  "height": 64,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "icon-coin",
+  "file": "icon-coin.png",
+  "kind": "ui",
+  "role": "icon",
+  "width": 64,
+  "height": 64,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "icon-shop",
+  "file": "icon-shop.png",
+  "kind": "ui",
+  "role": "icon",
+  "width": 64,
+  "height": 64,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "icon-beer",
+  "file": "icon-beer.png",
+  "kind": "ui",
+  "role": "icon",
+  "width": 64,
+  "height": 64,
+  "note": "attempt 2; attempt 1 had 'MUNCHNER HELL' text",
+  "attempt": 2
+ },
+ {
+  "id": "icon-lightning",
+  "file": "icon-lightning.png",
+  "kind": "ui",
+  "role": "icon",
+  "width": 64,
+  "height": 64,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "icon-gear",
+  "file": "icon-gear.png",
+  "kind": "ui",
+  "role": "icon",
+  "width": 64,
+  "height": 64,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "icon-star",
+  "file": "icon-star.png",
+  "kind": "ui",
+  "role": "icon",
+  "width": 64,
+  "height": 64,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "icon-lock",
+  "file": "icon-lock.png",
+  "kind": "ui",
+  "role": "icon",
+  "width": 64,
+  "height": 64,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "frame-panel",
+  "file": "frame-panel.png",
+  "kind": "ui",
+  "role": "frame",
+  "slice": 16,
+  "width": 96,
+  "height": 96,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "frame-button",
+  "file": "frame-button.png",
+  "kind": "ui",
+  "role": "frame",
+  "slice": 16,
+  "width": 96,
+  "height": 96,
+  "note": "",
+  "attempt": 1
+ }
+]
