@@ -6,33 +6,74 @@
 <title>Rüther GO</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#f7931a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Rüther GO">
 <link rel="icon" href="sprites/coin.png">
+<link rel="apple-touch-icon" href="sprites/icon-192.png">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="css/catch.css">
 <link rel="stylesheet" href="css/battle.css">
 <link rel="stylesheet" href="css/screens.css">
+<link rel="stylesheet" href="css/app.css">
 </head>
 <body>
 
-<section id="screen-map" class="screen active">
+<div id="splash" class="splash">
+  <img src="sprites/coin.png" alt="">
+  <h1>Rüther GO</h1>
+  <p>Lade Rüthers…</p>
+</div>
+
+<section id="screen-onboarding" class="screen">
+  <div class="onb-slides">
+    <div class="onb-slide active" data-step="0">
+      <img src="sprites/christian.png" alt="" class="frame-img">
+      <h2>Rüthers fangen</h2>
+      <p>Lauf durch die Stadt. Taucht ein Rüther auf, geh hin, schnipp die Münze nach oben und hoffe, dass er drin bleibt.</p>
+    </div>
+    <div class="onb-slide" data-step="1">
+      <img src="sprites/schanze.png" alt="" class="frame-img">
+      <h2>Arenen erobern</h2>
+      <p>An echten Adressen warten Bosse. Tippen = Angriff, Wischen = Ausweichen. Wer gewinnt, hält die Arena für alle sichtbar.</p>
+    </div>
+    <div class="onb-slide" data-step="2">
+      <img src="sprites/coin.png" alt="" class="frame-img">
+      <h2>Sammeln und aufleveln</h2>
+      <p>Vier Seltenheiten, ein Rütherdex mit 20 Feldern, Sats für Power-Ups, Quests jeden Tag und eine Rangliste gegen deine Freunde.</p>
+    </div>
+    <div class="onb-slide onb-profile" data-step="3">
+      <h2>Dein Trainerprofil</h2>
+      <label>Spielername<input type="text" class="onb-name" maxlength="16" placeholder="z.B. Sebi" autocomplete="off"></label>
+      <p class="hint">2 bis 16 Zeichen. So siehst du dich in der Rangliste.</p>
+      <div class="avatar-pick"></div>
+      <p class="onb-error hidden"></p>
+    </div>
+  </div>
+  <div class="onb-dots"></div>
+  <div class="onb-buttons">
+    <button class="onb-skip">Überspringen</button>
+    <button class="onb-next primary">Weiter</button>
+  </div>
+</section>
+
+<section id="screen-map" class="screen active with-tabs">
   <header class="topbar">
     <h1 id="title">Rüther GO</h1>
     <span id="hud-dex" class="pill">Dex 0/20</span>
     <span id="badge" class="badge hidden" title="Herrscher aller Rüthers">👑</span>
+    <button class="sats-chip" data-open="shop">💰 0</button>
   </header>
   <div id="banner" class="banner hidden"></div>
   <div id="lure-banner" class="banner lure hidden">🧲 Lockmodul: 5:00</div>
+  <div id="hour-banner" class="banner hour hidden">⏰ Rüther-Stunde bis 19:00</div>
+  <div id="featured-banner" class="banner featured hidden"><img alt=""><span>Heute: Viktor doppelt so oft</span></div>
   <div class="map-wrap">
     <div id="map"></div>
     <button id="btn-locate" class="locate following" title="Karte folgt dir">📍</button>
-    <div id="toast" class="toast hidden"></div>
+    <div id="online-dot" class="online-dot offline" title="Offline"></div>
   </div>
-  <nav class="bottombar">
-    <button id="btn-collection">Sammlung</button>
-    <span id="hud-sats" class="sats">💰 0</span>
-    <button id="btn-shop">Shop</button>
-  </nav>
   <div id="debug" class="debug hidden">
     <strong>Test-Modus</strong>
     <button data-beam="worringen">Beamen: Worringen</button>
@@ -40,8 +81,10 @@
     <button data-beam="pcsale">Beamen: PC Sale</button>
     <button id="dbg-gps">GPS wieder an</button>
     <button id="dbg-respawn">Spawns neu würfeln</button>
+    <button id="dbg-stops">Fake-Stops</button>
     <button id="dbg-catchall">Alle Rüthers fangen</button>
     <button id="dbg-sats">+1000 Sats</button>
+    <button id="dbg-xp">+500 XP</button>
     <button id="dbg-legendary">Nächster Spawn legendär: aus</button>
     <button id="dbg-weakboss">Boss fast tot: aus</button>
     <button id="dbg-reset">Spielstand löschen</button>
@@ -73,9 +116,24 @@
   </div>
 </section>
 
-<section id="screen-collection" class="screen">
-  <header class="topbar"><button class="back">‹ Karte</button><h2>Sammlung</h2><button class="dex-btn">Rütherdex</button></header>
-  <p class="hint">Bis zu drei ins Team. Der erste wird Arena-Besitzer. Power-Up hebt das Level.</p>
+<section id="screen-stop" class="screen">
+  <button class="back">✕</button>
+  <div class="stop-body">
+    <div class="stop-icon">🍺</div>
+    <h2 class="stop-name"></h2>
+    <p class="stop-sub">Dosenbier-Stop</p>
+    <div class="wheel-wrap">
+      <div class="wheel"></div>
+      <div class="wheel-pointer">▼</div>
+    </div>
+    <p class="stop-result"></p>
+    <button class="spin primary">Drehen</button>
+  </div>
+</section>
+
+<section id="screen-collection" class="screen with-tabs">
+  <header class="topbar"><h2>Sammlung</h2><button class="dex-btn">Rütherdex</button><button class="sats-chip" data-open="shop">💰 0</button></header>
+  <p class="hint">Bis zu drei ins Team. Der erste wird Arena-Besitzer. Power-Up hebt das Level, Fusion macht aus drei gleichen einen besseren.</p>
   <div class="box"></div>
 </section>
 
@@ -85,9 +143,60 @@
 </section>
 
 <section id="screen-shop" class="screen">
-  <header class="topbar"><button class="back">‹ Karte</button><h2>Shop</h2><span class="shop-sats pill">💰 0</span></header>
+  <header class="topbar"><button class="back">‹ Zurück</button><h2>Shop</h2><span class="shop-sats pill">💰 0</span></header>
   <div class="shop-items"></div>
-  <p class="hint">Sats bekommst du für Fänge, neue Dex-Einträge und Arenasiege.</p>
+  <p class="hint">Sats bekommst du für Fänge, Dex-Einträge, Quests, Dosenbier-Stops und Arenasiege.</p>
+</section>
+
+<section id="screen-quests" class="screen with-tabs">
+  <header class="topbar"><h2>Quests</h2><button class="sats-chip" data-open="shop">💰 0</button></header>
+  <div class="quest-streak"></div>
+  <h3 class="section-title">Heute</h3>
+  <div class="quest-list"></div>
+  <p class="quest-reset hint"></p>
+</section>
+
+<section id="screen-leaderboard" class="screen with-tabs">
+  <header class="topbar"><h2>Rangliste</h2><span class="online-count pill">…</span><button class="sats-chip" data-open="shop">💰 0</button></header>
+  <p class="lb-status hint"></p>
+  <div class="lb-scroll">
+    <div class="lb-list"></div>
+    <h3 class="section-title">Zuletzt passiert</h3>
+    <div class="feed"></div>
+  </div>
+</section>
+
+<section id="screen-profile" class="screen with-tabs">
+  <header class="topbar"><h2>Profil</h2><button class="sats-chip" data-open="shop">💰 0</button></header>
+  <div class="profile-scroll">
+    <div class="profile-head">
+      <div class="frame r-normal"><img class="avatar" alt=""><span class="shine"></span></div>
+      <div class="profile-meta">
+        <div class="profile-name"><span class="nick"></span><button class="edit-name" title="Namen ändern">✏️</button></div>
+        <div class="trainer-level">Trainer Lv. <span class="lvl">1</span></div>
+        <div class="bar xp"><div class="fill"></div></div>
+        <div class="xp-text sub"></div>
+        <div class="online-id sub"></div>
+      </div>
+    </div>
+    <div class="stats-grid"></div>
+    <div class="profile-buttons">
+      <button class="go-shop">🛒 Shop</button>
+      <button class="share">📤 Teilen</button>
+    </div>
+    <h3 class="section-title">Erfolge <span class="ach-count"></span></h3>
+    <div class="ach-grid"></div>
+    <h3 class="section-title">Einstellungen</h3>
+    <div class="settings">
+      <label class="switch-row"><span>🔊 Sound</span><input type="checkbox" class="set-sound"></label>
+      <label class="switch-row"><span>📳 Haptik</span><input type="checkbox" class="set-haptics"></label>
+      <div class="avatar-pick profile-avatar-pick"></div>
+      <button class="export">Spielstand kopieren</button>
+      <button class="import">Spielstand einfügen</button>
+      <button class="reset danger">Spielstand löschen</button>
+    </div>
+    <p class="hint version">Rüther GO v4</p>
+  </div>
 </section>
 
 <section id="screen-arena" class="screen">
@@ -98,6 +207,7 @@
     <p class="level"></p>
     <p class="address"></p>
     <p class="distance"></p>
+    <p class="global-owner"></p>
     <p class="owner"></p>
     <p class="reward"></p>
     <p class="status"></p>
@@ -172,6 +282,17 @@
     <button class="back primary">Zurück zur Karte</button>
   </div>
 </section>
+
+<nav id="tabbar" class="tabbar">
+  <button data-tab="screen-map" class="active"><span class="ico">🗺️</span><span>Karte</span></button>
+  <button data-tab="screen-collection"><span class="ico">🎒</span><span>Sammlung</span></button>
+  <button data-tab="screen-quests"><span class="ico">📋</span><span>Quests</span><span class="tab-badge hidden">0</span></button>
+  <button data-tab="screen-leaderboard"><span class="ico">🏆</span><span>Rangliste</span></button>
+  <button data-tab="screen-profile"><span class="ico">👤</span><span>Profil</span></button>
+</nav>
+
+<div id="toasts" class="toasts"></div>
+<div id="popup" class="popup hidden"><div class="popup-card"></div></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script type="module" src="js/app.js"></script>

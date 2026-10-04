@@ -46,7 +46,82 @@ export const CONST = {
   STUN_GRACE: 500,
   COMBO_WINDOW: 800,
   INTRO_MS: 2600,
+  // v4: XP, Quests, Stops, Events, Online
+  XP_CATCH: { normal: 20, selten: 50, episch: 120, legendaer: 300 },
+  XP_ARENA: 100,           // × Arena-Level
+  XP_STOP: 10,
+  XP_FUSION: 60,
+  LEVEL_XP_STEP: 150,      // Level n → n+1 braucht 150 × n XP
+  LEVELUP_SATS: 100,       // × neues Level
+  ACHIEVEMENT_SATS: 50,
+  STREAK_BASE: 50,
+  STREAK_STEP: 25,
+  STREAK_MAX: 200,
+  STARTER_SATS: 100,
+  STARTER_SUPERCOINS: 1,
+  FUSION_COUNT: 3,
+  STOP_RADIUS: 600,
+  STOP_RANGE: 40,
+  STOP_COOLDOWN: 300_000,
+  STOP_MAX: 25,
+  STOP_CACHE_MS: 600_000,
+  STOP_CACHE_CELL: 300,
+  STOP_SUPERCOIN_CHANCE: 0.25,
+  HOUR_START: 18,
+  HOUR_END: 19,
+  HOUR_SATS_MULT: 1.5,
+  FEATURED_WEIGHT: 3,
+  SYNC_DEBOUNCE: 3000,
+  STATE_POLL: 60_000,
+  API_TIMEOUT: 6000,
+  SPLASH_MS: 600,
 };
+
+export const API_BASE = 'https://ruether-go.higgsfield.app';
+export const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
+export const OVERPASS_AMENITIES = ['pub', 'bar', 'biergarten', 'cafe', 'fast_food'];
+export const OVERPASS_SHOPS = ['convenience', 'kiosk', 'supermarket', 'alcohol', 'beverages'];
+export const STOP_REWARDS = [
+  { sats: 20, w: 40 },
+  { sats: 30, w: 30 },
+  { sats: 40, w: 20 },
+  { sats: 60, w: 10 },
+];
+
+// kind = Ereignis, das den Fortschritt erhöht (trackQuest(save, kind, n))
+export const QUESTS = [
+  { id: 'catch3', text: 'Fange 3 Rüthers', kind: 'catch', goal: 3, sats: 150, xp: 60 },
+  { id: 'catchRare', text: 'Fange einen Seltenen oder besser', kind: 'catchRare', goal: 1, sats: 200, xp: 80 },
+  { id: 'arenaWin', text: 'Gewinne einen Arenakampf', kind: 'arenaWin', goal: 1, sats: 250, xp: 100 },
+  { id: 'stops3', text: 'Drehe 3 Dosenbier-Stops', kind: 'stop', goal: 3, sats: 150, xp: 60 },
+  { id: 'combo8', text: 'Erreiche Combo ×8', kind: 'combo8', goal: 1, sats: 200, xp: 80 },
+  { id: 'specials3', text: 'Setze 3 Spezial-Attacken ein', kind: 'special', goal: 3, sats: 150, xp: 60 },
+  { id: 'dodge3', text: 'Weiche 3 Boss-Angriffen aus', kind: 'dodge', goal: 3, sats: 150, xp: 60 },
+  { id: 'powerup1', text: 'Mache ein Power-Up', kind: 'powerup', goal: 1, sats: 100, xp: 50 },
+  { id: 'superHit', text: 'Triff mit „Super!"-Ring', kind: 'superHit', goal: 1, sats: 150, xp: 60 },
+  { id: 'fusion1', text: 'Mache eine Fusion', kind: 'fusion', goal: 1, sats: 300, xp: 150 },
+];
+
+export const ACHIEVEMENTS = [
+  { id: 'first_catch', name: 'Erster Fang', desc: 'Fange deinen ersten Rüther', icon: '🎯' },
+  { id: 'all_five', name: 'Familienalbum', desc: 'Fange alle fünf Rüthers', icon: '👨‍👩‍👧‍👦' },
+  { id: 'rare1', name: 'Glücksgriff', desc: 'Fange einen Seltenen', icon: '🔵' },
+  { id: 'epic1', name: 'Episch!', desc: 'Fange einen Epischen', icon: '🟣' },
+  { id: 'legend1', name: 'Legende', desc: 'Fange einen Legendären', icon: '🟡' },
+  { id: 'catch10', name: 'Sammler', desc: '10 Fänge', icon: '🧺' },
+  { id: 'catch50', name: 'Großwildjäger', desc: '50 Fänge', icon: '🏹' },
+  { id: 'dex10', name: 'Halber Dex', desc: '10 Dex-Einträge', icon: '📗' },
+  { id: 'dex20', name: 'Kompletter Dex', desc: 'Alle 20 Dex-Einträge', icon: '📕' },
+  { id: 'arena1', name: 'Eroberer', desc: 'Gewinne einen Arenakampf', icon: '⚔️' },
+  { id: 'master1', name: 'Arenameister', desc: 'Meistere eine Arena', icon: '🏆' },
+  { id: 'master3', name: 'Herrscher', desc: 'Meistere alle Arenen', icon: '👑' },
+  { id: 'combo10', name: 'Combo-König', desc: 'Erreiche Combo ×10', icon: '💥' },
+  { id: 'level10', name: 'Aufgeleveled', desc: 'Ein Rüther auf Level 10', icon: '⬆️' },
+  { id: 'stops10', name: 'Stammgast', desc: 'Drehe 10 Dosenbier-Stops', icon: '🍺' },
+  { id: 'trainer5', name: 'Trainer Lv. 5', desc: 'Erreiche Trainer-Level 5', icon: '⭐' },
+  { id: 'trainer10', name: 'Trainer Lv. 10', desc: 'Erreiche Trainer-Level 10', icon: '🌟' },
+  { id: 'fusion1', name: 'Alchemist', desc: 'Mache deine erste Fusion', icon: '⚗️' },
+];
 
 export const RARITIES = [
   { id: 'normal', name: 'Normal', weight: 70, mult: 1.0, catchPenalty: 0, sats: 10, color: '#9aa0a6' },
