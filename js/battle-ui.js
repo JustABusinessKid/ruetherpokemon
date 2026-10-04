@@ -1,31 +1,44 @@
-import { CONST } from './data.js';
+import { CONST, RARITIES } from './data.js';
 import { createBattle, tick } from './battle.js';
 
-// Kampf-Bildschirm: requestAnimationFrame-Schleife um die Engine, Pointer-Eingabe,
-// Events → CSS-Animationen (css/battle.css), End-Overlay.
-// createBattleScreen({ el, onEnd }) -> { start({ team, enemy, rng }), stop() }
-// onEnd({ won, retry }) genau einmal pro Kampf, wenn der Spieler im Overlay tippt.
+// Kampf-Bildschirm: VS-Intro mit Countdown, requestAnimationFrame-Schleife um die Engine,
+// Pointer-Eingabe, Events → CSS-Animationen (css/battle.css), Combo, Wut, End-Overlay.
+// createBattleScreen({ el, onEnd }) -> { start({ team, enemy, rng, arena, arenaLevel, reward, masteredAfter }), stop() }
+// onEnd({ won, retry }) genau einmal pro Kampf: Overlay-Button oder Aufgeben.
 
 const sprite = id => `sprites/${id}.png`;
+const fmt = n => n.toLocaleString('de-DE');
 const freshInput = () => ({ taps: 0, dodge: false, special: null, switchTo: null });
 const svgLine = pts => `<svg viewBox="0 0 200 120" preserveAspectRatio="none"><polyline pathLength="100" points="${pts}"/></svg>`;
 const COLORS = ['#e53935', '#fdd835', '#43a047', '#1e88e5', '#fb8c00', '#8e24aa'];
+const RARITY_COLORS = RARITIES.map(r => r.color);
 const coins = n => Array.from({ length: n }, (_, i) =>
   `<img class="coin" src="sprites/coin.png" alt="" style="--x:${Math.round(8 + Math.random() * 84)}%;--d:${(i * 0.09).toFixed(2)}s">`).join('');
 const dots = n => Array.from({ length: n }, (_, i) =>
   `<i style="--x:${Math.round((Math.random() - 0.5) * 120)}px;--d:${(i * 0.05).toFixed(2)}s;--c:${COLORS[i % COLORS.length]}"></i>`).join('');
+const confetti = n => Array.from({ length: n }, (_, i) =>
+  `<i style="--x:${Math.round(Math.random() * 100)}%;--d:${(Math.random() * 0.8).toFixed(2)}s;--c:${RARITY_COLORS[i % RARITY_COLORS.length]};--sx:${Math.round((Math.random() - 0.5) * 140)}px;--r:${Math.round((Math.random() - 0.5) * 1080)}deg"></i>`).join('');
 const buzz = ms => navigator.vibrate?.(ms);
+// Beben nach Schaden: klein < 15, mittel < 30, groß darüber; Lade-Attacken mindestens mittel
+const quakeFor = (dmg, charged) => dmg >= 30 ? 'quake-l' : dmg >= 15 || charged ? 'quake-m' : 'quake-s';
+const QUAKE_MS = { 'quake-s': 300, 'quake-m': 500, 'quake-l': 700 };
+const COUNTDOWN = ['3', '2', '1', 'Kampf!'];
+const COUNT_STEP = 500, INTRO_LEAD = CONST.INTRO_MS - COUNTDOWN.length * COUNT_STEP;
+const COMBO_HIDE = 1000;
 
 export function createBattleScreen({ el, onEnd }) {
   const $ = s => el.querySelector(s);
-  const flash = $('.flash'), stage = $('.stage'), fx = $('.fx'), helpers = $('.helpers');
+  const flash = $('.flash'), stage = $('.stage'), fx = $('.fx'), helpers = $('.helpers'), comboEl = $('.combo');
   const enemySprite = $('.enemy-sprite'), timerEl = $('.timer');
   const enemyPanel = $('.fighter.enemy'), mePanel = $('.fighter.me');
-  const meSprite = mePanel.querySelector('.sprite'), energyFill = mePanel.querySelector('.energy .fill');
+  const frame = mePanel.querySelector('.frame'), meSprite = frame.querySelector('.sprite'), energyFill = mePanel.querySelector('.energy .fill');
   const specials = $('.specials'), sw = $('.switch'), overlay = $('.overlay');
+  const intro = $('.intro'), countdown = intro.querySelector('.countdown');
 
-  let state = null, raf = 0, lastTs = 0, running = false, ended = false, down = null;
+  let state = null, raf = 0, countRaf = 0, lastTs = 0, running = false, ended = false, down = null;
   let input = freshInput(), dodgeDir = 'left', koPending = false, batchDelay = 0;
+  let combo = 0, lastHitAt = -Infinity;
+  let ctx = {}; // { arena, arenaLevel, reward, masteredAfter }
   const timers = new Set();
   const pending = new Map(); // node -> { cls: timerId }: Neustart derselben Animation löscht den alten Entfern-Timer
 
@@ -45,6 +58,7 @@ export function createBattleScreen({ el, onEnd }) {
   }
   const setText = (n, s) => { if (n.textContent !== s) n.textContent = s; };
   const setWidth = (n, pct) => { const w = `${pct}%`; if (n.style.width !== w) n.style.width = w; };
+  const setFrame = f => { frame.className = `frame r-${f.rarity || 'normal'}`; };
 
   // ---------- Effekt-Elemente ----------
   function item(cls, at, ms, { text = '', html = '', vars = {} } = {}) {
@@ -57,6 +71,7 @@ export function createBattleScreen({ el, onEnd }) {
     return d;
   }
   const num = (n, at, cls = '') => item(`num ${cls}`, at, 900, { text: n, vars: { '--x': `${Math.round((Math.random() - 0.5) * 60)}px` } });
+  const dmgNum = (n, at, cls = '') => num(`-${n}`, at, `${cls}${n >= 25 ? ' big' : ''}`);
   const text = (t, at) => item('text', at, 1200, { text: t });
   const emoji = (ch, cls, at, ms) => item(`emoji ${cls}`, at, ms, { text: ch });
   const glow = color => item('glow-ring', 'enemy', 900, { vars: { '--c': color } });
@@ -67,8 +82,24 @@ export function createBattleScreen({ el, onEnd }) {
   }
   function hitEnemy(n) {
     anim(enemySprite, 'shake', 350);
-    num(`-${n}`, 'enemy');
+    anim(enemySprite, 'hit', 120);
+    dmgNum(n, 'enemy');
     item('boom', 'enemy', 400, { text: '💥' });
+  }
+  // Combo: schnelle Treffer mit < COMBO_WINDOW Abstand (Spielzeit), Anzeige ab ×2, ab ×10 „hot"
+  function comboHit() {
+    const t = state.time;
+    combo = t - lastHitAt < CONST.COMBO_WINDOW ? combo + 1 : 1;
+    lastHitAt = t;
+    if (combo < 2) { comboEl.classList.add('hidden'); return; } // Combo gerissen: alten Zähler sofort weg
+    setText(comboEl, `×${combo}`);
+    comboEl.classList.remove('hidden');
+    comboEl.classList.toggle('hot', combo >= 10);
+    anim(comboEl, 'bump', 200);
+  }
+  function resetCombo() {
+    combo = 0; lastHitAt = -Infinity;
+    comboEl.className = 'combo hidden';
   }
 
   // Spezial-Attacken nach attack.fx. Rückgabe: ms bis zum Einschlag (Zahl, Wackeln, Folge-Effekte).
@@ -107,7 +138,7 @@ export function createBattleScreen({ el, onEnd }) {
   function handle(e) {
     const at = e.target === 'me' ? 'me' : 'enemy';
     switch (e.type) {
-      case 'fast': hitEnemy(e.damage); break;
+      case 'fast': hitEnemy(e.damage); comboHit(); break;
       case 'special':
         batchDelay = run(FX, e.attack);
         buzz(20);
@@ -119,11 +150,12 @@ export function createBattleScreen({ el, onEnd }) {
       case 'dodge': anim(meSprite, `dodge-${dodgeDir}`, 450); text('Ausgewichen!', 'me'); break;
       case 'enemyAttack':
         batchDelay = run(BOSS_FX, e.attack);
-        if (e.kind === 'charged' && e.damage > 0) later(() => anim(stage, 'quake', 500), batchDelay);
         if (e.damage > 0) later(() => {
           if (e.dodged) { num(`-${e.damage}`, 'me', 'small'); return; }
+          const q = quakeFor(e.damage, e.kind === 'charged');
+          anim(stage, q, QUAKE_MS[q]);
           anim(meSprite, 'shake', 350);
-          num(`-${e.damage}`, 'me', 'hurt');
+          dmgNum(e.damage, 'me', 'hurt');
           buzz(e.kind === 'charged' ? 60 : 25);
         }, batchDelay);
         break;
@@ -147,6 +179,12 @@ export function createBattleScreen({ el, onEnd }) {
         num(`-${e.damage}`, 'enemy');
         break;
       }
+      case 'rage': // Wutphase: roter Rand bleibt bis Kampfende, Boss wackelt, „WUT!", 🔥 im Namen (render)
+        stage.classList.add('rage');
+        anim(enemySprite, 'rage-shake', 1000);
+        item('text rage-text', 'enemy', 1200, { text: 'WUT!' });
+        buzz([30, 30, 30, 30, 80]);
+        break;
       case 'faint': // KO erst, wenn der auslösende Boss-Angriff eingeschlagen ist
         koPending = true;
         later(() => { meSprite.classList.add('ko'); text(`${e.fighter.name} ist pleite!`, 'me'); }, batchDelay);
@@ -156,6 +194,7 @@ export function createBattleScreen({ el, onEnd }) {
         later(() => {
           meSprite.className = 'sprite';
           meSprite.src = sprite(f.id);
+          setFrame(f);
           anim(meSprite, 'slide-in', 500);
           text(`${f.name}, du bist dran!`, 'me');
         }, koPending ? batchDelay + 1000 : 0); // ko (900 ms) fertig, „ist pleite!" blendet schon aus
@@ -224,7 +263,7 @@ export function createBattleScreen({ el, onEnd }) {
 
   // ---------- Rendern pro Frame ----------
   function panel(p, f, t) {
-    setText(p.querySelector('.fname'), f.name);
+    setText(p.querySelector('.fname'), `${f.rage ? '🔥 ' : ''}${f.name}${f.level ? ` · Lv. ${f.level}` : ''}`);
     const pct = Math.max(0, Math.round((100 * f.btc) / f.maxBtc));
     const fill = p.querySelector('.hp .fill');
     setWidth(fill, pct);
@@ -252,6 +291,7 @@ export function createBattleScreen({ el, onEnd }) {
     enemySprite.classList.toggle('poisoned', !!e.status.poison);
     meSprite.classList.toggle('poisoned', !!me.status.poison);
     helpers.classList.toggle('hidden', !state.summons.length);
+    if (combo && t - lastHitAt > COMBO_HIDE) resetCombo();
     const stunnedMe = me.status.stunUntil > t;
     specials.querySelectorAll('.special').forEach((b, i) => {
       const a = me.attacks[i];
@@ -268,7 +308,7 @@ export function createBattleScreen({ el, onEnd }) {
   // sparsamer Browser) folgt die Spielzeit der echten Zeit. Tipps werden auf die
   // Schritte verteilt, Spezial/Ausweichen/Wechsel gelten im ersten Schritt.
   const STEP = 1000 / 60, MAX_CATCHUP = 1500;
-  function frame(ts) {
+  function loop(ts) {
     if (!running) return;
     let elapsed = Math.min(MAX_CATCHUP, lastTs ? ts - lastTs : STEP);
     lastTs = ts;
@@ -287,7 +327,30 @@ export function createBattleScreen({ el, onEnd }) {
     }
     batchDelay = 0; koPending = false;
     render();
-    raf = state.over ? 0 : requestAnimationFrame(frame);
+    raf = state.over ? 0 : requestAnimationFrame(loop);
+  }
+  function begin() {
+    running = true; lastTs = 0;
+    raf = requestAnimationFrame(loop);
+  }
+
+  // ---------- VS-Intro: Arena, Sprites, „VS", Countdown; erst danach läuft die Schleife ----------
+  function showIntro(then) {
+    const me = state.team[state.active], boss = state.enemy;
+    setText(intro.querySelector('.intro-arena'), ctx.arena?.name || 'Arena');
+    setText(intro.querySelector('.intro-level'), `Arena Lv. ${ctx.arenaLevel}${ctx.masteredAfter ? ' 👑' : ''}`);
+    intro.querySelector('.intro-me').src = sprite(me.id);
+    intro.querySelector('.intro-boss').src = sprite(boss.id);
+    setText(intro.querySelector('.intro-me-name'), me.name);
+    setText(intro.querySelector('.intro-boss-name'), boss.name);
+    countdown.textContent = ''; countdown.className = 'countdown';
+    intro.classList.remove('hidden');
+    COUNTDOWN.forEach((s, i) => later(() => {
+      setText(countdown, s);
+      countdown.classList.toggle('go', i === COUNTDOWN.length - 1);
+      anim(countdown, 'pop', 450);
+    }, INTRO_LEAD + i * COUNT_STEP));
+    later(() => { intro.classList.add('hidden'); then(); }, CONST.INTRO_MS);
   }
 
   // ---------- Eingabe ----------
@@ -316,6 +379,18 @@ export function createBattleScreen({ el, onEnd }) {
   }
 
   // ---------- Ende ----------
+  // Sats-Zähler rollt in 1 s von 0 auf target (zeitbasiert, damit auch gedrosseltes rAF richtig endet)
+  function countUp(node, target) {
+    cancelAnimationFrame(countRaf);
+    const t0 = performance.now();
+    const step = now => {
+      const k = Math.min(1, (now - t0) / 1000);
+      setText(node, `+${fmt(Math.round(target * (1 - (1 - k) ** 3)))} 💰`);
+      countRaf = k < 1 ? requestAnimationFrame(step) : 0;
+    };
+    setText(node, '+0 💰');
+    countRaf = requestAnimationFrame(step);
+  }
   function showOverlay() {
     const won = !!state.won, boss = state.enemy, img = overlay.querySelector('.boss');
     img.src = sprite(boss.id);
@@ -327,6 +402,12 @@ export function createBattleScreen({ el, onEnd }) {
     setText(overlay.querySelector('.sub'), won
       ? `${boss.name} ist pleite. Die Arena gehört jetzt ${state.team[0].name}.`
       : state.reason === 'timeout' ? 'Die Zeit ist um.' : 'Alle Rüthers sind pleite.');
+    overlay.querySelector('.confetti').innerHTML = won ? confetti(30) : '';
+    const gain = overlay.querySelector('.sats-gain');
+    gain.classList.toggle('hidden', !won);
+    if (won) later(() => countUp(gain, ctx.reward || 0), 800); // erst wenn .sats-gain eingeblendet ist (sats-in startet nach .8s)
+    setText(overlay.querySelector('.arena-note'), !won ? ''
+      : ctx.masteredAfter ? 'Arena gemeistert! 👑' : `Arena Lv. ${(ctx.arenaLevel || 1) + 1} freigeschaltet`);
     overlay.classList.remove('hidden');
   }
   function end(retry) {
@@ -337,40 +418,48 @@ export function createBattleScreen({ el, onEnd }) {
     onEnd({ won, retry });
   }
   overlay.querySelector('.done').addEventListener('click', () => end(false));
-  // Aufgeben: Kampf sofort beenden, zählt als Niederlage
+  // Aufgeben: Kampf sofort beenden (auch im Intro), zählt als Niederlage – außer der Kampf ist schon entschieden
+  // (zwischen KO und Overlay liegen bis ~1,7 s, ein Tipp auf ✕ darf den Sieg nicht verwerfen)
   el.querySelector('.quit').addEventListener('click', () => {
     if (!state || ended) return;
     ended = true;
     stop();
-    onEnd({ won: false, retry: false });
+    onEnd({ won: !!(state.over && state.won), retry: false });
   });
   overlay.querySelector('.retry').addEventListener('click', () => end(true));
 
   function stop() {
     running = false;
     cancelAnimationFrame(raf); raf = 0;
+    cancelAnimationFrame(countRaf); countRaf = 0;
     for (const id of timers) clearTimeout(id);
     timers.clear(); pending.clear();
     window.removeEventListener('keydown', onKey);
     fx.innerHTML = ''; helpers.innerHTML = ''; helpers.classList.add('hidden');
-    flash.className = 'flash'; stage.classList.remove('quake');
+    flash.className = 'flash'; stage.classList.remove('rage', 'quake-s', 'quake-m', 'quake-l');
     enemySprite.className = 'enemy-sprite sprite'; meSprite.className = 'sprite';
     specials.classList.remove('shake-x'); enemyPanel.classList.remove('glow'); mePanel.classList.remove('glow');
-    sw.classList.add('hidden'); overlay.classList.add('hidden');
+    resetCombo();
+    sw.classList.add('hidden'); overlay.classList.add('hidden'); intro.classList.add('hidden');
+    overlay.querySelector('.confetti').innerHTML = '';
     down = null; input = freshInput();
   }
 
-  function start({ team, enemy, rng = Math.random }) {
+  function start({ team, enemy, rng = Math.random, arena = null, arenaLevel = 1, reward = 0, masteredAfter = false }) {
     stop();
     state = createBattle({ team, enemy, rng });
-    ended = false; lastTs = 0; running = true; koPending = false; batchDelay = 0;
+    ctx = { arena, arenaLevel, reward, masteredAfter };
+    ended = false; koPending = false; batchDelay = 0;
+    if (arena?.id) stage.dataset.arena = arena.id; else delete stage.dataset.arena;
+    const me = state.team[state.active];
     enemySprite.src = sprite(state.enemy.id);
-    meSprite.src = sprite(state.team[state.active].id);
+    meSprite.src = sprite(me.id);
+    setFrame(me);
     anim(meSprite, 'slide-in', 500);
     buildSpecials();
-    render();
+    render(); // Timer steht auf 90, bis das Intro vorbei ist
     window.addEventListener('keydown', onKey);
-    raf = requestAnimationFrame(frame);
+    showIntro(begin);
   }
 
   return { start, stop };

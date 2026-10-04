@@ -12,9 +12,12 @@ also auf einen statischen Host (z.B. GitHub Pages) legen.
 ## Steuerung
 
 - Karte folgt dir. Karte verschoben? 📍 unten rechts tippen.
-- Fangen: Münze nach oben schnippen, kleiner Ring = bessere Chance. Drei Ausbrüche, dann ist der Rüther weg.
-- Kampf: auf den Boss tippen = schneller Angriff und Energie. Spezial-Buttons unten, wenn die Energie reicht. Blinkt es, nach links oder rechts wischen = ausweichen. 90 Sekunden Zeit.
-- Arenasieg: die Arena gehört deinem ersten Team-Rüther, Trophäe im HUD.
+- Rüthers gibt es in vier Seltenheiten (Normal, Selten, Episch, Legendär), erkennbar an Rand und Aura auf der Karte. Seltenere sind stärker und schwerer zu fangen.
+- Fangen: Münze nach oben schnippen, kleiner Ring = bessere Chance. Super-Münze (Shop) gibt +20 %. Drei Ausbrüche, dann ist der Rüther weg.
+- Sammlung: bis zu drei ins Team, Power-Up hebt das Level (kostet Sats). Rütherdex zeigt alle 20 Kombinationen.
+- Shop: Lockmodul (5 Minuten doppelte Spawns), Super-Münzen. Sats gibt es für Fänge, neue Dex-Einträge und Arenasiege.
+- Kampf: VS-Intro, dann auf den Boss tippen. Spezial-Buttons unten, wenn die Energie reicht. Blinkt es, wischen = ausweichen. Unter 50 % wird der Boss wütend und schneller. 90 Sekunden Zeit, ✕ oben links = aufgeben.
+- Arenen haben fünf Level, der Boss wird pro Level stärker und die Belohnung größer. Level 5 besiegt = gemeistert (👑). Alle drei gemeistert = Krone.
 
 ## Test-Modus
 

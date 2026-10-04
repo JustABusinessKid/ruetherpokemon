@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { makeFighter, makeBoss, createBattle, tick } from '../js/battle.js';
 import { RUETHER_BY_ID, BOSSES } from '../js/data.js';
 
-const F = (id, bonus = 0) => makeFighter(RUETHER_BY_ID[id], bonus);
+const F = (id, extra = 0) => { const f = makeFighter(RUETHER_BY_ID[id]); f.btc += extra; f.maxBtc += extra; return f; };
 const B = (team, bossId, opts = {}) => createBattle({ team, enemy: makeBoss(BOSSES[bossId]), rng: () => 0.5, ...opts });
 // tickt in 50-ms-Schritten; input nur im ersten Schritt
 function run(s, ms, input = {}, dt = 50) {
@@ -210,4 +210,38 @@ test('Wechsel per Eingabe', () => {
   assert.equal(find(ev, 'switch').to, 1);
   assert.equal(s.active, 1);
   assert.ok(!has(tick(s, 50, { switchTo: 1 }), 'switch'));
+});
+
+test('v3: Legendär Level 1 Christian tippt 4 Schaden, Level 20 Legendär 8', () => {
+  const s = B([makeFighter(RUETHER_BY_ID.christian, { uid: 'x', rarity: 'legendaer', level: 1 })], 'ps3');
+  tick(s, 16, { taps: 1 });
+  assert.equal(s.enemy.btc, 256); // floor(3 × 1,6) = 4
+  assert.equal(s.team[0].btc, 160);
+  const t = B([makeFighter(RUETHER_BY_ID.christian, { uid: 'y', rarity: 'legendaer', level: 20 })], 'ps3');
+  tick(t, 16, { taps: 1 });
+  assert.equal(t.enemy.btc, 252); // floor(3 × 2,816) = 8
+  assert.equal(t.team[0].maxBtc, 282);
+});
+
+test('v3: Boss Arena-Level 3 hat 390 BTC und Blu-ray 18', () => {
+  const b = makeBoss(BOSSES.ps3, 3);
+  assert.equal(b.btc, 390);
+  assert.equal(b.fast.damage, 18);
+  assert.equal(b.charged[0].damage, 37); // floor(25 × 1,5)
+  assert.equal(makeBoss(BOSSES.ps3).btc, 260);
+});
+
+test('v3: Wutphase unter 50 %: Event rage, nächster schneller Angriff nach 1800 ms', () => {
+  const s = B([F('christian', 500)], 'ps3');
+  s.enemy.btc = 130;
+  let ev = tick(s, 50);
+  assert.ok(has(ev, 'rage'));
+  assert.equal(s.enemy.rage, true);
+  ev = run(s, 1750); // bis 1800: Warnung ab 1250, Angriff bei 1850
+  assert.ok(!has(ev, 'enemyAttack'));
+  ev = run(s, 50);
+  assert.ok(has(ev, 'enemyAttack'));
+  ev = run(s, 1800); // nächster bei 3650
+  assert.equal(ev.filter(e => e.type === 'enemyAttack').length, 1);
+  assert.ok(!has(tick(s, 50), 'rage')); // nur einmal
 });

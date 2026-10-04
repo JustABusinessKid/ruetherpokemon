@@ -1,0 +1,53 @@
+/* Sammlung */
+#screen-collection .hint, #screen-shop .hint { padding: 0 14px; }
+#screen-collection .topbar .dex-btn { padding: 6px 10px; background: var(--orange); color: #111; font-weight: 700; }
+.box { flex: 1; overflow: auto; padding: 0 14px calc(14px + env(safe-area-inset-bottom)); }
+.box h3 { margin: 14px 0 6px; font-size: 15px; color: var(--muted); }
+.box .empty { color: var(--muted); text-align: center; margin-top: 40px; }
+.card { display: flex; gap: 12px; align-items: center; background: var(--panel); border-radius: 12px; padding: 10px; margin-bottom: 10px; position: relative; border: 2px solid transparent; }
+.card.in-team { border-color: var(--orange); }
+.card .frame img { width: 72px; height: 72px; }
+.card .order { position: absolute; top: -8px; left: -8px; background: var(--orange); color: #111; font-weight: 700; border-radius: 50%; width: 24px; height: 24px; line-height: 24px; text-align: center; }
+.card .meta { flex: 1; min-width: 0; }
+.card .cname { font-weight: 700; }
+.card .rar { font-size: 12px; padding: 1px 6px; border-radius: 6px; background: rgba(255,255,255,.1); margin-left: 4px; }
+.card.r-selten .rar { color: var(--r-selten); }
+.card.r-episch .rar { color: var(--r-episch); }
+.card.r-legendaer .rar { color: var(--r-legendaer); }
+.card .sub { font-size: 12px; color: var(--muted); margin: 2px 0 6px; }
+.card .actions { display: flex; gap: 6px; }
+.card .actions button { padding: 8px 10px; font-size: 13px; flex: 1; white-space: nowrap; }
+.card .power-btn:not(:disabled) { background: var(--orange); color: #111; font-weight: 700; }
+/* Power-Up: Rahmen leuchtet, Sterne steigen im Rahmen auf (--x/--d setzt JS, Rahmen schneidet oben ab), Levelzahl springt */
+.card.level-up .frame { animation: level-glow 1.2s ease-out; }
+.card .lvl-pop { display: inline-block; margin-left: 6px; color: var(--r-legendaer); font-weight: 800; animation: lvl-pop 1.2s ease-out forwards; }
+.card .lvl-star { position: absolute; left: var(--x, 30px); bottom: 6px; font-size: 14px; line-height: 1; color: var(--r-legendaer); text-shadow: 0 0 6px var(--r-legendaer); pointer-events: none; animation: lvl-rise .8s ease-out var(--d, 0s) both; }
+@keyframes level-glow { 0% { box-shadow: 0 0 0 0 var(--orange); } 50% { box-shadow: 0 0 24px 6px var(--orange); } 100% { box-shadow: 0 0 0 0 transparent; } }
+@keyframes lvl-pop { 0% { transform: scale(.4); opacity: 0; } 30% { transform: scale(1.3); opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
+@keyframes lvl-rise { 0% { transform: translateY(0) scale(.5); opacity: 0; } 25% { transform: translateY(-12px) scale(1); opacity: 1; } 100% { transform: translateY(-64px) scale(.7); opacity: 0; } }
+
+/* Rütherdex */
+.dex-grid { display: grid; grid-template-columns: 1.3fr repeat(4, 1fr); gap: 6px; padding: 10px; overflow: auto; align-content: start; }
+.dex-head { font-size: 11px; text-align: center; color: var(--muted); }
+.dex-head.r-selten { color: var(--r-selten); } .dex-head.r-episch { color: var(--r-episch); } .dex-head.r-legendaer { color: var(--r-legendaer); }
+.dex-name { font-size: 13px; font-weight: 700; align-self: center; }
+.dex-cell { aspect-ratio: 1; border-radius: 10px; border: 3px solid var(--r-normal); background: #111; overflow: hidden; }
+.dex-cell.r-selten { border-color: var(--r-selten); } .dex-cell.r-episch { border-color: var(--r-episch); } .dex-cell.r-legendaer { border-color: var(--r-legendaer); }
+.dex-cell img { width: 100%; height: 100%; image-rendering: pixelated; }
+.dex-cell.missing { opacity: .35; border-style: dashed; }
+
+/* Shop */
+.shop-items { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.shop-item { display: flex; gap: 12px; align-items: center; background: var(--panel); border-radius: 12px; padding: 12px; }
+.shop-item .icon { font-size: 36px; }
+.shop-item .meta { flex: 1; }
+.shop-item .iname { font-weight: 700; }
+.shop-item .sub { font-size: 12px; color: var(--muted); }
+.shop-item .owned { color: var(--orange); }
+.shop-item .buy { white-space: nowrap; }
+.shop-item.bought { animation: bought .6s ease-out; }
+@keyframes bought { 0% { background: var(--orange); } 100% { background: var(--panel); } }
+
+/* Arena-Info */
+.arena-body .level { color: var(--orange); font-weight: 700; }
+.arena-body .reward { color: var(--r-legendaer); }

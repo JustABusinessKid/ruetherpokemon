@@ -7,12 +7,16 @@
   --green: #3ddc84;
   --red: #ff5252;
   --purple: #b36bff;
+  --r-normal: #9aa0a6;
+  --r-selten: #2a7fff;
+  --r-episch: #b36bff;
+  --r-legendaer: #f7c948;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; overflow: hidden; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 img { -webkit-user-drag: none; }
 img.sprite, .spawn-icon img, .slot img { image-rendering: pixelated; }
-button { font: inherit; border: 0; border-radius: 10px; padding: 10px 14px; background: var(--panel); color: var(--text); }
+button { font: inherit; border: 0; border-radius: 10px; padding: 10px 14px; min-height: 44px; background: var(--panel); color: var(--text); } /* min-height: Touch-Ziel */
 button.primary { background: var(--orange); color: #111; font-weight: 700; }
 button:disabled { opacity: .4; }
 .hidden { display: none !important; }
@@ -29,7 +33,9 @@ button:disabled { opacity: .4; }
 #map { flex: 1; background: #333; }
 .locate { position: absolute; right: 12px; bottom: 12px; z-index: 1000; width: 48px; height: 48px; border-radius: 50%; padding: 0; font-size: 22px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
 .locate.following { background: var(--orange); }
-.player-pulse { border-radius: 50%; background: rgba(42,127,255,.3); animation: pulse 2s ease-out infinite; }
+/* Puls auf einem Pseudo-Element: Leaflet positioniert den Marker per Inline-transform, eine Animation darauf würde das überschreiben */
+.player-pulse { pointer-events: none; }
+.player-pulse::before { content: ''; position: absolute; inset: 0; border-radius: 50%; background: rgba(42,127,255,.3); animation: pulse 2s ease-out infinite; }
 @keyframes pulse { 0% { transform: scale(.4); opacity: .9; } 100% { transform: scale(1.4); opacity: 0; } }
 .bottombar { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; padding-bottom: calc(10px + env(safe-area-inset-bottom)); background: var(--panel); z-index: 1000; font-size: 14px; }
 .banner { background: var(--red); color: #fff; padding: 8px 14px; font-size: 14px; z-index: 1000; }
@@ -38,11 +44,11 @@ button:disabled { opacity: .4; }
 .spawn-icon img { width: 48px; height: 48px; border-radius: 8px; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
 .arena-icon { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: var(--purple); color: #fff; font-size: 22px; border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
 .arena-icon.beaten { background: #d4a017; }
-.arena-icon.owned { background: #d4a017; width: 48px; height: 48px; position: relative; overflow: visible; }
+.arena-icon.owned { background: #d4a017; width: 48px; height: 48px; overflow: visible; }
 .arena-icon.owned img { width: 100%; height: 100%; border-radius: 50%; image-rendering: pixelated; }
 .arena-icon.owned .trophy { position: absolute; right: -8px; bottom: -8px; font-size: 18px; }
 
-.debug { position: absolute; top: calc(120px + env(safe-area-inset-top)); right: 10px; z-index: 1200; display: flex; flex-direction: column; gap: 6px; background: rgba(0,0,0,.9); padding: 10px; border-radius: 12px; font-size: 13px; }
+.debug { position: absolute; top: calc(120px + env(safe-area-inset-top)); right: 10px; z-index: 1200; display: flex; flex-direction: column; gap: 6px; max-height: calc(100% - 130px - env(safe-area-inset-top)); overflow: auto; background: rgba(0,0,0,.9); padding: 10px; border-radius: 12px; font-size: 13px; }
 .debug button { padding: 8px 10px; font-size: 13px; }
 
 .hint { color: var(--muted); font-size: 13px; }
@@ -66,3 +72,41 @@ button:disabled { opacity: .4; }
 /* Sieg */
 #screen-victory { align-items: center; justify-content: center; text-align: center; padding: 20px; background: radial-gradient(circle, #5a4a10, var(--bg)); }
 .crown { font-size: 96px; }
+
+/* Seltenheit, Rahmen, Glanz (geteilt von Karte, Sammlung, Kampf, Fangen) */
+.frame { position: relative; display: inline-block; border: 3px solid var(--r-normal); border-radius: 12px; overflow: hidden; background: #111; }
+.frame.r-selten { border-color: var(--r-selten); }
+.frame.r-episch { border-color: var(--r-episch); box-shadow: 0 0 10px var(--r-episch); }
+.frame.r-legendaer { border-color: var(--r-legendaer); box-shadow: 0 0 14px var(--r-legendaer); }
+.frame img { display: block; image-rendering: pixelated; }
+.frame .shine { display: none; position: absolute; inset: -40% -60%; background: linear-gradient(115deg, transparent 40%, rgba(255,255,255,.45) 50%, transparent 60%); pointer-events: none; }
+.frame.r-episch .shine, .frame.r-legendaer .shine { display: block; animation: shine 2.4s linear infinite; }
+@keyframes shine { from { transform: translateX(-60%); } to { transform: translateX(60%); } }
+.pill { background: rgba(255,255,255,.12); border-radius: 999px; padding: 3px 10px; font-size: 13px; }
+.sats { font-weight: 700; color: var(--orange); }
+.bottombar button { padding: 10px 16px; }
+.banner.lure { background: #7a4a00; color: #ffd27a; }
+
+/* .spawn-icon/.arena-icon: kein position: relative – Leaflet positioniert Marker absolut (sonst stapeln sie sich im Fluss der Marker-Pane) */
+.spawn-icon .aura { position: absolute; inset: -8px; border-radius: 50%; opacity: 0; pointer-events: none; }
+.spawn-icon img { position: relative; }
+.spawn-icon.r-selten img { border-color: var(--r-selten); }
+.spawn-icon.r-episch img { border-color: var(--r-episch); }
+.spawn-icon.r-legendaer img { border-color: var(--r-legendaer); }
+.spawn-icon.r-selten .aura { background: radial-gradient(circle, var(--r-selten) 0%, transparent 70%); opacity: .6; animation: aura-pulse 1.8s ease-in-out infinite; }
+.spawn-icon.r-episch .aura { background: radial-gradient(circle, var(--r-episch) 0%, transparent 70%); opacity: .7; animation: aura-pulse 1.4s ease-in-out infinite; }
+.spawn-icon.r-legendaer .aura { background: radial-gradient(circle, var(--r-legendaer) 0%, transparent 70%); opacity: .85; animation: aura-pulse 1s ease-in-out infinite; }
+.spawn-icon .star { position: absolute; top: -12px; right: -10px; font-size: 16px; animation: aura-pulse 1s ease-in-out infinite; }
+@keyframes aura-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
+
+.arena-icon { overflow: visible; }
+.arena-icon .lvl { position: absolute; left: -8px; bottom: -8px; background: #111; color: #fff; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 6px; border: 1px solid #fff; }
+.arena-icon.mastered { box-shadow: 0 0 0 3px var(--r-legendaer), 0 0 16px var(--r-legendaer); }
+
+/* Weniger Bewegung: Schmuck-Schleifen und starkes Beben aus; Gameplay-Signale (gelb/rot-Blinken, Fang-Ring, Treffer) bleiben */
+@media (prefers-reduced-motion: reduce) {
+  .frame .shine { display: none !important; }
+  .spawn-icon .aura, .spawn-icon .star, .player-pulse::before,
+  #screen-battle .stage .bg::before, #screen-battle .stage .bg::after, #screen-battle .stage[class*="quake"],
+  #screen-battle .enemy-sprite.rage-shake, #screen-battle .combo.hot::before, #screen-battle .combo.hot::after { animation: none !important; }
+}

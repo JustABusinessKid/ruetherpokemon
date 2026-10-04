@@ -1,18 +1,28 @@
 import { CONST } from './data.js';
+import { fighterStats, arenaScale } from './progress.js';
 
 // Echtzeit-Engine. tick() mutiert den State und liefert Events für die Animationen.
 
 const freshStatus = () => ({ poison: null, stunUntil: 0, weakenedUntil: 0 });
 
-export function makeFighter(def, bonusBtc = 0) {
-  const max = def.btc + bonusBtc;
-  return { id: def.id, name: def.name, btc: max, maxBtc: max, attacks: def.attacks, energy: 0, used: {}, status: freshStatus() };
+// inst: Exemplar { uid, rarity, level } oder undefined (Normal, Level 1)
+export function makeFighter(def, inst) {
+  const { btc, power } = fighterStats(def, inst);
+  return {
+    id: def.id, uid: inst?.uid || null, name: def.name, rarity: inst?.rarity || 'normal', level: inst?.level || 1,
+    btc, maxBtc: btc, power, attacks: def.attacks, energy: 0, used: {}, status: freshStatus(),
+  };
 }
 
-export function makeBoss(def) {
+export function makeBoss(def, arenaLevel = 1) {
+  const scale = arenaScale(arenaLevel);
+  const dmg = n => Math.floor(n * scale);
+  const btc = Math.floor(def.btc * scale);
   return {
-    id: def.id, name: def.name, btc: def.btc, maxBtc: def.btc,
-    fast: def.fast, charged: def.charged, chargedIndex: 0,
+    id: def.id, name: def.name, btc, maxBtc: btc, arenaLevel, rage: false,
+    fast: { ...def.fast, damage: dmg(def.fast.damage) },
+    charged: def.charged.map(c => ({ ...c, damage: dmg(c.damage) })),
+    chargedIndex: 0, fastEvery: def.fast.every, chargedEvery: CONST.CHARGED_EVERY,
     nextFastAt: def.fast.every, nextChargedAt: CONST.CHARGED_EVERY, warning: null,
     status: freshStatus(),
   };
@@ -43,7 +53,7 @@ function stunEnemy(s, ms, ev) {
 
 function applySpecial(s, me, atk, ev) {
   const e = s.enemy;
-  const dealt = atk.damage > 0 ? hurt(e, atk.damage) : 0;
+  const dealt = atk.damage > 0 ? hurt(e, atk.damage * me.power) : 0;
   ev.push({ type: 'special', attack: atk, damage: dealt });
   if (atk.poison) { poison(e, atk.poison, s.time); ev.push({ type: 'poisoned', target: 'enemy', ms: atk.poison.ms }); }
   if (atk.stun) stunEnemy(s, atk.stun, ev);
@@ -51,7 +61,7 @@ function applySpecial(s, me, atk, ev) {
   if (atk.drain && dealt > 0) ev.push({ type: 'heal', target: 'me', amount: heal(me, dealt) });
   if (atk.heal) ev.push({ type: 'heal', target: 'me', amount: heal(me, atk.heal) });
   if (atk.summon) {
-    s.summons = atk.summon.map(x => ({ id: x.id, name: x.name, damage: x.damage, nextAt: s.time + CONST.SUMMON_INTERVAL, until: s.time + atk.summonMs }));
+    s.summons = atk.summon.map(x => ({ id: x.id, name: x.name, damage: x.damage, power: me.power, nextAt: s.time + CONST.SUMMON_INTERVAL, until: s.time + atk.summonMs }));
     ev.push({ type: 'summoned', names: atk.summon.map(x => x.name), ids: atk.summon.map(x => x.id), ms: atk.summonMs });
   }
 }
@@ -70,12 +80,23 @@ function resolveEnemyAttack(s, me, ev) {
   if (atk.heal) ev.push({ type: 'heal', target: 'enemy', amount: heal(e, atk.heal) });
   e.warning = null;
   if (w.kind === 'fast') {
-    e.nextFastAt = s.time + e.fast.every;
+    e.nextFastAt = s.time + e.fastEvery;
   } else {
-    e.nextChargedAt = s.time + CONST.CHARGED_EVERY;
+    e.nextChargedAt = s.time + e.chargedEvery;
     e.chargedIndex = (e.chargedIndex + 1) % e.charged.length;
     e.nextFastAt = Math.max(e.nextFastAt, s.time + 1000);
   }
+}
+
+function rageStep(s, ev) {
+  const e = s.enemy;
+  if (e.rage || !alive(e) || e.btc > CONST.RAGE_AT * e.maxBtc) return;
+  e.rage = true;
+  e.fastEvery = CONST.RAGE_FAST_EVERY;
+  e.chargedEvery = CONST.RAGE_CHARGED_EVERY;
+  e.nextFastAt = s.time + e.fastEvery;
+  e.nextChargedAt = Math.min(e.nextChargedAt, s.time + e.chargedEvery);
+  ev.push({ type: 'rage' });
 }
 
 function enemyStep(s, me, ev) {
@@ -97,7 +118,7 @@ function enemyStep(s, me, ev) {
 function summonStep(s, ev) {
   for (const su of s.summons) {
     while (su.nextAt <= s.time && su.nextAt <= su.until) {
-      ev.push({ type: 'summon', id: su.id, name: su.name, damage: hurt(s.enemy, su.damage) });
+      ev.push({ type: 'summon', id: su.id, name: su.name, damage: hurt(s.enemy, su.damage * (su.power || 1)) });
       su.nextAt += CONST.SUMMON_INTERVAL;
     }
   }
@@ -129,7 +150,6 @@ export function tick(s, dt, input = {}) {
   s.tapCooldown = Math.max(0, s.tapCooldown - dt);
   let me = s.team[s.active];
 
-  // 2. Eingabe
   const sw = input.switchTo;
   if (sw != null && sw !== s.active && s.team[sw] && alive(s.team[sw])) {
     s.active = sw; me = s.team[sw];
@@ -139,7 +159,7 @@ export function tick(s, dt, input = {}) {
   for (let i = 0; i < (input.taps || 0); i++) {
     if (meStunned) { ev.push({ type: 'stunnedTap' }); break; }
     if (s.tapCooldown > 0) break;
-    const d = hurt(s.enemy, CONST.FAST_DAMAGE);
+    const d = hurt(s.enemy, CONST.FAST_DAMAGE * me.power);
     me.energy = Math.min(CONST.MAX_ENERGY, me.energy + CONST.FAST_ENERGY);
     s.tapCooldown = CONST.FAST_COOLDOWN;
     ev.push({ type: 'fast', damage: d });
@@ -159,13 +179,12 @@ export function tick(s, dt, input = {}) {
     }
   }
 
-  // 3.–5.
   summonStep(s, ev);
+  rageStep(s, ev);
   if (alive(s.enemy)) enemyStep(s, me, ev);
   poisonStep(s, me, 'me', ev, dt);
   poisonStep(s, s.enemy, 'enemy', ev, dt);
 
-  // 6. Ausgang
   if (!alive(s.enemy)) return finish(s, true, 'ko', ev);
   if (!alive(me)) {
     ev.push({ type: 'faint', fighter: me });

@@ -1,16 +1,19 @@
 /* global L */
-// Leaflet-Adapter mit Folgen-Modus und Besitz-Markern.
+// Leaflet-Adapter mit Folgen-Modus, Seltenheits-Markern und Arena-Leveln.
 
 const HAGEN = [51.36, 7.47];
 
-function spriteIcon(id) {
-  return L.divIcon({ className: 'spawn-icon', html: `<img src="sprites/${id}.png" alt="">`, iconSize: [48, 48], iconAnchor: [24, 24] });
+function spriteIcon(id, rarity = 'normal') {
+  const star = rarity === 'legendaer' ? '<span class="star">✨</span>' : '';
+  return L.divIcon({ className: `spawn-icon r-${rarity}`, html: `<span class="aura"></span><img src="sprites/${id}.png" alt="">${star}`, iconSize: [48, 48], iconAnchor: [24, 24] });
 }
-function arenaIcon() {
-  return L.divIcon({ className: 'arena-icon', html: '⚔', iconSize: [40, 40], iconAnchor: [20, 20] });
-}
-function ownedIcon(ruetherId) {
-  return L.divIcon({ className: 'arena-icon owned', html: `<img src="sprites/${ruetherId}.png" alt=""><span class="trophy">🏆</span>`, iconSize: [48, 48], iconAnchor: [24, 24] });
+function arenaIcon({ level = 1, mastered = false, ownerId = null } = {}) {
+  const badge = `<span class="lvl">${mastered ? '👑' : 'Lv.' + level}</span>`;
+  const cls = mastered ? ' mastered' : '';
+  if (ownerId) {
+    return L.divIcon({ className: 'arena-icon owned' + cls, html: `<img src="sprites/${ownerId}.png" alt=""><span class="trophy">🏆</span>${badge}`, iconSize: [48, 48], iconAnchor: [24, 24] });
+  }
+  return L.divIcon({ className: 'arena-icon' + cls, html: `⚔${badge}`, iconSize: [40, 40], iconAnchor: [20, 20] });
 }
 
 export function createMap({ el, arenas, onSpawnTap, onArenaTap, onFollowChange }) {
@@ -42,11 +45,10 @@ export function createMap({ el, arenas, onSpawnTap, onArenaTap, onFollowChange }
     setSpawns(spawns) {
       spawnLayer.clearLayers();
       for (const s of spawns) {
-        // zIndexOffset: Spawns liegen über Arena-Markern, sonst verdeckt die Arena nahe Spawns (Leaflet staffelt nach Breitengrad)
-        L.marker([s.lat, s.lon], { icon: spriteIcon(s.ruetherId), zIndexOffset: 1000 }).addTo(spawnLayer).on('click', () => onSpawnTap(s));
+        L.marker([s.lat, s.lon], { icon: spriteIcon(s.ruetherId, s.rarity), zIndexOffset: 1000 }).addTo(spawnLayer).on('click', () => onSpawnTap(s));
       }
     },
-    setArenaOwner(id, ruetherId) { arenaMarkers[id].setIcon(ruetherId ? ownedIcon(ruetherId) : arenaIcon()); },
+    setArena(id, info) { arenaMarkers[id].setIcon(arenaIcon(info)); },
     invalidate() { map.invalidateSize(); },
   };
 }

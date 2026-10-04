@@ -1,6 +1,7 @@
 /* Kampf-Bildschirm (Echtzeit). Layout passt auf 375×812 ohne Scroll.
    Alle Bewegungen sind CSS-Keyframes; js/battle-ui.js setzt nur Klassen und erzeugt .fx-item-Elemente.
-   Einmal-Animationen nutzen die Einzel-Eigenschaften translate/rotate/scale, damit sie sich nicht gegenseitig überschreiben. */
+   Einmal-Animationen nutzen die Einzel-Eigenschaften translate/rotate/scale, damit sie sich nicht gegenseitig überschreiben.
+   Ebenen: .bg 0 · Boss 1 · .rage::after/.helpers 2 · .fx/.combo 3 · .flash 5 · .switch 6 · .intro 8 · .quit 9 · .overlay 10 */
 
 #screen-battle { position: fixed; inset: 0; overflow: hidden; gap: 8px; padding: 8px 10px; padding-top: calc(8px + env(safe-area-inset-top)); padding-bottom: calc(8px + env(safe-area-inset-bottom)); background: radial-gradient(ellipse at 50% 35%, #34344b 0%, var(--bg) 70%); }
 
@@ -24,23 +25,69 @@
 #screen-battle .bar.energy .fill.full { box-shadow: 0 0 10px var(--orange); }
 #screen-battle .btc { font-size: 12px; color: var(--muted); }
 #screen-battle .status { font-size: 12px; min-height: 16px; }
-#screen-battle .battle-top { padding-left: 40px; }
-#screen-battle .quit { position: absolute; left: 10px; top: calc(10px + env(safe-area-inset-top)); z-index: 5; width: 36px; height: 36px; padding: 0; border-radius: 50%; background: rgba(0,0,0,.55); color: var(--muted); font-size: 16px; }
+#screen-battle .battle-top { padding-left: 48px; }
+#screen-battle .quit { position: absolute; left: 10px; top: calc(10px + env(safe-area-inset-top)); z-index: 9; width: 44px; height: 44px; padding: 0; border-radius: 50%; background: rgba(0,0,0,.55); color: var(--muted); font-size: 16px; }
 #screen-battle .timer { font-size: 28px; font-weight: 800; min-width: 52px; text-align: center; font-variant-numeric: tabular-nums; }
 #screen-battle .timer.low { color: var(--red); animation: timer-pulse .5s ease-in-out infinite alternate; }
 @keyframes timer-pulse { from { scale: 1; } to { scale: 1.2; } }
-#screen-battle .fighter.me .sprite { width: 72px; height: 72px; flex: none; border-radius: 10px; }
+/* Eigener Rüther im Seltenheitsrahmen (.frame/.shine/--r-* aus style.css, Klasse r-<rarity> setzt JS) */
+#screen-battle .fighter.me .frame { flex: none; width: 72px; height: 72px; border-radius: 10px; }
+#screen-battle .fighter.me .frame .sprite { display: block; width: 100%; height: 100%; }
 
 /* Bühne */
 #screen-battle .stage { flex: 1; min-height: 0; position: relative; display: flex; align-items: center; justify-content: center; touch-action: none; overflow: hidden; border-radius: 16px; background: radial-gradient(ellipse at 50% 72%, rgba(255,255,255,.07), transparent 60%); cursor: pointer; }
-#screen-battle .stage.quake { animation: quake .5s; }
+/* Beben nach Schaden: s < 15, m < 30, l darüber */
+#screen-battle .stage.quake-s { animation: quake-s .3s; }
+#screen-battle .stage.quake-m { animation: quake .5s; }
+#screen-battle .stage.quake-l { animation: quake-l .7s; }
+@keyframes quake-s { 0%, 100% { translate: 0 0; } 25% { translate: -3px 2px; } 50% { translate: 3px -2px; } 75% { translate: -2px 0; } }
 @keyframes quake { 0%, 100% { translate: 0 0; } 10% { translate: -8px 4px; } 20% { translate: 8px -4px; } 30% { translate: -7px -3px; } 40% { translate: 7px 3px; } 50% { translate: -5px 2px; } 60% { translate: 5px -2px; } 70% { translate: -3px 1px; } 80% { translate: 3px -1px; } }
+@keyframes quake-l { 0%, 100% { translate: 0 0; rotate: 0deg; } 8% { translate: -16px 8px; rotate: -1.5deg; } 16% { translate: 16px -8px; rotate: 1.5deg; } 24% { translate: -14px -6px; rotate: -1deg; } 32% { translate: 14px 6px; rotate: 1deg; } 45% { translate: -10px 4px; rotate: -.6deg; } 58% { translate: 10px -4px; rotate: .6deg; } 72% { translate: -5px 2px; rotate: 0deg; } 86% { translate: 4px -1px; } }
 #screen-battle .enemy-sprite { width: 48%; max-width: 240px; max-height: 65%; aspect-ratio: 1; object-fit: contain; border-radius: 18px; z-index: 1; filter: drop-shadow(0 14px 18px rgba(0,0,0,.55)); transition: scale .4s ease-out, rotate .4s ease-out, opacity .3s, filter .3s; }
 #screen-battle .enemy-sprite.windup { scale: 1.15; rotate: -8deg; }
 #screen-battle .enemy-sprite.weak { opacity: .5; }
 #screen-battle .sprite.poisoned { filter: sepia(1) hue-rotate(60deg) saturate(2.5) drop-shadow(0 0 14px #3ddc84); }
 #screen-battle .enemy-sprite.stunned { filter: grayscale(1) brightness(.8); rotate: 15deg; }
+/* Treffer-Blitz: sofort weiß, blendet über die normale filter-Transition (.3s) wieder aus.
+   Basis-Liste als Präfix: filter interpoliert nur, wenn die Listen gleich beginnen, sonst schaltet der Browser hart. */
+#screen-battle .enemy-sprite.hit { filter: drop-shadow(0 14px 18px rgba(0,0,0,.55)) brightness(3) drop-shadow(0 0 22px #fff); transition: scale .4s ease-out, rotate .4s ease-out, opacity .3s, filter 0s; }
 #screen-battle .stage-hint { position: absolute; left: 0; bottom: 6px; width: 100%; margin: 0; text-align: center; font-size: 12px; color: var(--muted); pointer-events: none; }
+
+/* Arena-Hintergründe (.stage[data-arena], nur CSS) */
+#screen-battle .stage .bg { position: absolute; inset: 0; z-index: 0; overflow: hidden; border-radius: inherit; pointer-events: none; }
+#screen-battle .stage .bg::before, #screen-battle .stage .bg::after { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; pointer-events: none; }
+/* Regen: nahtlos gekachelte SVG-Glyphen (200×240), background-position-y wandert genau eine Kachelhöhe → lückenlos, Loop ohne Sprung */
+@keyframes rain { to { background-position-y: 240px; } }
+@keyframes rain-small { to { background-position-y: 168px; } } /* hintere Ebene: Kachel 0,7-fach (140×168) */
+/* pcsale: dunkelblau, Scanlines, heller Streifen läuft alle 4 s von oben nach unten */
+#screen-battle .stage[data-arena="pcsale"] .bg { background: linear-gradient(180deg, #070c26 0%, #121c52 55%, #070c26 100%); }
+#screen-battle .stage[data-arena="pcsale"] .bg::before { content: ''; background: repeating-linear-gradient(180deg, rgba(140,180,255,.09) 0 1px, transparent 1px 4px); }
+#screen-battle .stage[data-arena="pcsale"] .bg::after { content: ''; top: -20%; height: 20%; background: linear-gradient(180deg, transparent, rgba(130,180,255,.4) 50%, transparent); animation: sweep 4s linear infinite; }
+@keyframes sweep { to { translate: 0 600%; } }
+/* huettenberg: zwei Ebenen regnender ₿ (hinten kleiner, blasser, langsamer), oranger Schein unten */
+#screen-battle .stage[data-arena="huettenberg"] .bg { background: radial-gradient(ellipse at 50% 115%, rgba(247,147,26,.6), transparent 55%), linear-gradient(180deg, #14100a, #1f1608); }
+#screen-battle .stage[data-arena="huettenberg"] .bg::before, #screen-battle .stage[data-arena="huettenberg"] .bg::after { content: ''; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='240'%3E%3Cg font-family='system-ui,sans-serif' fill='%23f7931a'%3E%3Ctext x='20' y='40' font-size='22' fill-opacity='0.38'%3E&%23x20BF;%3C/text%3E%3Ctext x='110' y='24' font-size='22' fill-opacity='0.38'%3E&%23x20BF;%3C/text%3E%3Ctext x='160' y='90' font-size='22' fill-opacity='0.38'%3E&%23x20BF;%3C/text%3E%3Ctext x='60' y='120' font-size='22' fill-opacity='0.38'%3E&%23x20BF;%3C/text%3E%3Ctext x='130' y='170' font-size='22' fill-opacity='0.38'%3E&%23x20BF;%3C/text%3E%3Ctext x='30' y='215' font-size='22' fill-opacity='0.38'%3E&%23x20BF;%3C/text%3E%3Ctext x='90' y='70' font-size='14' fill-opacity='0.25'%3E&%23x20BF;%3C/text%3E%3Ctext x='180' y='30' font-size='14' fill-opacity='0.25'%3E&%23x20BF;%3C/text%3E%3Ctext x='10' y='150' font-size='14' fill-opacity='0.25'%3E&%23x20BF;%3C/text%3E%3Ctext x='150' y='230' font-size='14' fill-opacity='0.25'%3E&%23x20BF;%3C/text%3E%3Ctext x='75' y='195' font-size='14' fill-opacity='0.25'%3E&%23x20BF;%3C/text%3E%3Ctext x='186' y='140' font-size='14' fill-opacity='0.25'%3E&%23x20BF;%3C/text%3E%3C/g%3E%3C/svg%3E"); background-repeat: repeat; background-size: 200px 240px; animation: rain 7s linear infinite; }
+#screen-battle .stage[data-arena="huettenberg"] .bg::after { background-size: 140px 168px; background-position-x: 70px; opacity: .55; animation: rain-small 11s linear infinite; }
+/* worringen: fallende grüne Hex-Zeichen in Spalten (Kopf unten hell, Schweif blass; hintere Ebene kleiner und langsamer) auf fast schwarz */
+#screen-battle .stage[data-arena="worringen"] .bg { background: radial-gradient(ellipse at 50% 60%, rgba(61,220,132,.08), transparent 70%), #04080a; }
+#screen-battle .stage[data-arena="worringen"] .bg::before, #screen-battle .stage[data-arena="worringen"] .bg::after { content: ''; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='240'%3E%3Cg font-family='ui-monospace,Menlo,Consolas,monospace' font-size='14' fill='%233ddc84'%3E%3Ctext x='14' y='24' fill-opacity='.15'%3E0%3C/text%3E%3Ctext x='14' y='54' fill-opacity='.2'%3E1%3C/text%3E%3Ctext x='14' y='84' fill-opacity='.25'%3Ea%3C/text%3E%3Ctext x='14' y='114' fill-opacity='.3'%3Ef%3C/text%3E%3Ctext x='14' y='144' fill-opacity='.38'%3E3%3C/text%3E%3Ctext x='14' y='174' fill-opacity='.48'%3Ec%3C/text%3E%3Ctext x='14' y='204' fill-opacity='.65'%3E7%3C/text%3E%3Ctext x='14' y='234' fill-opacity='.9'%3Ee%3C/text%3E%3Ctext x='46' y='24' fill-opacity='.15'%3E9%3C/text%3E%3Ctext x='46' y='54' fill-opacity='.2'%3Eb%3C/text%3E%3Ctext x='46' y='84' fill-opacity='.25'%3E2%3C/text%3E%3Ctext x='46' y='114' fill-opacity='.3'%3Ed%3C/text%3E%3Ctext x='46' y='144' fill-opacity='.38'%3E4%3C/text%3E%3Ctext x='46' y='174' fill-opacity='.48'%3E8%3C/text%3E%3Ctext x='46' y='204' fill-opacity='.65'%3Ef%3C/text%3E%3Ctext x='46' y='234' fill-opacity='.9'%3E0%3C/text%3E%3Ctext x='80' y='24' fill-opacity='.15'%3Ec%3C/text%3E%3Ctext x='80' y='54' fill-opacity='.2'%3E6%3C/text%3E%3Ctext x='80' y='84' fill-opacity='.25'%3Ea%3C/text%3E%3Ctext x='80' y='114' fill-opacity='.3'%3E1%3C/text%3E%3Ctext x='80' y='144' fill-opacity='.38'%3Ee%3C/text%3E%3Ctext x='80' y='174' fill-opacity='.48'%3E5%3C/text%3E%3Ctext x='80' y='204' fill-opacity='.65'%3Eb%3C/text%3E%3Ctext x='80' y='234' fill-opacity='.9'%3E9%3C/text%3E%3Ctext x='114' y='24' fill-opacity='.15'%3E3%3C/text%3E%3Ctext x='114' y='54' fill-opacity='.2'%3Ed%3C/text%3E%3Ctext x='114' y='84' fill-opacity='.25'%3E7%3C/text%3E%3Ctext x='114' y='114' fill-opacity='.3'%3Ef%3C/text%3E%3Ctext x='114' y='144' fill-opacity='.38'%3E2%3C/text%3E%3Ctext x='114' y='174' fill-opacity='.48'%3E0%3C/text%3E%3Ctext x='114' y='204' fill-opacity='.65'%3E4%3C/text%3E%3Ctext x='114' y='234' fill-opacity='.9'%3E8%3C/text%3E%3Ctext x='148' y='24' fill-opacity='.15'%3Ea%3C/text%3E%3Ctext x='148' y='54' fill-opacity='.2'%3Ec%3C/text%3E%3Ctext x='148' y='84' fill-opacity='.25'%3E1%3C/text%3E%3Ctext x='148' y='114' fill-opacity='.3'%3Ee%3C/text%3E%3Ctext x='148' y='144' fill-opacity='.38'%3E9%3C/text%3E%3Ctext x='148' y='174' fill-opacity='.48'%3Eb%3C/text%3E%3Ctext x='148' y='204' fill-opacity='.65'%3E3%3C/text%3E%3Ctext x='148' y='234' fill-opacity='.9'%3E5%3C/text%3E%3Ctext x='182' y='24' fill-opacity='.15'%3Ed%3C/text%3E%3Ctext x='182' y='54' fill-opacity='.2'%3E7%3C/text%3E%3Ctext x='182' y='84' fill-opacity='.25'%3Ef%3C/text%3E%3Ctext x='182' y='114' fill-opacity='.3'%3E6%3C/text%3E%3Ctext x='182' y='144' fill-opacity='.38'%3Ea%3C/text%3E%3Ctext x='182' y='174' fill-opacity='.48'%3E0%3C/text%3E%3Ctext x='182' y='204' fill-opacity='.65'%3Ec%3C/text%3E%3Ctext x='182' y='234' fill-opacity='.9'%3E2%3C/text%3E%3C/g%3E%3C/svg%3E"); background-repeat: repeat; background-size: 200px 240px; animation: rain 6s linear infinite; }
+#screen-battle .stage[data-arena="worringen"] .bg::after { background-size: 140px 168px; background-position-x: 90px; opacity: .45; animation: rain-small 9.5s linear infinite; }
+
+/* Wutphase: roter pulsierender Innenschatten (Pseudo-Element, damit das Beben auf .stage weiterläuft) */
+#screen-battle .stage.rage::after { content: ''; position: absolute; inset: 0; z-index: 2; border-radius: inherit; pointer-events: none; box-shadow: inset 0 0 40px 12px rgba(255,23,68,.75); animation: rage-pulse .8s ease-in-out infinite alternate; }
+@keyframes rage-pulse { from { opacity: .45; } to { opacity: 1; } }
+@keyframes rage-shake { 0%, 100% { translate: 0 0; rotate: 0deg; scale: 1; } 10% { translate: -10px 0; rotate: -6deg; scale: 1.1; } 20% { translate: 10px 0; rotate: 6deg; scale: 1.15; } 30% { translate: -10px 2px; rotate: -6deg; scale: 1.2; } 40% { translate: 10px -2px; rotate: 6deg; scale: 1.2; } 50% { translate: -8px 0; rotate: -5deg; scale: 1.2; } 60% { translate: 8px 0; rotate: 5deg; scale: 1.15; } 70% { translate: -6px 0; rotate: -4deg; scale: 1.1; } 80% { translate: 6px 0; rotate: 4deg; scale: 1.05; } 90% { translate: -3px 0; rotate: -2deg; } }
+.fx-item.text.rage-text { font-size: 56px; color: var(--red); text-shadow: 0 0 24px rgba(255,23,68,.9), 0 4px 0 #000; animation: rage-in 1.2s ease-out forwards; }
+@keyframes rage-in { 0% { translate: 0 -200px; scale: 2.2; opacity: 0; } 20% { translate: 0 0; scale: 1; opacity: 1; } 28% { translate: -6px 0; rotate: -3deg; } 36% { translate: 6px 0; rotate: 3deg; } 44% { translate: -6px 0; rotate: -3deg; } 52% { translate: 6px 0; rotate: 3deg; } 60% { translate: -4px 0; rotate: -2deg; } 68% { translate: 4px 0; rotate: 2deg; } 80% { translate: 0 0; rotate: 0deg; opacity: 1; } 100% { translate: 0 -30px; opacity: 0; } }
+
+/* Combo-Zähler über dem Boss */
+#screen-battle .combo { position: absolute; left: 50%; top: 8px; z-index: 3; translate: -50% 0; font-size: 34px; font-weight: 900; font-style: italic; color: #fff; text-shadow: 0 2px 0 #000, 0 0 14px rgba(0,0,0,.8); pointer-events: none; }
+#screen-battle .combo.bump { animation: combo-bump .2s ease-out; }
+@keyframes combo-bump { 0% { scale: 1.7; } 100% { scale: 1; } }
+#screen-battle .combo.hot { color: var(--r-legendaer, #f7c948); text-shadow: 0 2px 0 #6b4a00, 0 0 18px rgba(247,201,72,.95); }
+#screen-battle .combo.hot::before, #screen-battle .combo.hot::after { content: '✨'; position: absolute; bottom: 0; font-size: 20px; font-style: normal; animation: rise 1s ease-out infinite; }
+#screen-battle .combo.hot::before { left: -30px; }
+#screen-battle .combo.hot::after { right: -30px; animation-delay: .5s; }
 
 /* Herbeigerufene (Familientreffen) */
 #screen-battle .helpers { position: absolute; left: 10px; bottom: 28px; z-index: 2; display: flex; gap: 6px; }
@@ -59,6 +106,7 @@
 @keyframes slide-in { from { translate: -80px 0; opacity: 0; } to { translate: 0 0; opacity: 1; } }
 #screen-battle .sprite.ko { animation: ko .9s ease-in forwards; }
 @keyframes ko { 0% { rotate: 0deg; translate: 0 0; opacity: 1; } 60% { rotate: 80deg; translate: 20px 30px; opacity: .9; } 100% { rotate: 90deg; translate: 30px 60px; opacity: 0; } }
+#screen-battle .enemy-sprite.rage-shake { animation: rage-shake 1s ease-in-out; } /* nach .shake: gewinnt, solange die Wut-Animation läuft */
 
 /* Effekt-Ebene */
 #screen-battle .fx { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 3; }
@@ -73,6 +121,7 @@
 .fx-item.num.hurt { color: var(--red); }
 .fx-item.num.heal { color: var(--green); }
 .fx-item.num.small { font-size: 18px; color: var(--green); }
+.fx-item.num.big { font-size: 48px; letter-spacing: -1px; text-shadow: 0 3px 0 #000, 0 0 18px rgba(0,0,0,.9); }
 @keyframes float-up { 0% { opacity: 0; translate: 0 10px; scale: .5; } 15% { opacity: 1; scale: 1.25; } 30% { scale: 1; } 100% { opacity: 0; translate: 0 -80px; scale: 1; } }
 .fx-item.boom { font-size: 44px; line-height: 1; animation: boom .4s ease-out forwards; }
 @keyframes boom { 0% { scale: .3; opacity: 1; } 100% { scale: 1.5; opacity: 0; } }
@@ -182,6 +231,28 @@
 #screen-battle .switch { position: absolute; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 6; display: grid; gap: 6px; padding: 10px; background: #111; border: 2px solid var(--orange); border-radius: 14px; }
 #screen-battle .switch button { display: flex; justify-content: space-between; gap: 10px; padding: 12px 14px; }
 
+/* VS-Intro (2,6 s): Kopf fällt ein, Rüther von links, Boss von rechts, „VS" platzt, Countdown springt */
+#screen-battle .intro { position: absolute; inset: 0; z-index: 8; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; background: radial-gradient(ellipse at 50% 40%, rgba(60,30,90,.85), rgba(8,8,12,.96) 70%); animation: fade-in .3s; }
+#screen-battle .intro-head { display: flex; flex-direction: column; align-items: center; gap: 4px; animation: intro-drop .5s cubic-bezier(.2, .9, .3, 1.25) both; }
+#screen-battle .intro-arena { font-size: 22px; font-weight: 800; text-align: center; }
+#screen-battle .intro-level { font-size: 14px; font-weight: 700; color: var(--orange); letter-spacing: 1px; text-transform: uppercase; }
+@keyframes intro-drop { from { translate: 0 -60px; opacity: 0; } to { translate: 0 0; opacity: 1; } }
+#screen-battle .intro-row, #screen-battle .intro-names { display: grid; grid-template-columns: 120px 70px 120px; align-items: center; justify-items: center; }
+#screen-battle .intro-row { margin-top: 10px; }
+#screen-battle .intro-me, #screen-battle .intro-boss { width: 120px; height: 120px; border-radius: 16px; filter: drop-shadow(0 10px 14px rgba(0,0,0,.6)); }
+#screen-battle .intro-me { animation: intro-left .6s cubic-bezier(.2, .9, .3, 1.15) both; }
+#screen-battle .intro-boss { animation: intro-right .6s cubic-bezier(.2, .9, .3, 1.15) both; }
+@keyframes intro-left { from { translate: -140px 0; opacity: 0; } to { translate: 0 0; opacity: 1; } }
+@keyframes intro-right { from { translate: 140px 0; opacity: 0; } to { translate: 0 0; opacity: 1; } }
+#screen-battle .intro-vs { font-size: 44px; font-weight: 900; font-style: italic; color: var(--red); text-shadow: 0 0 22px rgba(255,82,82,.9), 0 3px 0 #000; animation: vs-pop .6s cubic-bezier(.34, 1.56, .64, 1) .35s both; }
+@keyframes vs-pop { 0% { scale: 3; opacity: 0; } 60% { scale: .85; opacity: 1; } 100% { scale: 1; opacity: 1; } }
+#screen-battle .intro-names { font-size: 14px; font-weight: 700; text-align: center; animation: fade-in .4s .5s both; }
+#screen-battle .intro-boss-name { grid-column: 3; }
+#screen-battle .countdown { min-height: 80px; margin-top: 10px; font-size: 68px; font-weight: 900; line-height: 80px; color: #fff; text-shadow: 0 4px 0 #000, 0 0 24px rgba(255,255,255,.5); }
+#screen-battle .countdown.pop { animation: count-pop .45s cubic-bezier(.34, 1.56, .64, 1); }
+@keyframes count-pop { 0% { scale: 2.4; opacity: 0; } 50% { scale: .9; opacity: 1; } 100% { scale: 1; } }
+#screen-battle .countdown.go { font-size: 56px; color: var(--orange); text-shadow: 0 4px 0 #000, 0 0 30px rgba(247,147,26,.9); }
+
 /* End-Overlay */
 #screen-battle .overlay { position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; text-align: center; background: rgba(10,10,14,.9); animation: fade-in .4s; }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
@@ -192,5 +263,13 @@
 @keyframes trophy-in { 0% { scale: 0; rotate: -30deg; opacity: 0; } 60% { scale: 1.3; rotate: 5deg; opacity: 1; } 100% { scale: 1; rotate: 0deg; opacity: 1; } }
 #screen-battle .overlay .title { margin: 0; font-size: 30px; }
 #screen-battle .overlay .sub { margin: 0; font-size: 15px; color: var(--muted); }
+/* Sats-Zähler (JS zählt hoch) und Arena-Hinweis */
+#screen-battle .overlay .sats-gain { margin: 4px 0 0; font-size: 36px; font-weight: 900; color: var(--r-legendaer, #f7c948); text-shadow: 0 0 20px rgba(247,201,72,.6), 0 3px 0 #000; font-variant-numeric: tabular-nums; animation: sats-in .5s cubic-bezier(.34, 1.56, .64, 1) .8s both; }
+@keyframes sats-in { 0% { scale: .3; opacity: 0; } 100% { scale: 1; opacity: 1; } }
+#screen-battle .overlay .arena-note { margin: 0; min-height: 18px; font-size: 15px; font-weight: 700; color: var(--orange); animation: fade-in .5s 1.4s both; }
+/* Konfetti: 30 Partikel in den vier Seltenheitsfarben, fallen 2 s mit Drehung */
+#screen-battle .overlay .confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+#screen-battle .confetti i { position: absolute; left: var(--x); top: -20px; width: 10px; height: 16px; border-radius: 2px; background: var(--c); opacity: 0; animation: confetti-fall 2s ease-in var(--d) both; }
+@keyframes confetti-fall { 0% { translate: 0 0; rotate: 0deg; opacity: 1; } 75% { opacity: 1; } 100% { translate: var(--sx) 105vh; rotate: var(--r); opacity: 0; } }
 #screen-battle .overlay-buttons { display: flex; gap: 10px; margin-top: 10px; }
 #screen-battle .overlay-buttons button { font-size: 16px; padding: 12px 22px; }

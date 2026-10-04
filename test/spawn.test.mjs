@@ -80,3 +80,13 @@ test('bestehende Spawns werden nicht verdoppelt, wenn Zielzahl erreicht', () => 
   const list = updateSpawns({ spawns: have, player: HAGEN, arenas: ARENAS, ruethers: RUETHERS, now: 0, rng: seq(0.99) });
   assert.equal(list.length, 4);
 });
+
+test('v3: jeder Spawn hat eine Seltenheit, forceRarity erzwingt sie, Lockmodul erhöht die Zielzahl', () => {
+  const a = updateSpawns({ spawns: [], player: HAGEN, arenas: ARENAS, ruethers: RUETHERS, now: 0, rng: seq(0) });
+  assert.ok(a.every(s => s.rarity === 'normal'));
+  const b = updateSpawns({ spawns: [], player: HAGEN, arenas: ARENAS, ruethers: RUETHERS, now: 0, rng: seq(0), forceRarity: 'legendaer' });
+  assert.equal(b[0].rarity, 'legendaer', 'nur der erste neue Spawn wird erzwungen (Spec §9)');
+  assert.ok(b.length > 1 && b.slice(1).every(s => s.rarity === 'normal'));
+  const c = updateSpawns({ spawns: [], player: HAGEN, arenas: ARENAS, ruethers: RUETHERS, now: 0, rng: seq(0.99, 0.5), lure: true });
+  assert.equal(c.length, CONST.LURE_SPAWN_MAX);
+});

@@ -1,11 +1,17 @@
-import { CONST } from './data.js';
-import { ringBonus, catchChance, landing, isHit, rollCatch, isFlick } from './catch-logic.js';
+import { CONST, RARITY_BY_ID } from './data.js';
+import { ringBonus, landing, isHit, rollCatch, isFlick } from './catch-logic.js';
+import { catchChanceV3 } from './progress.js';
 
-const FLY_MS = 700, ARC = 120, GROUND = 60;
+const FLY_MS = 700, ARC = 120, GROUND = 60, REWARD_MS = 1800;
+const CONFETTI = ['#f7c948', '#ffe28a', '#fff3c4', '#e0a800'];
 const rand = (a, b) => a + Math.random() * (b - a);
+const fmt = n => n.toLocaleString('de-DE');
 
-// el = section#screen-catch. onDone({ spawn, caught }) genau einmal, onCancel() bei ✕ (nur in idle).
-export function createCatchScreen({ el, onDone, onCancel }) {
+// el = section#screen-catch.
+// onDone({ spawn, caught }) genau einmal; onCancel() bei ✕ (nur in idle);
+// onCaught({ spawn, usedSuperCoin }) -> { sats, newDex } synchron im Moment „Gefangen!";
+// onSuperCoinUsed() -> Restanzahl, beim Treffer mit aktiver Super-Münze (auch wenn der Rüther ausbricht).
+export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinUsed }) {
   const stage = el.querySelector('.catch-stage');
   const target = el.querySelector('.target');
   const sprite = target.querySelector('.sprite');
@@ -13,12 +19,16 @@ export function createCatchScreen({ el, onDone, onCancel }) {
   const fx = el.querySelector('.catch-fx');
   const msg = el.querySelector('.catch-msg');
   const coin = el.querySelector('.coin');
+  const badge = el.querySelector('.rarity-badge');
+  const reward = el.querySelector('.reward');
+  const superBtn = el.querySelector('.supercoin');
   const name = el.querySelector('.name');
   const title = el.querySelector('.title');
   const desc = el.querySelector('.desc');
   const throwsEl = el.querySelector('.throws');
 
   let spawn = null, def = null, rng = Math.random, left = 0;
+  let rarity = 'normal', superCoins = 0, superActive = false;
   let state = 'done'; // idle | drag | flying | seq | done
   let drag = null;
 
@@ -35,7 +45,7 @@ export function createCatchScreen({ el, onDone, onCancel }) {
     coin.style.setProperty('--x', `${x}px`); coin.style.setProperty('--y', `${y}px`);
     coin.style.setProperty('--r', `${r}deg`); coin.style.setProperty('--s', s);
   }
-  function resetCoin() { coin.className = 'coin'; setCoin(0, 0); }
+  function resetCoin() { coin.className = superActive ? 'coin super' : 'coin'; setCoin(0, 0); }
   function spriteAnim(cls) { sprite.classList.remove('hop', 'suck', 'pop', 'flee'); if (cls) sprite.classList.add(cls); }
   function say(text) {
     clearTimeout(msgTimer); timers.delete(msgTimer);
@@ -43,6 +53,11 @@ export function createCatchScreen({ el, onDone, onCancel }) {
     msgTimer = after(1200, () => msg.classList.remove('show'));
   }
   function renderThrows() { throwsEl.textContent = `Ausbrüche übrig: ${left}`; }
+  function renderSuper() {
+    superBtn.textContent = `🪙 Super-Münze (${superCoins})`;
+    superBtn.classList.toggle('hidden', superCoins <= 0);
+    superBtn.classList.toggle('active', superActive);
+  }
   const center = r => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
   function place(cls, text, p) { // Client-Punkt → Element in .catch-fx
     const s = stage.getBoundingClientRect();
@@ -84,6 +99,14 @@ export function createCatchScreen({ el, onDone, onCancel }) {
       scheduleAngry();
     });
   }
+
+  // ---- Super-Münze: Schalter, Verbrauch erst beim Treffer ----
+  superBtn.addEventListener('click', () => {
+    if (state !== 'idle' || superCoins <= 0) return;
+    superActive = !superActive;
+    coin.classList.toggle('super', superActive);
+    renderSuper();
+  });
 
   // ---- Münze ziehen und schnippen ----
   coin.draggable = false;
@@ -157,6 +180,28 @@ export function createCatchScreen({ el, onDone, onCancel }) {
     hitSequence(rest, land);
   }
 
+  // ---- Burst: Sterne in Seltenheitsfarbe, Legendär mit Konfetti und Schriftzug ----
+  function burst() {
+    const c = center(coin.getBoundingClientRect());
+    const legend = rarity === 'legendaer', n = legend ? 12 : 8;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const star = place('star', '★', c);
+      star.style.setProperty('--dx', `${Math.cos(a) * 130}px`);
+      star.style.setProperty('--dy', `${Math.sin(a) * 130}px`);
+    }
+    if (!legend) return;
+    const s = stage.getBoundingClientRect();
+    place('legend', 'LEGENDÄR!', { x: s.left + s.width / 2, y: s.top + s.height * 0.14 }); // über dem Sprite, Belohnung kommt darunter
+    for (let i = 0; i < 40; i++) {
+      const p = place('confetti', '', { x: s.left + Math.random() * s.width, y: s.top - 12 });
+      p.style.setProperty('--c', CONFETTI[i % CONFETTI.length]);
+      p.style.setProperty('--d', `${rand(0, 0.7)}s`);
+      p.style.setProperty('--rot', `${rand(360, 1080)}deg`);
+      p.style.setProperty('--h', `${s.height + 40}px`);
+    }
+  }
+
   // ---- Treffer: einsaugen, wackeln, gefangen oder Ausbruch ----
   async function hitSequence(rest, land) {
     setState('seq');
@@ -177,7 +222,13 @@ export function createCatchScreen({ el, onDone, onCancel }) {
     await wait(200);
     coin.classList.remove('drop');
 
-    const { caught, wobbles } = rollCatch(catchChance(def.catchChance, scale), rng);
+    const usedSuperCoin = superActive;
+    if (usedSuperCoin) { // Treffer verbraucht die Münze, Fehlwürfe nicht
+      const n = onSuperCoinUsed?.();
+      superCoins = typeof n === 'number' ? n : superCoins - 1;
+      superActive = false; renderSuper();
+    }
+    const { caught, wobbles } = rollCatch(catchChanceV3(def.catchChance, rarity, scale, usedSuperCoin), rng);
     for (let i = 0; i < wobbles; i++) {
       await wait(250);
       coin.classList.add('wobble');
@@ -187,15 +238,14 @@ export function createCatchScreen({ el, onDone, onCancel }) {
 
     if (caught) {
       coin.classList.add('glow');
-      const c = center(coin.getBoundingClientRect());
-      for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * Math.PI * 2;
-        const star = place('star', '★', c);
-        star.style.setProperty('--dx', `${Math.cos(a) * 130}px`);
-        star.style.setProperty('--dy', `${Math.sin(a) * 130}px`);
-      }
+      burst();
       say('Gefangen!');
-      await wait(1000);
+      const r = onCaught?.({ spawn, usedSuperCoin });
+      if (r) {
+        reward.innerHTML = `<div class="amount">+${fmt(r.sats)} 💰</div>${r.newDex ? '<div class="newdex">Neu im Rütherdex!</div>' : ''}`;
+        reward.classList.remove('hidden');
+      }
+      await wait(REWARD_MS);
       finish(true);
       return;
     }
@@ -224,14 +274,19 @@ export function createCatchScreen({ el, onDone, onCancel }) {
   });
 
   return {
-    start(s, d, r = Math.random) {
+    start(s, d, { rng: r = Math.random, rarity: ra = 'normal', superCoins: sc = 0 } = {}) {
       clearAll();
       spawn = s; def = d; rng = r; left = CONST.BREAKOUTS; drag = null;
+      rarity = RARITY_BY_ID[ra] ? ra : 'normal'; superCoins = sc; superActive = false;
+      const R = RARITY_BY_ID[rarity];
       sprite.src = `sprites/${d.id}.png`;
       sprite.style.removeProperty('--sx'); sprite.style.removeProperty('--sy');
-      target.classList.remove('angry');
+      target.className = `target r-${rarity}`; // räumt auch angry weg
+      stage.dataset.rarity = rarity;
+      badge.textContent = rarity === 'legendaer' ? `✨ ${R.name} ✨` : R.name;
+      reward.classList.add('hidden'); reward.innerHTML = '';
       name.textContent = d.name; title.textContent = d.title; desc.textContent = d.desc;
-      renderThrows();
+      renderThrows(); renderSuper();
       msg.classList.remove('show');
       fx.replaceChildren();
       idle();
