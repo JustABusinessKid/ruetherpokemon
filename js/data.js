@@ -1,4 +1,4 @@
-// Reine Daten. Lebensenergie heißt BTC. Zeiten in Millisekunden.
+// Reine Daten. Lebensenergie heißt BTC, Währung heißt Sats. Zeiten in Millisekunden.
 export const CONST = {
   SPAWN_INTERVAL: 60_000,
   SPAWN_LIFETIME: 600_000,
@@ -13,9 +13,26 @@ export const CONST = {
   ARENA_RANGE: 100,
   BREAKOUTS: 3,            // Ausbrüche, bis der Rüther abhaut
   MAX_CATCH_CHANCE: 0.95,
-  DUP_BONUS: 10,
-  DUP_CAP: 50,
+  MIN_CATCH_CHANCE: 0.05,
+  SUPERCOIN_BONUS: 0.2,
   TEAM_SIZE: 3,
+  // Lockmodul
+  LURE_MS: 300_000,
+  LURE_SPAWN_MIN: 4,
+  LURE_SPAWN_MAX: 8,
+  LURE_INTERVAL: 20_000,
+  // Power-Ups
+  LEVEL_MAX: 20,
+  LEVEL_STEP: 0.04,        // +4 % Stats pro Level über 1
+  LEVEL_COST: 50,          // × aktuelles Level
+  DEX_BONUS: 100,
+  // Arenen
+  ARENA_LEVELS: 5,
+  ARENA_SCALE: 0.25,       // +25 % Boss-Stats pro Level über 1
+  ARENA_WIN_BASE: 150,     // × Arena-Level
+  RAGE_AT: 0.5,
+  RAGE_FAST_EVERY: 1800,
+  RAGE_CHARGED_EVERY: 7000,
   // Kampf (Echtzeit)
   BATTLE_DURATION: 90_000,
   FAST_DAMAGE: 3,
@@ -27,7 +44,22 @@ export const CONST = {
   SUMMON_INTERVAL: 1000,
   CHARGED_EVERY: 10_000,
   STUN_GRACE: 500,
+  COMBO_WINDOW: 800,
+  INTRO_MS: 2600,
 };
+
+export const RARITIES = [
+  { id: 'normal', name: 'Normal', weight: 70, mult: 1.0, catchPenalty: 0, sats: 10, color: '#9aa0a6' },
+  { id: 'selten', name: 'Selten', weight: 20, mult: 1.15, catchPenalty: 0.1, sats: 30, color: '#2a7fff' },
+  { id: 'episch', name: 'Episch', weight: 8, mult: 1.35, catchPenalty: 0.2, sats: 80, color: '#b36bff' },
+  { id: 'legendaer', name: 'Legendär', weight: 2, mult: 1.6, catchPenalty: 0.3, sats: 200, color: '#f7c948' },
+];
+export const RARITY_BY_ID = Object.fromEntries(RARITIES.map(r => [r.id, r]));
+
+export const SHOP = [
+  { id: 'lockmodul', name: 'Lockmodul', icon: '🧲', cost: 300, desc: '5 Minuten lang doppelt so viele Rüthers, alle 20 Sekunden neue.' },
+  { id: 'supercoin', name: 'Super-Münze', icon: '🪙', cost: 40, desc: 'Ein Wurf mit +20 % Fangchance. Wird beim Treffer verbraucht.' },
+];
 
 export const ARENAS = [
   { id: 'worringen', name: 'Rütherschanze Worringen', address: 'Langeler Weg 23, 50769 Köln', lat: 51.0631420, lon: 6.8722528, boss: 'satoshi' },

@@ -11,24 +11,27 @@
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="css/catch.css">
 <link rel="stylesheet" href="css/battle.css">
+<link rel="stylesheet" href="css/screens.css">
 </head>
 <body>
 
 <section id="screen-map" class="screen active">
   <header class="topbar">
     <h1 id="title">Rüther GO</h1>
+    <span id="hud-dex" class="pill">Dex 0/20</span>
     <span id="badge" class="badge hidden" title="Herrscher aller Rüthers">👑</span>
   </header>
   <div id="banner" class="banner hidden"></div>
+  <div id="lure-banner" class="banner lure hidden">🧲 Lockmodul: 5:00</div>
   <div class="map-wrap">
     <div id="map"></div>
     <button id="btn-locate" class="locate following" title="Karte folgt dir">📍</button>
     <div id="toast" class="toast hidden"></div>
   </div>
   <nav class="bottombar">
-    <span id="hud-caught">0/5 gefangen</span>
-    <button id="btn-team" class="primary">Team</button>
-    <span id="hud-arenas">0/3 Trophäen</span>
+    <button id="btn-collection">Sammlung</button>
+    <span id="hud-sats" class="sats">💰 0</span>
+    <button id="btn-shop">Shop</button>
   </nav>
   <div id="debug" class="debug hidden">
     <strong>Test-Modus</strong>
@@ -38,6 +41,8 @@
     <button id="dbg-gps">GPS wieder an</button>
     <button id="dbg-respawn">Spawns neu würfeln</button>
     <button id="dbg-catchall">Alle Rüthers fangen</button>
+    <button id="dbg-sats">+1000 Sats</button>
+    <button id="dbg-legendary">Nächster Spawn legendär: aus</button>
     <button id="dbg-weakboss">Boss fast tot: aus</button>
     <button id="dbg-reset">Spielstand löschen</button>
     <button id="dbg-close">Schließen</button>
@@ -47,13 +52,17 @@
 <section id="screen-catch" class="screen">
   <button class="back">✕</button>
   <div class="catch-stage">
+    <div class="rarity-badge"></div>
     <div class="target">
+      <div class="aura"></div>
       <img class="sprite" alt="">
       <div class="ring"></div>
     </div>
     <div class="catch-fx"></div>
     <div class="catch-msg"></div>
+    <div class="reward hidden"></div>
     <img class="coin" src="sprites/coin.png" alt="Bitcoin">
+    <button class="supercoin hidden">🪙 Super-Münze (0)</button>
   </div>
   <div class="catch-info">
     <h2 class="name"></h2>
@@ -64,10 +73,21 @@
   </div>
 </section>
 
-<section id="screen-team" class="screen">
-  <header class="topbar"><button class="back">‹ Karte</button><h2>Team</h2></header>
-  <p class="hint">Bis zu drei antippen. Der erste wird Arena-Besitzer.</p>
-  <div class="slots"></div>
+<section id="screen-collection" class="screen">
+  <header class="topbar"><button class="back">‹ Karte</button><h2>Sammlung</h2><button class="dex-btn">Rütherdex</button></header>
+  <p class="hint">Bis zu drei ins Team. Der erste wird Arena-Besitzer. Power-Up hebt das Level.</p>
+  <div class="box"></div>
+</section>
+
+<section id="screen-dex" class="screen">
+  <header class="topbar"><button class="back">‹ Sammlung</button><h2>Rütherdex</h2><span class="dex-count pill">0/20</span></header>
+  <div class="dex-grid"></div>
+</section>
+
+<section id="screen-shop" class="screen">
+  <header class="topbar"><button class="back">‹ Karte</button><h2>Shop</h2><span class="shop-sats pill">💰 0</span></header>
+  <div class="shop-items"></div>
+  <p class="hint">Sats bekommst du für Fänge, neue Dex-Einträge und Arenasiege.</p>
 </section>
 
 <section id="screen-arena" class="screen">
@@ -75,9 +95,11 @@
   <div class="arena-body">
     <img class="sprite" alt="">
     <h3 class="boss-name"></h3>
+    <p class="level"></p>
     <p class="address"></p>
     <p class="distance"></p>
     <p class="owner"></p>
+    <p class="reward"></p>
     <p class="status"></p>
     <button class="fight primary">Kämpfen</button>
   </div>
@@ -98,13 +120,15 @@
     </div>
   </div>
   <div class="stage">
+    <div class="bg"></div>
     <img class="enemy-sprite sprite" alt="">
+    <div class="combo hidden"></div>
     <div class="helpers hidden"></div>
     <div class="fx"></div>
     <p class="stage-hint">Tippen = Angriff · Wischen = Ausweichen</p>
   </div>
   <div class="fighter me">
-    <img class="sprite" alt="">
+    <div class="frame"><img class="sprite" alt=""><span class="shine"></span></div>
     <div class="info">
       <div class="fname"></div>
       <div class="bar hp"><div class="fill"></div></div>
@@ -115,11 +139,24 @@
   </div>
   <div class="specials"></div>
   <div class="switch hidden"></div>
+  <div class="intro hidden">
+    <div class="intro-head"><span class="intro-arena"></span><span class="intro-level"></span></div>
+    <div class="intro-row">
+      <img class="intro-me sprite" alt="">
+      <div class="intro-vs">VS</div>
+      <img class="intro-boss sprite" alt="">
+    </div>
+    <div class="intro-names"><span class="intro-me-name"></span><span class="intro-boss-name"></span></div>
+    <div class="countdown"></div>
+  </div>
   <div class="overlay hidden">
+    <div class="confetti"></div>
     <img class="boss sprite" alt="">
     <div class="trophy">🏆</div>
     <h2 class="title"></h2>
     <p class="sub"></p>
+    <p class="sats-gain hidden">+0 💰</p>
+    <p class="arena-note"></p>
     <div class="overlay-buttons">
       <button class="retry">Nochmal</button>
       <button class="done primary">Weiter</button>
@@ -131,6 +168,7 @@
   <div class="victory">
     <div class="crown">👑</div>
     <h2>Du bist der Herrscher aller Rüthers.</h2>
+    <p>Alle drei Arenen gemeistert.</p>
     <button class="back primary">Zurück zur Karte</button>
   </div>
 </section>
