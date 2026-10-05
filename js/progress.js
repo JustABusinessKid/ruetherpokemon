@@ -88,20 +88,88 @@ export function buyItem(save, itemId, now = 0) {
   return { ok: true };
 }
 
-// ---------- Spielstand ----------
-export function emptySaveV2() {
+// ---------- XP / Trainer-Level ----------
+export const xpForLevel = level => CONST.LEVEL_XP_STEP * level;
+export function levelProgress(save) {
+  const level = save.trainerLevel || 1;
+  return { level, xp: save.xp || 0, need: xpForLevel(level) };
+}
+export function addXp(save, n) {
+  save.xp = (save.xp || 0) + Math.max(0, Math.floor(n));
+  save.trainerLevel = save.trainerLevel || 1;
+  const levelUps = [];
+  let sats = 0;
+  while (save.xp >= xpForLevel(save.trainerLevel)) {
+    save.xp -= xpForLevel(save.trainerLevel);
+    save.trainerLevel += 1;
+    levelUps.push(save.trainerLevel);
+    sats += CONST.LEVELUP_SATS * save.trainerLevel;
+  }
+  save.sats += sats;
+  return { levelUps, sats };
+}
+
+// ---------- Fusion ----------
+export function nextRarity(id) {
+  const i = RARITIES.findIndex(r => r.id === id);
+  return i >= 0 && i < RARITIES.length - 1 ? RARITIES[i + 1].id : null;
+}
+export function canFuse(save, id, rarityId) {
+  return !!nextRarity(rarityId) && save.box.filter(i => i.id === id && i.rarity === rarityId).length >= CONST.FUSION_COUNT;
+}
+// Verbraucht die drei niedrigsten Level; Ergebnis hat max(level) und die nächste Seltenheit.
+export function fuse(save, id, rarityId, now = 0) {
+  if (!canFuse(save, id, rarityId)) return { ok: false };
+  const group = save.box.filter(i => i.id === id && i.rarity === rarityId).sort((a, b) => a.level - b.level);
+  const used = group.slice(0, CONST.FUSION_COUNT);
+  const usedUids = new Set(used.map(i => i.uid));
+  save.box = save.box.filter(i => !usedUids.has(i.uid));
+  save.team = save.team.filter(uid => !usedUids.has(uid));
+  const rarity = nextRarity(rarityId);
+  const inst = { uid: newUid(save), id, rarity, level: Math.max(...used.map(i => i.level)), caughtAt: now };
+  save.box.push(inst);
+  const key = `${id}:${rarity}`;
+  const newDex = !save.dex[key];
+  if (newDex) { save.dex[key] = true; save.sats += CONST.DEX_BONUS; }
+  save.stats.fusions = (save.stats.fusions || 0) + 1;
+  if (save.team.length < CONST.TEAM_SIZE) save.team.push(inst.uid);
+  return { ok: true, inst, used, newDex };
+}
+
+// ---------- Spielstand v3 ----------
+export function emptySaveV3() {
   return {
-    version: 2, box: [], team: [], sats: 0, dex: {}, arenaLevels: {}, arenaMastered: {}, arenaOwners: {},
+    version: 3, box: [], team: [], sats: 0, dex: {}, arenaLevels: {}, arenaMastered: {}, arenaOwners: {},
     items: { lockmodul: 0, supercoin: 0 }, lureUntil: 0, victoryShown: false,
-    stats: { catches: 0, arenaWins: 0 }, nextUid: 1,
+    stats: { catches: 0, arenaWins: 0, stops: 0, fusions: 0, specials: 0, dodges: 0, maxCombo: 0, superHits: 0 },
+    nextUid: 1,
+    profile: null, xp: 0, trainerLevel: 1,
+    quests: { date: '', list: [] }, streak: { count: 0, lastDay: '' }, achievements: {}, stopCooldowns: {},
+    settings: { sound: true, haptics: true }, seen: { onboarding: false, iosHint: false },
+  };
+}
+export const emptySaveV2 = emptySaveV3; // Kompatibilität für ältere Importe
+
+function upgradeToV3(s) {
+  const empty = emptySaveV3();
+  return {
+    ...empty, ...s, version: 3,
+    items: { ...empty.items, ...(s.items || {}) },
+    stats: { ...empty.stats, ...(s.stats || {}) },
+    settings: { ...empty.settings, ...(s.settings || {}) },
+    seen: { ...empty.seen, ...(s.seen || {}) },
+    quests: s.quests && Array.isArray(s.quests.list) ? s.quests : empty.quests,
+    streak: s.streak && typeof s.streak.count === 'number' ? s.streak : empty.streak,
+    achievements: s.achievements && typeof s.achievements === 'object' ? s.achievements : {},
+    stopCooldowns: s.stopCooldowns && typeof s.stopCooldowns === 'object' ? s.stopCooldowns : {},
+    profile: s.profile && typeof s.profile.nickname === 'string' && s.profile.nickname.length >= 2 ? s.profile : null,
   };
 }
 export function migrate(d) {
-  const empty = emptySaveV2();
-  if (!d || typeof d !== 'object') return empty;
-  if (d.version === 2) return { ...empty, ...d, items: { ...empty.items, ...(d.items || {}) }, stats: { ...empty.stats, ...(d.stats || {}) } };
-  if (d.version !== 1) return empty;
-  const s = empty;
+  if (!d || typeof d !== 'object') return emptySaveV3();
+  if (d.version === 3 || d.version === 2) return upgradeToV3(d);
+  if (d.version !== 1) return emptySaveV3();
+  const s = emptySaveV3();
   const uidOf = {};
   let catches = 0;
   for (const [id, c] of Object.entries(d.caught || {})) {

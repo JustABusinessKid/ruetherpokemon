@@ -51,3 +51,35 @@
 /* Arena-Info */
 .arena-body .level { color: var(--orange); font-weight: 700; }
 .arena-body .reward { color: var(--r-legendaer); }
+
+/* Fusion (Sammlung) */
+.fuse-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.fuse-btn { text-align: left; font-weight: 700; font-size: 14px; border: 2px solid var(--r-selten); background: linear-gradient(135deg, rgba(42,127,255,.18), var(--panel)); }
+.fuse-btn.r-episch { border-color: var(--r-episch); background: linear-gradient(135deg, rgba(179,107,255,.22), var(--panel)); }
+.fuse-btn.r-legendaer { border-color: var(--r-legendaer); background: linear-gradient(135deg, rgba(247,201,72,.22), var(--panel)); box-shadow: 0 0 12px rgba(247,201,72,.3); }
+.fusion-anim { position: absolute; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(12,12,16,.94); overflow: hidden; }
+.fusion-anim .fz-stage { position: relative; width: 280px; height: 240px; }
+.fusion-anim .fz-src { position: absolute; left: 50%; top: 50%; width: 72px; height: 72px; margin: -36px 0 0 -36px; border-radius: 10px; border: 3px solid var(--rc, var(--r-normal)); background: #111; image-rendering: pixelated; transform: translate(var(--x), var(--y)); animation: fz-fly .6s cubic-bezier(.5,0,.9,.4) .1s forwards; }
+.fusion-anim .fz-result { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(.2); opacity: 0; }
+.fusion-anim .fz-result.show { animation: fz-pop .5s cubic-bezier(.34,1.56,.64,1) forwards; }
+.fusion-anim .fz-result .frame img { width: 136px; height: 136px; }
+.fusion-anim .fz-late { opacity: 0; transform: translateY(12px); transition: opacity .35s ease-out, transform .35s cubic-bezier(.34,1.56,.64,1); }
+.fusion-anim .fz-late.show { opacity: 1; transform: none; }
+.fusion-anim .fz-title { font-size: 34px; font-weight: 900; letter-spacing: .02em; text-shadow: 0 2px 12px rgba(0,0,0,.6); }
+.fusion-anim .fz-title.r-selten { color: var(--r-selten); }
+.fusion-anim .fz-title.r-episch { color: var(--r-episch); }
+.fusion-anim .fz-title.r-legendaer { color: var(--r-legendaer); text-shadow: 0 0 24px var(--r-legendaer); }
+.fusion-anim .fz-sub { color: var(--muted); font-size: 14px; text-align: center; padding: 0 20px; }
+.fusion-anim .fz-next { min-width: 160px; font-size: 17px; margin-top: 8px; transition-delay: .3s; }
+.fusion-anim .fz-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+.fusion-anim .fz-flash.go { animation: fz-flash .55s ease-out forwards; }
+.fusion-anim .fz-confetti { position: absolute; top: -20px; left: var(--x, 50%); width: 8px; height: 14px; border-radius: 2px; background: var(--c, #f7c948); box-shadow: 0 0 6px var(--c, #f7c948); pointer-events: none; animation: fz-confetti 2s ease-in var(--d, 0s) both; }
+@keyframes fz-fly { to { transform: translate(0, 0) scale(.25) rotate(180deg); opacity: 0; filter: brightness(3); } }
+@keyframes fz-flash { 0% { opacity: 0; } 20% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes fz-pop { from { transform: translate(-50%, -50%) scale(.2) rotate(-10deg); opacity: 0; } to { transform: translate(-50%, -50%) scale(1) rotate(0); opacity: 1; } }
+@keyframes fz-confetti { from { transform: translateY(0) rotate(0); opacity: 1; } 80% { opacity: 1; } to { transform: translateY(110vh) rotate(720deg); opacity: 0; } }
+
+/* Arena-Info: globaler Besitzer */
+.arena-body .global-owner { color: var(--text); font-weight: 700; background: rgba(255,255,255,.06); border-radius: 10px; padding: 8px 12px; }
+.arena-body .global-owner.mine { color: var(--orange); background: rgba(247,147,26,.14); }
+.arena-body .owner { font-size: 13px; }

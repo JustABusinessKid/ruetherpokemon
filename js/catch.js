@@ -1,6 +1,7 @@
 import { CONST, RARITY_BY_ID } from './data.js';
 import { ringBonus, landing, isHit, rollCatch, isFlick } from './catch-logic.js';
 import { catchChanceV3 } from './progress.js';
+import { sfx, haptic } from './audio.js';
 
 const FLY_MS = 700, ARC = 120, GROUND = 60, REWARD_MS = 1800;
 const CONFETTI = ['#f7c948', '#ffe28a', '#fff3c4', '#e0a800'];
@@ -10,8 +11,9 @@ const fmt = n => n.toLocaleString('de-DE');
 // el = section#screen-catch.
 // onDone({ spawn, caught }) genau einmal; onCancel() bei ✕ (nur in idle);
 // onCaught({ spawn, usedSuperCoin }) -> { sats, newDex } synchron im Moment „Gefangen!";
-// onSuperCoinUsed() -> Restanzahl, beim Treffer mit aktiver Super-Münze (auch wenn der Rüther ausbricht).
-export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinUsed }) {
+// onSuperCoinUsed() -> Restanzahl, beim Treffer mit aktiver Super-Münze (auch wenn der Rüther ausbricht);
+// onThrow({ hit, label }) nach jeder Trefferprüfung (label 'Super!' | 'Gut!' | '', bei Fehlwurf/Abwehr hit false).
+export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinUsed, onThrow }) {
   const stage = el.querySelector('.catch-stage');
   const target = el.querySelector('.target');
   const sprite = target.querySelector('.sprite');
@@ -152,6 +154,7 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
     setState('flying');
     msg.textContent = '';
     coin.classList.add('fly');
+    sfx.play('throw');
     const t0 = performance.now();
     const step = now => {
       const t = Math.min(1, (now - t0) / FLY_MS);
@@ -169,11 +172,13 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
   function resolve(rest, land) {
     if (!isHit(land, sprite.getBoundingClientRect())) { // daneben: fällt aus dem Bild
       coin.classList.add('fall'); say('Daneben!');
+      onThrow?.({ hit: false, label: '' });
       after(500, idle);
       return;
     }
     if (target.classList.contains('angry')) { // abgewehrt: prallt zurück
       coin.classList.add('return'); setCoin(0, 0, -360, 1); say('Abgewehrt!');
+      onThrow?.({ hit: false, label: '' });
       after(400, idle);
       return;
     }
@@ -207,6 +212,8 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
     setState('seq');
     const scale = ringScale();
     const { label } = ringBonus(scale);
+    sfx.play('coin');
+    onThrow?.({ hit: true, label });
     const sc = center(sprite.getBoundingClientRect());
     if (label) {
       const r = place('rating', label, { x: sc.x, y: sc.y - 100 });
@@ -240,6 +247,7 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
       coin.classList.add('glow');
       burst();
       say('Gefangen!');
+      sfx.play('catch'); haptic([20, 30, 60]);
       const r = onCaught?.({ spawn, usedSuperCoin });
       if (r) {
         reward.innerHTML = `<div class="amount">+${fmt(r.sats)} 💰</div>${r.newDex ? '<div class="newdex">Neu im Rütherdex!</div>' : ''}`;
@@ -253,6 +261,7 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
     coin.classList.add('burst');
     spriteAnim('pop');
     say('Rausgehauen!');
+    sfx.play('breakout');
     left -= 1; renderThrows();
     await wait(400);
     if (left <= 0) {

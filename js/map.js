@@ -1,26 +1,30 @@
 /* global L */
-// Leaflet-Adapter mit Folgen-Modus, Seltenheits-Markern und Arena-Leveln.
+// Leaflet-Adapter mit Folgen-Modus, Seltenheits-Markern, Arena-Leveln, Dosenbier-Stops und Namensschild des globalen Besitzers.
 
 const HAGEN = [51.36, 7.47];
+const esc = s => String(s).replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 
 function spriteIcon(id, rarity = 'normal') {
   const star = rarity === 'legendaer' ? '<span class="star">✨</span>' : '';
   return L.divIcon({ className: `spawn-icon r-${rarity}`, html: `<span class="aura"></span><img src="sprites/${id}.png" alt="">${star}`, iconSize: [48, 48], iconAnchor: [24, 24] });
 }
-function arenaIcon({ level = 1, mastered = false, ownerId = null } = {}) {
+function arenaIcon({ level = 1, mastered = false, ownerId = null, globalOwner = null } = {}) {
   const badge = `<span class="lvl">${mastered ? '👑' : 'Lv.' + level}</span>`;
+  const label = globalOwner?.owner ? `<span class="owner-label${globalOwner.mine ? ' mine' : ''}">${esc(globalOwner.owner)}</span>` : '';
   const cls = mastered ? ' mastered' : '';
   if (ownerId) {
-    return L.divIcon({ className: 'arena-icon owned' + cls, html: `<img src="sprites/${ownerId}.png" alt=""><span class="trophy">🏆</span>${badge}`, iconSize: [48, 48], iconAnchor: [24, 24] });
+    return L.divIcon({ className: 'arena-icon owned' + cls, html: `<img src="sprites/${ownerId}.png" alt=""><span class="trophy">🏆</span>${badge}${label}`, iconSize: [48, 48], iconAnchor: [24, 24] });
   }
-  return L.divIcon({ className: 'arena-icon' + cls, html: `⚔${badge}`, iconSize: [40, 40], iconAnchor: [20, 20] });
+  return L.divIcon({ className: 'arena-icon' + cls, html: `⚔${badge}${label}`, iconSize: [40, 40], iconAnchor: [20, 20] });
 }
+const stopIcon = ready => L.divIcon({ className: 'stop-icon' + (ready ? '' : ' cooling'), html: '🍺', iconSize: [34, 34], iconAnchor: [17, 17] });
 
-export function createMap({ el, arenas, onSpawnTap, onArenaTap, onFollowChange }) {
+export function createMap({ el, arenas, onSpawnTap, onArenaTap, onStopTap, onFollowChange }) {
   const map = L.map(el, { zoomControl: false }).setView(HAGEN, 15);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
   const pulse = L.marker(HAGEN, { icon: L.divIcon({ className: 'player-pulse', iconSize: [40, 40], iconAnchor: [20, 20] }), interactive: false });
   const player = L.circleMarker(HAGEN, { radius: 8, color: '#fff', fillColor: '#2a7fff', fillOpacity: 1, weight: 2 });
+  const stopLayer = L.layerGroup().addTo(map);
   const spawnLayer = L.layerGroup().addTo(map);
   const arenaMarkers = {};
   for (const a of arenas) {
@@ -46,6 +50,13 @@ export function createMap({ el, arenas, onSpawnTap, onArenaTap, onFollowChange }
       spawnLayer.clearLayers();
       for (const s of spawns) {
         L.marker([s.lat, s.lon], { icon: spriteIcon(s.ruetherId, s.rarity), zIndexOffset: 1000 }).addTo(spawnLayer).on('click', () => onSpawnTap(s));
+      }
+    },
+    // readyFn(stop) -> bool: false = in Abkühlung (grau)
+    setStops(stops, readyFn = () => true) {
+      stopLayer.clearLayers();
+      for (const s of stops) {
+        L.marker([s.lat, s.lon], { icon: stopIcon(readyFn(s)), zIndexOffset: 500 }).addTo(stopLayer).on('click', () => onStopTap?.(s));
       }
     },
     setArena(id, info) { arenaMarkers[id].setIcon(arenaIcon(info)); },

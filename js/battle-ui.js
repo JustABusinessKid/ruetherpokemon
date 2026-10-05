@@ -1,10 +1,12 @@
 import { CONST, RARITIES } from './data.js';
 import { createBattle, tick } from './battle.js';
+import { sfx, haptic } from './audio.js';
 
 // Kampf-Bildschirm: VS-Intro mit Countdown, requestAnimationFrame-Schleife um die Engine,
-// Pointer-Eingabe, Events → CSS-Animationen (css/battle.css), Combo, Wut, End-Overlay.
-// createBattleScreen({ el, onEnd }) -> { start({ team, enemy, rng, arena, arenaLevel, reward, masteredAfter }), stop() }
+// Pointer-Eingabe, Events → CSS-Animationen (css/battle.css), Sounds, Haptik, Combo, Wut, End-Overlay.
+// createBattleScreen({ el, onEnd, onEvent }) -> { start({ team, enemy, rng, arena, arenaLevel, reward, masteredAfter }), stop() }
 // onEnd({ won, retry }) genau einmal pro Kampf: Overlay-Button oder Aufgeben.
+// onEvent(e) für jedes Engine-Event, zusätzlich { type: 'combo', value } bei jeder Combo-Erhöhung.
 
 const sprite = id => `sprites/${id}.png`;
 const fmt = n => n.toLocaleString('de-DE');
@@ -18,7 +20,6 @@ const dots = n => Array.from({ length: n }, (_, i) =>
   `<i style="--x:${Math.round((Math.random() - 0.5) * 120)}px;--d:${(i * 0.05).toFixed(2)}s;--c:${COLORS[i % COLORS.length]}"></i>`).join('');
 const confetti = n => Array.from({ length: n }, (_, i) =>
   `<i style="--x:${Math.round(Math.random() * 100)}%;--d:${(Math.random() * 0.8).toFixed(2)}s;--c:${RARITY_COLORS[i % RARITY_COLORS.length]};--sx:${Math.round((Math.random() - 0.5) * 140)}px;--r:${Math.round((Math.random() - 0.5) * 1080)}deg"></i>`).join('');
-const buzz = ms => navigator.vibrate?.(ms);
 // Beben nach Schaden: klein < 15, mittel < 30, groß darüber; Lade-Attacken mindestens mittel
 const quakeFor = (dmg, charged) => dmg >= 30 ? 'quake-l' : dmg >= 15 || charged ? 'quake-m' : 'quake-s';
 const QUAKE_MS = { 'quake-s': 300, 'quake-m': 500, 'quake-l': 700 };
@@ -26,7 +27,7 @@ const COUNTDOWN = ['3', '2', '1', 'Kampf!'];
 const COUNT_STEP = 500, INTRO_LEAD = CONST.INTRO_MS - COUNTDOWN.length * COUNT_STEP;
 const COMBO_HIDE = 1000;
 
-export function createBattleScreen({ el, onEnd }) {
+export function createBattleScreen({ el, onEnd, onEvent }) {
   const $ = s => el.querySelector(s);
   const flash = $('.flash'), stage = $('.stage'), fx = $('.fx'), helpers = $('.helpers'), comboEl = $('.combo');
   const enemySprite = $('.enemy-sprite'), timerEl = $('.timer');
@@ -91,6 +92,7 @@ export function createBattleScreen({ el, onEnd }) {
     const t = state.time;
     combo = t - lastHitAt < CONST.COMBO_WINDOW ? combo + 1 : 1;
     lastHitAt = t;
+    onEvent?.({ type: 'combo', value: combo });
     if (combo < 2) { comboEl.classList.add('hidden'); return; } // Combo gerissen: alten Zähler sofort weg
     setText(comboEl, `×${combo}`);
     comboEl.classList.remove('hidden');
@@ -136,18 +138,19 @@ export function createBattleScreen({ el, onEnd }) {
 
   // ---------- Events → Animationen ----------
   function handle(e) {
+    onEvent?.(e);
     const at = e.target === 'me' ? 'me' : 'enemy';
     switch (e.type) {
       case 'fast': hitEnemy(e.damage); comboHit(); break;
       case 'special':
         batchDelay = run(FX, e.attack);
-        buzz(20);
+        sfx.play('special'); haptic(20);
         if (e.damage > 0) later(() => hitEnemy(e.damage), batchDelay);
         break;
       case 'specialDenied': anim(specials, 'shake-x', 400); break;
       case 'stunnedTap': if (!fx.querySelector('.stunned-tap')) item('text stunned-tap', 'me', 1200, { text: 'betäubt' }); break;
-      case 'warn': break; // Blinken und Ausholen hängen am Zustand (render)
-      case 'dodge': anim(meSprite, `dodge-${dodgeDir}`, 450); text('Ausgewichen!', 'me'); break;
+      case 'warn': sfx.play('warn'); break; // Blinken und Ausholen hängen am Zustand (render)
+      case 'dodge': anim(meSprite, `dodge-${dodgeDir}`, 450); text('Ausgewichen!', 'me'); sfx.play('dodge'); break;
       case 'enemyAttack':
         batchDelay = run(BOSS_FX, e.attack);
         if (e.damage > 0) later(() => {
@@ -156,7 +159,7 @@ export function createBattleScreen({ el, onEnd }) {
           anim(stage, q, QUAKE_MS[q]);
           anim(meSprite, 'shake', 350);
           dmgNum(e.damage, 'me', 'hurt');
-          buzz(e.kind === 'charged' ? 60 : 25);
+          sfx.play('hit'); haptic(20);
         }, batchDelay);
         break;
       case 'poisoned': later(() => item('puff', at, 800), batchDelay); break;
@@ -183,7 +186,7 @@ export function createBattleScreen({ el, onEnd }) {
         stage.classList.add('rage');
         anim(enemySprite, 'rage-shake', 1000);
         item('text rage-text', 'enemy', 1200, { text: 'WUT!' });
-        buzz([30, 30, 30, 30, 80]);
+        sfx.play('rage'); haptic([30, 30, 30, 30, 80]);
         break;
       case 'faint': // KO erst, wenn der auslösende Boss-Angriff eingeschlagen ist
         koPending = true;
@@ -202,10 +205,10 @@ export function createBattleScreen({ el, onEnd }) {
         break;
       }
       case 'win':
-        later(() => { enemySprite.classList.add('ko'); buzz([40, 40, 80]); }, batchDelay);
+        later(() => { enemySprite.classList.add('ko'); sfx.play('win'); haptic([30, 30, 30]); }, batchDelay);
         later(showOverlay, batchDelay + 900);
         break;
-      case 'lose': later(showOverlay, batchDelay + 900); break;
+      case 'lose': later(() => sfx.play('lose'), batchDelay); later(showOverlay, batchDelay + 900); break;
     }
   }
 
@@ -366,12 +369,14 @@ export function createBattleScreen({ el, onEnd }) {
     if (!running || state.over) return;
     if (Math.abs(dx) > 40) { input.dodge = true; dodgeDir = dx < 0 ? 'left' : 'right'; return; }
     input.taps += 1;
+    sfx.play('tap');
     const r = stage.getBoundingClientRect();
     const ring = item('tap', 'enemy', 350);
     ring.style.left = `${e.clientX - r.left}px`;
     ring.style.top = `${e.clientY - r.top}px`;
   });
   stage.addEventListener('pointercancel', () => { down = null; });
+  el.addEventListener('click', e => { if (e.target.closest('button')) sfx.play('click'); }); // alle Buttons im Kampf-Screen
   function onKey(e) {
     if (!running || state.over || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
     input.dodge = true; dodgeDir = e.key === 'ArrowLeft' ? 'left' : 'right';

@@ -1,15 +1,15 @@
-import { migrate, emptySaveV2 } from './progress.js';
+import { migrate, emptySaveV3 } from './progress.js';
 const KEY = 'ruether-go';
 
-export const emptySave = emptySaveV2;
+export const emptySave = emptySaveV3;
 
 export function load() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return emptySaveV2();
+    if (!raw) return emptySaveV3();
     return migrate(JSON.parse(raw));
   } catch {
-    return emptySaveV2();
+    return emptySaveV3();
   }
 }
 

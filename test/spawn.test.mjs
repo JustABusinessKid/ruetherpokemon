@@ -90,3 +90,10 @@ test('v3: jeder Spawn hat eine Seltenheit, forceRarity erzwingt sie, Lockmodul e
   const c = updateSpawns({ spawns: [], player: HAGEN, arenas: ARENAS, ruethers: RUETHERS, now: 0, rng: seq(0.99, 0.5), lure: true });
   assert.equal(c.length, CONST.LURE_SPAWN_MAX);
 });
+
+test('v4: featured-Rüther ist dreifach im Pool', () => {
+  const plain = updateSpawns({ spawns: [], player: HAGEN, arenas: ARENAS, ruethers: RUETHERS, now: 0, rng: seq(0, 0.3) });
+  assert.ok(plain.every(s => s.ruetherId === 'christian'));
+  const feat = updateSpawns({ spawns: [], player: HAGEN, arenas: ARENAS, ruethers: RUETHERS, now: 0, rng: seq(0, 0.3), featured: 'viktor' });
+  assert.ok(feat.every(s => s.ruetherId === 'viktor'));
+});

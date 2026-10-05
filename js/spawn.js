@@ -14,7 +14,8 @@ function makeSpawn(r, pos, now, rng, forceRarity) {
 }
 
 // Reine Funktion. lure: Lockmodul aktiv (mehr Spawns). forceRarity: der erste neu erzeugte Spawn bekommt diese Stufe (Debug).
-export function updateSpawns({ spawns, player, arenas, ruethers, now, rng, lure = false, forceRarity = null }) {
+// featured: dieser Rüther liegt FEATURED_WEIGHT-fach im Pool (Rüther des Tages).
+export function updateSpawns({ spawns, player, arenas, ruethers, now, rng, lure = false, forceRarity = null, featured = null }) {
   if (!player) return [];
   const list = spawns.filter(s => s.expires > now && distance(player, s) <= CONST.SPAWN_FORGET);
   const min = lure ? CONST.LURE_SPAWN_MIN : CONST.SPAWN_MIN;
@@ -44,7 +45,7 @@ export function updateSpawns({ spawns, player, arenas, ruethers, now, rng, lure 
     }
     list.push(place(r));
   }
-  const pool = [...anywhere, ...local.map(x => x.r)];
+  const pool = [...anywhere, ...local.map(x => x.r)].flatMap(r => (r.id === featured ? Array(CONST.FEATURED_WEIGHT).fill(r) : [r]));
   while (list.length < target) {
     list.push(place(pool[Math.floor(rng() * pool.length)]));
   }

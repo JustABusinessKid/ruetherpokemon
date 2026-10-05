@@ -108,6 +108,18 @@ def draw_coin():
     print("ok coin")
 
 
+def draw_icons():
+    """PWA-Icons: Münze auf dunklem Grund mit 12 % Rand, 192 und 512 px."""
+    coin = Image.open(OUT / "coin.png").convert("RGBA")
+    for size in (192, 512):
+        pad = round(size * 0.12)
+        inner = size - 2 * pad
+        img = Image.new("RGBA", (size, size), (27, 27, 31, 255))  # #1b1b1f
+        img.alpha_composite(coin.resize((inner, inner), Image.NEAREST), (pad, pad))
+        img.save(OUT / f"icon-{size}.png")
+        print("ok", f"icon-{size}")
+
+
 if __name__ == "__main__":
     OUT.mkdir(exist_ok=True)
     for file, (name, box) in PHOTOS.items():
@@ -118,3 +130,4 @@ if __name__ == "__main__":
     draw_schanze()
     draw_ps3()
     draw_coin()
+    draw_icons()

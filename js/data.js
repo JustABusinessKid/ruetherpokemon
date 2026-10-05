@@ -79,6 +79,8 @@ export const CONST = {
 
 export const API_BASE = 'https://ruether-go.higgsfield.app';
 export const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
+// Ausweich-Server, der Reihe nach; die öffentlichen Instanzen sind oft überlastet (504)
+export const OVERPASS_URLS = [OVERPASS_URL, 'https://z.overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
 export const OVERPASS_AMENITIES = ['pub', 'bar', 'biergarten', 'cafe', 'fast_food'];
 export const OVERPASS_SHOPS = ['convenience', 'kiosk', 'supermarket', 'alcohol', 'beverages'];
 export const STOP_REWARDS = [

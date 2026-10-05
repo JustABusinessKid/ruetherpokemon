@@ -4,6 +4,7 @@ import {
   rollRarity, instanceMult, fighterStats, levelCost, powerUp, catchChanceV3, catchReward,
   arenaScale, arenaReward, arenaWin, buyItem, migrate, emptySaveV2, dexCount, DEX_TOTAL, lureActive,
 } from '../js/progress.js';
+import { xpForLevel, addXp, levelProgress, canFuse, fuse, nextRarity, emptySaveV3 } from '../js/progress.js';
 import { RUETHER_BY_ID } from '../js/data.js';
 
 const near = (a, b) => Math.abs(a - b) < 1e-9;
@@ -101,10 +102,10 @@ test('buyItem: Super-Münze ins Inventar, Lockmodul aktiviert sofort', () => {
   assert.equal(buyItem(s, 'nix', 0).ok, false);
 });
 
-test('migrate: v1 → v2', () => {
+test('migrate: v1 → v3', () => {
   const v1 = { version: 1, caught: { christian: { count: 3, bonusBtc: 20 }, viktor: { count: 1, bonusBtc: 0 } }, team: ['viktor', 'christian'], arenasBeaten: ['pcsale'], arenaOwners: { pcsale: 'christian' }, victoryShown: false };
   const s = migrate(v1);
-  assert.equal(s.version, 2);
+  assert.equal(s.version, 3);
   assert.equal(s.box.length, 2);
   const chr = s.box.find(i => i.id === 'christian');
   assert.equal(chr.level, 3);
@@ -117,9 +118,54 @@ test('migrate: v1 → v2', () => {
   assert.equal(s.arenaLevels.pcsale, 2);
   assert.equal(s.arenaOwners.pcsale, chr.uid);
   assert.equal(s.items.supercoin, 0);
-  assert.equal(migrate(null).version, 2);
+  assert.equal(migrate(null).version, 3);
   assert.equal(migrate({ version: 7 }).box.length, 0);
   const v2 = migrate({ version: 2, box: [], team: [], sats: 5 });
+  assert.equal(v2.version, 3);
   assert.equal(v2.sats, 5);
   assert.deepEqual(v2.items, { lockmodul: 0, supercoin: 0 });
+  assert.equal(v2.profile, null);
+  assert.equal(v2.settings.sound, true);
+});
+
+test('v4: XP und Trainer-Level', () => {
+  assert.equal(xpForLevel(1), 150);
+  assert.equal(xpForLevel(4), 600);
+  const s = emptySaveV3();
+  assert.deepEqual(addXp(s, 100), { levelUps: [], sats: 0 });
+  assert.deepEqual(levelProgress(s), { level: 1, xp: 100, need: 150 });
+  const r = addXp(s, 400); // 500 gesamt: Lv1→2 (150), Lv2→3 (300), Rest 50
+  assert.deepEqual(r, { levelUps: [2, 3], sats: 500 });
+  assert.equal(s.trainerLevel, 3);
+  assert.equal(s.xp, 50);
+  assert.equal(s.sats, 500);
+});
+
+test('v4: Fusion verbraucht die drei niedrigsten, Ergebnis nächste Seltenheit mit max Level', () => {
+  const s = emptySaveV3();
+  s.box.push(
+    { uid: 'a', id: 'christian', rarity: 'selten', level: 2, caughtAt: 0 },
+    { uid: 'b', id: 'christian', rarity: 'selten', level: 5, caughtAt: 0 },
+    { uid: 'c', id: 'christian', rarity: 'selten', level: 1, caughtAt: 0 },
+    { uid: 'd', id: 'christian', rarity: 'selten', level: 9, caughtAt: 0 },
+    { uid: 'e', id: 'viktor', rarity: 'selten', level: 1, caughtAt: 0 },
+  );
+  s.team = ['a', 'd', 'e'];
+  assert.equal(nextRarity('selten'), 'episch');
+  assert.equal(nextRarity('legendaer'), null);
+  assert.equal(canFuse(s, 'christian', 'selten'), true);
+  assert.equal(canFuse(s, 'viktor', 'selten'), false);
+  const r = fuse(s, 'christian', 'selten', 7);
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.used.map(i => i.uid), ['c', 'a', 'b']);
+  assert.equal(r.inst.rarity, 'episch');
+  assert.equal(r.inst.level, 5);
+  assert.equal(r.newDex, true);
+  assert.equal(s.sats, 100);
+  assert.deepEqual(s.box.map(i => i.uid).sort(), ['d', 'e', r.inst.uid].sort());
+  assert.deepEqual(s.team, ['d', 'e', r.inst.uid]);
+  assert.equal(s.stats.fusions, 1);
+  assert.equal(fuse(s, 'christian', 'selten').ok, false);
+  s.box.push({ uid: 'x', id: 'micha', rarity: 'legendaer', level: 1 }, { uid: 'y', id: 'micha', rarity: 'legendaer', level: 1 }, { uid: 'z', id: 'micha', rarity: 'legendaer', level: 1 });
+  assert.equal(canFuse(s, 'micha', 'legendaer'), false);
 });

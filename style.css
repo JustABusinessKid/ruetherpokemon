@@ -110,3 +110,9 @@ button:disabled { opacity: .4; }
   #screen-battle .stage .bg::before, #screen-battle .stage .bg::after, #screen-battle .stage[class*="quake"],
   #screen-battle .enemy-sprite.rage-shake, #screen-battle .combo.hot::before, #screen-battle .combo.hot::after { animation: none !important; }
 }
+
+/* v4: Dosenbier-Stops und Namensschild des globalen Arena-Besitzers (Karten-Marker) */
+.leaflet-marker-icon.stop-icon { display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--r-legendaer); border: 2px solid #fff; font-size: 18px; line-height: 1; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
+.leaflet-marker-icon.stop-icon.cooling { background: #777; opacity: .6; filter: grayscale(1); }
+.arena-icon .owner-label { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 5px; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: rgba(0,0,0,.85); color: #fff; font-size: 10px; font-weight: 700; line-height: 1; padding: 3px 7px; border-radius: 999px; border: 1px solid rgba(255,255,255,.6); pointer-events: none; }
+.arena-icon .owner-label.mine { background: var(--orange); color: #111; border-color: #fff; }
