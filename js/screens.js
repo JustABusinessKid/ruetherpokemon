@@ -1,6 +1,6 @@
 import { CONST, RUETHERS, RUETHER_BY_ID, RARITIES, RARITY_BY_ID, SHOP, QUESTS, ACHIEVEMENTS, ARENAS } from './data.js';
 import { fighterStats, levelCost, DEX_TOTAL, dexCount, arenaReward, canFuse, nextRarity, levelProgress } from './progress.js';
-import { esc, popup } from './ui.js';
+import { esc, popup, ico, kitName } from './ui.js';
 
 const fmt = n => n.toLocaleString('de-DE');
 const rarityRank = id => RARITIES.findIndex(r => r.id === id);
@@ -27,8 +27,8 @@ async function askText({ title, html, cls, initial = '', ok = 'Speichern' }) {
     return i === 1 ? value : null;
   } finally { box.removeEventListener('input', onInput); }
 }
-const emptyState = (ico, text, sub = '') =>
-  `<div class="empty"><div class="empty-ico">${ico}</div><p>${esc(text)}</p>${sub ? `<p class="sub">${esc(sub)}</p>` : ''}</div>`;
+const emptyState = (icon, text, sub = '') =>
+  `<div class="empty">${ico(icon, 'ico-xl empty-ico')}<p>${esc(text)}</p>${sub ? `<p class="sub">${esc(sub)}</p>` : ''}</div>`;
 
 // ---------- Sammlung ----------
 // onTeamChange(teamUids); onPowerUp(uid) -> { ok, reason, level }; onFuse(id, rarityId) -> { ok, inst, used, newDex }; onDex(); onBack()
@@ -42,17 +42,18 @@ export function createCollectionScreen({ el, onTeamChange, onPowerUp, onFuse, on
     const def = RUETHER_BY_ID[inst.id], r = RARITY_BY_ID[inst.rarity], st = fighterStats(def, inst);
     const idx = save.team.indexOf(inst.uid), cost = levelCost(inst.level);
     const div = document.createElement('div');
-    div.className = `card r-${inst.rarity}` + (idx >= 0 ? ' in-team' : '');
+    div.className = `card panel thin r-${inst.rarity}` + (idx >= 0 ? ' in-team' : '');
     div.dataset.uid = inst.uid;
     div.innerHTML = `
-      ${idx >= 0 ? `<div class="order">${idx + 1}</div>` : ''}
+      <span class="ribbon r-${inst.rarity}">${r.name}</span>
+      ${idx >= 0 ? `<div class="order">Team ${idx + 1}</div>` : ''}
       <div class="frame r-${inst.rarity}"><img src="sprites/${inst.id}.png" alt=""><span class="shine"></span></div>
       <div class="meta">
-        <div class="cname">${def.name} <span class="rar">${r.name}</span></div>
-        <div class="sub">Lv. ${inst.level} · ${st.btc} BTC · Power ×${st.power.toFixed(2)}</div>
+        <div class="cname">${def.name} <span class="badge-pixel">Lv. ${inst.level}</span></div>
+        <div class="sub">${st.btc} BTC · Power ×${st.power.toFixed(2)}</div>
         <div class="actions">
           <button class="team-btn" ${idx < 0 && save.team.length >= CONST.TEAM_SIZE ? 'disabled' : ''}>${idx >= 0 ? 'Aus dem Team' : 'Ins Team'}</button>
-          <button class="power-btn" ${cost == null || save.sats < cost ? 'disabled' : ''}>${cost == null ? 'Max. Level' : `⬆ ${fmt(cost)} 💰`}</button>
+          <button class="power-btn primary" ${cost == null || save.sats < cost ? 'disabled' : ''}>${cost == null ? 'Max. Level' : `${ico('lightning')}${fmt(cost)}${ico('coin')}`}</button>
         </div>
       </div>`;
     div.querySelector('.team-btn').addEventListener('click', () => toggleTeam(inst.uid));
@@ -65,7 +66,7 @@ export function createCollectionScreen({ el, onTeamChange, onPowerUp, onFuse, on
         c.classList.add('level-up');
         c.querySelector('.cname').insertAdjacentHTML('beforeend', `<span class="lvl-pop">Lv. ${res.level}!</span>`);
         c.querySelector('.frame').insertAdjacentHTML('beforeend', Array.from({ length: 7 }, (_, i) =>
-          `<span class="lvl-star" style="--x:${8 + Math.round(Math.random() * 50)}px;--d:${(i * 0.06).toFixed(2)}s">★</span>`).join(''));
+          `<img class="lvl-star" src="art/icon-star.png" alt="" style="--x:${8 + Math.round(Math.random() * 50)}px;--d:${(i * 0.06).toFixed(2)}s">`).join(''));
         setTimeout(() => { c.classList.remove('level-up'); c.querySelectorAll('.lvl-pop, .lvl-star').forEach(n => n.remove()); }, 1200);
       }
     });
@@ -80,7 +81,7 @@ export function createCollectionScreen({ el, onTeamChange, onPowerUp, onFuse, on
       const nxt = RARITY_BY_ID[nextRarity(r.id)];
       const b = document.createElement('button');
       b.className = `fuse-btn r-${nxt.id}`;
-      b.textContent = `⚗️ Fusion: ${CONST.FUSION_COUNT}× ${r.name} → ${nxt.name}`;
+      b.innerHTML = `${ico('star')}Fusion: ${CONST.FUSION_COUNT}× ${r.name} → ${nxt.name}`;
       b.addEventListener('click', () => { const res = onFuse(def.id, r.id); if (res?.ok) playFusion(res); });
       row.appendChild(b);
     }
@@ -90,7 +91,7 @@ export function createCollectionScreen({ el, onTeamChange, onPowerUp, onFuse, on
   function playFusion({ inst, used, newDex }) {
     const r = RARITY_BY_ID[inst.rarity];
     const pos = [[-96, -36], [96, -36], [0, 84]];
-    const colors = ['#f7c948', '#f7931a', '#b36bff', '#2a7fff', '#3ddc84', '#ffffff'];
+    const colors = ['var(--gold)', 'var(--teal)', 'var(--red)', 'var(--paper)', 'var(--amber)', 'var(--r-episch)'];
     const ov = document.createElement('div');
     ov.className = 'fusion-anim';
     ov.innerHTML = `
@@ -99,7 +100,7 @@ export function createCollectionScreen({ el, onTeamChange, onPowerUp, onFuse, on
         <div class="fz-result"><div class="frame r-${inst.rarity}"><img src="${spriteOf(inst.id)}" alt=""><span class="shine"></span></div></div>
       </div>
       <div class="fz-title fz-late r-${inst.rarity}">${esc(r.name)}!</div>
-      <div class="fz-sub fz-late">${esc(RUETHER_BY_ID[inst.id].name)} · Lv. ${inst.level}${newDex ? ` · Neuer Dex-Eintrag +${fmt(CONST.DEX_BONUS)} 💰` : ''}</div>
+      <div class="fz-sub fz-late">${esc(RUETHER_BY_ID[inst.id].name)} · Lv. ${inst.level}${newDex ? ` · Neuer Dex-Eintrag +${fmt(CONST.DEX_BONUS)}${ico('coin', 'ico-in')}` : ''}</div>
       <button class="fz-next fz-late primary">Weiter</button>
       <div class="fz-flash"></div>`;
     el.appendChild(ov);
@@ -109,13 +110,13 @@ export function createCollectionScreen({ el, onTeamChange, onPowerUp, onFuse, on
       ov.querySelector('.fz-result').classList.add('show');
       ov.querySelectorAll('.fz-late').forEach(n => n.classList.add('show'));
       ov.insertAdjacentHTML('beforeend', Array.from({ length: 20 }, (_, i) =>
-        `<span class="fz-confetti" style="--x:${Math.round(Math.random() * 96)}%;--d:${(Math.random() * 0.5).toFixed(2)}s;--c:${colors[i % colors.length]}"></span>`).join(''));
+        `<span class="fx-confetti" style="--x:${Math.round(Math.random() * 96)}%;--dx:${Math.round(Math.random() * 64 - 32)}px;--size:${i % 3 ? 8 : 12}px;--ms:${1600 + Math.round(Math.random() * 600)}ms;background:${colors[i % colors.length]};animation-delay:${(Math.random() * 0.5).toFixed(2)}s"></span>`).join(''));
     }, 680);
   }
   function render() {
     el.querySelector('.fusion-anim')?.remove();
     box.innerHTML = '';
-    if (!save.box.length) { box.innerHTML = emptyState('🎒', 'Noch keine Rüthers gefangen.', 'Raus auf die Karte – dort warten sie.'); return; }
+    if (!save.box.length) { box.innerHTML = emptyState('bag', 'Noch keine Rüthers gefangen.', 'Raus auf die Karte – dort warten sie.'); return; }
     for (const def of RUETHERS) {
       const mine = save.box.filter(i => i.id === def.id)
         .sort((a, b) => rarityRank(b.rarity) - rarityRank(a.rarity) || b.level - a.level);
@@ -165,18 +166,18 @@ export function createShopScreen({ el, onBuy, onBack }) {
   const list = el.querySelector('.shop-items');
   let save = null;
   function render() {
-    el.querySelector('.shop-sats').textContent = `💰 ${fmt(save.sats)}`;
+    el.querySelector('.shop-sats').innerHTML = `${ico('coin')}${fmt(save.sats)}`;
     list.innerHTML = '';
     for (const item of SHOP) {
       const owned = item.id === 'supercoin'
         ? `Im Besitz: ${save.items.supercoin || 0}`
-        : (save.lureUntil > Date.now() ? '🧲 Gerade aktiv (Kauf verlängert)' : '');
+        : (save.lureUntil > Date.now() ? 'Gerade aktiv (Kauf verlängert)' : '');
       const div = document.createElement('div');
-      div.className = 'shop-item';
+      div.className = 'shop-item panel thin';
       div.innerHTML = `
-        <div class="icon">${item.icon}</div>
+        ${ico(kitName(item.icon) || 'shop', 'icon')}
         <div class="meta"><div class="iname">${item.name}</div><div class="sub">${item.desc}</div><div class="sub owned">${owned}</div></div>
-        <button class="buy primary" ${save.sats < item.cost ? 'disabled' : ''}>${fmt(item.cost)} 💰</button>`;
+        <button class="buy primary" ${save.sats < item.cost ? 'disabled' : ''}>${fmt(item.cost)}${ico('coin')}</button>`;
       div.querySelector('.buy').addEventListener('click', () => {
         const res = onBuy(item.id);
         render();
@@ -200,22 +201,25 @@ export function createArenaScreen({ el, bosses, onFight, onBack }) {
       arena = a;
       const boss = bosses[a.boss];
       el.querySelector('.arena-name').textContent = a.name;
-      el.querySelector('.sprite').src = `sprites/${boss.id}.png`;
-      el.querySelector('.boss-name').textContent = `Boss: ${boss.name} (${bossBtc} BTC)`;
-      el.querySelector('.level').textContent = mastered ? '👑 Arena gemeistert (Lv. 5)' : `Arena Lv. ${level} von ${CONST.ARENA_LEVELS}`;
+      el.querySelector('.arena-poster').style.backgroundImage = `url(art/bg-${a.id}.png)`;
+      el.querySelector('.sprite').src = `art/boss-${boss.id}.png`;
+      el.querySelector('.boss-name').textContent = `Boss: ${boss.name} · ${bossBtc} BTC`;
+      el.querySelector('.level').innerHTML = mastered ? `${ico('trophy')}Arena gemeistert (Lv. 5)` : `${ico('star')}Arena Lv. ${level} von ${CONST.ARENA_LEVELS}`;
       el.querySelector('.address').textContent = a.address;
       el.querySelector('.distance').textContent = distanceM == null ? 'Entfernung unbekannt (keine Ortung)' : `Entfernung: ${Math.round(distanceM)} m`;
       const go = el.querySelector('.global-owner');
-      if (!globalOwner) go.textContent = '🌍 Noch von niemandem gehalten.';
+      let text;
+      if (!globalOwner) text = 'Noch von niemandem gehalten.';
       else {
         const since = globalOwner.since ? ` seit ${agoText(Date.now() - globalOwner.since)}` : '';
         const l = globalOwner.leader;
         const lead = l && RUETHER_BY_ID[l.id] ? ` (${RUETHER_BY_ID[l.id].name} ${RARITY_BY_ID[l.rarity]?.name || ''} Lv. ${l.level})` : '';
-        go.textContent = globalOwner.mine ? `🌍 Du hältst diese Arena${since}` : `🌍 Gehalten von ${globalOwner.owner}${lead}${since}`;
+        text = globalOwner.mine ? `Du hältst diese Arena${since}` : `Gehalten von ${globalOwner.owner}${lead}${since}`;
       }
+      go.innerHTML = `${ico('map')}<span>${esc(text)}</span>`;
       go.classList.toggle('mine', !!globalOwner?.mine);
-      el.querySelector('.owner').textContent = ownerName ? `🏆 Dein Besitzer hier: ${ownerName}` : 'Du hast diese Arena noch nicht erobert.';
-      el.querySelector('.reward').textContent = `Belohnung: ${fmt(arenaReward(level))} 💰`;
+      el.querySelector('.owner').textContent = ownerName ? `Dein Besitzer hier: ${ownerName}` : 'Du hast diese Arena noch nicht erobert.';
+      el.querySelector('.reward').innerHTML = `Belohnung: ${fmt(arenaReward(level))}${ico('coin')}`;
       const inRange = distanceM != null && distanceM < CONST.ARENA_RANGE;
       let status = '';
       if (!inRange) status = `Du musst näher als ${CONST.ARENA_RANGE} m ran.`;
@@ -240,12 +244,12 @@ export function createQuestsScreen({ el, onClaim }) {
   function render() {
     const n = save.streak?.count || 0;
     const next = Math.min(CONST.STREAK_MAX, CONST.STREAK_BASE + CONST.STREAK_STEP * n);
-    streak.innerHTML = '<span class="fire">🔥</span><div class="qs-meta"><div class="big"></div><div class="sub"></div></div>';
+    streak.innerHTML = `${ico('star', 'ico-xl fire')}<div class="qs-meta"><div class="big"></div><div class="sub"></div></div>`;
     streak.querySelector('.big').textContent = n ? `Tag ${n} in Folge` : 'Tagesbonus';
-    streak.querySelector('.sub').textContent = `Nächster Bonus: ${fmt(next)} 💰 · morgen wiederkommen`;
+    streak.querySelector('.sub').innerHTML = `Nächster Bonus: ${fmt(next)}${ico('coin', 'ico-in')}· morgen wiederkommen`;
     list.innerHTML = '';
     const qs = save.quests?.list || [];
-    if (!qs.length) list.innerHTML = emptyState('📋', 'Heute keine Quests.', 'Neue gibt es um Mitternacht.');
+    if (!qs.length) list.innerHTML = emptyState('quest', 'Heute keine Quests.', 'Neue gibt es um Mitternacht.');
     for (const q of qs) {
       const def = QUESTS.find(d => d.id === q.id);
       if (!def) continue;
@@ -254,9 +258,9 @@ export function createQuestsScreen({ el, onClaim }) {
       card.className = 'quest-card' + (q.claimed ? ' claimed' : q.done ? ' done' : '');
       card.innerHTML = `
         <div class="q-text">${esc(def.text)}</div>
-        <div class="q-prog">${q.done ? '✓' : `${q.progress}/${def.goal}`}</div>
+        <div class="q-prog">${q.done ? 'fertig' : `${q.progress}/${def.goal}`}</div>
         <div class="bar q-bar"><div class="fill" style="width:${pct}%"></div></div>
-        <div class="q-reward">${fmt(def.sats)} 💰 · ${def.xp} XP</div>
+        <div class="q-reward">${fmt(def.sats)}${ico('coin', 'ico-in')}· ${def.xp} XP</div>
         ${q.done ? `<button class="claim${q.claimed ? '' : ' primary'}" ${q.claimed ? 'disabled' : ''}>${q.claimed ? 'Erledigt' : 'Einlösen'}</button>` : ''}`;
       card.querySelector('.claim:not(:disabled)')?.addEventListener('click', () => { if (onClaim(q.id)) render(); });
       list.appendChild(card);
@@ -273,8 +277,7 @@ export function createQuestsScreen({ el, onClaim }) {
 // state = { now, online, leaderboard: [{ nickname, avatar, sats, dex, trophies, mastered, level, online }], feed: [{ at, nickname, kind, text }] } | null
 export function createLeaderboardScreen({ el }) {
   const count = el.querySelector('.online-count'), status = el.querySelector('.lb-status'), list = el.querySelector('.lb-list'), feed = el.querySelector('.feed');
-  const ICON = { catch: '✨', achievement: '🏅', fusion: '⚗️', level: '⬆️', arena: '⚔️' };
-  const MEDAL = ['🥇', '🥈', '🥉'];
+  const ICON = { catch: 'star', achievement: 'trophy', fusion: 'star', level: 'lightning', arena: 'trophy' };
   return {
     show({ save, state, available }) {
       const live = !!(available && state);
@@ -284,17 +287,17 @@ export function createLeaderboardScreen({ el }) {
       list.innerHTML = '';
       feed.innerHTML = '';
       const board = state?.leaderboard || [];
-      if (!board.length) list.innerHTML = emptyState('🏆', state ? 'Noch niemand gemeldet. Spiel eine Runde!' : 'Sobald du online bist, erscheint hier die Rangliste.');
+      if (!board.length) list.innerHTML = emptyState('trophy', state ? 'Noch niemand gemeldet. Spiel eine Runde!' : 'Sobald du online bist, erscheint hier die Rangliste.');
       board.forEach((p, i) => {
         const row = document.createElement('div');
         row.className = 'lb-row' + (p.nickname === save.profile?.nickname ? ' me' : '');
         row.innerHTML = `
-          <div class="rank">${MEDAL[i] || i + 1}</div>
+          <div class="rank${i < 3 ? ` medal px-circle m${i + 1}` : ''}">${i + 1}</div>
           <img class="av" src="${spriteOf(p.avatar)}" alt="">
           <div class="lmeta"><div class="lname"><span class="n"></span><span class="dot${p.online ? ' on' : ''}"></span></div><div class="lsub"></div></div>
-          <div class="lstats"><div class="tr">🏆 ${p.trophies | 0}</div><div class="sub">Dex ${p.dex | 0}/${DEX_TOTAL}</div></div>`;
+          <div class="lstats"><div class="tr">${ico('trophy', 'ico-in')}${p.trophies | 0}</div><div class="sub">Dex ${p.dex | 0}/${DEX_TOTAL}</div></div>`;
         row.querySelector('.n').textContent = p.nickname || '?';
-        row.querySelector('.lsub').textContent = `Lv. ${p.level || 1} · ${fmt(p.sats | 0)} 💰${p.mastered ? ` · 👑 ${p.mastered}` : ''}`;
+        row.querySelector('.lsub').innerHTML = `Lv. ${Number(p.level) || 1} · ${fmt(p.sats | 0)}${ico('coin', 'ico-in')}${p.mastered ? `· ${ico('star', 'ico-in')}${p.mastered | 0}` : ''}`;
         list.appendChild(row);
       });
       const now = state?.now || Date.now();
@@ -303,7 +306,7 @@ export function createLeaderboardScreen({ el }) {
       for (const f of items) {
         const d = document.createElement('div');
         d.className = 'feed-item';
-        d.innerHTML = `<span class="f-ico">${ICON[f.kind] || '📣'}</span><span class="f-text"><b></b> </span><span class="f-time"></span>`;
+        d.innerHTML = `${ico(ICON[f.kind] || 'quest', 'f-ico')}<span class="f-text"><b></b> </span><span class="f-time"></span>`;
         d.querySelector('b').textContent = f.nickname || '?';
         d.querySelector('.f-text').append(document.createTextNode(f.text || ''));
         const ms = now - (f.at || now);
@@ -332,7 +335,7 @@ export function createProfileScreen({ el, onRename, onAvatar, onSettings, onShar
     if (v) onImport(v);
   });
   $('.reset').addEventListener('click', async () => {
-    const i = await popup({ title: 'Spielstand löschen?', html: '<p>Alle Rüthers, Sats, Erfolge und dein Profil sind dann weg. Das lässt sich nicht rückgängig machen.</p>', buttons: [{ label: 'Abbrechen', primary: true }, { label: 'Löschen' }] });
+    const i = await popup({ title: 'Spielstand löschen?', html: '<p>Alle Rüthers, Sats, Erfolge und dein Profil sind dann weg. Das lässt sich nicht rückgängig machen.</p>', buttons: [{ label: 'Abbrechen', primary: true }, { label: 'Löschen', danger: true }] });
     if (i === 1) onReset();
   });
   const settingsChanged = () => onSettings({ sound: $('.set-sound').checked, haptics: $('.set-haptics').checked });
@@ -360,14 +363,14 @@ export function createProfileScreen({ el, onRename, onAvatar, onSettings, onShar
     const st = save.stats || {};
     const mastered = Object.keys(save.arenaMastered || {}).length;
     const tiles = [
-      ['🎯', fmt(st.catches || 0), 'Fänge'], ['⚔️', fmt(st.arenaWins || 0), 'Arenasiege'], ['🍺', fmt(st.stops || 0), 'Stops'],
-      ['📗', `${dexCount(save)}/${DEX_TOTAL}`, 'Dex'], ['👑', `${mastered}/${ARENAS.length}`, 'Gemeistert'], ['⚗️', fmt(st.fusions || 0), 'Fusionen'],
+      ['coin', fmt(st.catches || 0), 'Fänge'], ['trophy', fmt(st.arenaWins || 0), 'Arenasiege'], ['beer', fmt(st.stops || 0), 'Stops'],
+      ['quest', `${dexCount(save)}/${DEX_TOTAL}`, 'Dex'], ['star', `${mastered}/${ARENAS.length}`, 'Gemeistert'], ['lightning', fmt(st.fusions || 0), 'Fusionen'],
     ];
-    $('.stats-grid').innerHTML = tiles.map(([i, v, k]) => `<div class="stat"><div class="s-ico">${i}</div><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');
+    $('.stats-grid').innerHTML = tiles.map(([i, v, k]) => `<div class="stat px-circle">${ico(i, 's-ico')}<div class="v">${v}</div><div class="k">${k}</div></div>`).join('');
     const got = save.achievements || {};
     $('.ach-count').textContent = `${ACHIEVEMENTS.filter(a => got[a.id]).length}/${ACHIEVEMENTS.length}`;
     $('.ach-grid').innerHTML = ACHIEVEMENTS.map(a =>
-      `<div class="ach${got[a.id] ? '' : ' locked'}" title="${esc(a.desc)}"><div class="a-ico">${a.icon}</div><div class="a-name">${esc(a.name)}</div>${got[a.id] ? '' : `<div class="a-desc">${esc(a.desc)}</div>`}</div>`).join('');
+      `<div class="ach${got[a.id] ? '' : ' locked'}" title="${esc(a.desc)}">${ico(got[a.id] ? kitName(a.icon) || 'star' : 'lock', 'a-ico')}<div class="a-name">${esc(a.name)}</div>${got[a.id] ? '' : `<div class="a-desc">${esc(a.desc)}</div>`}</div>`).join('');
     $('.set-sound').checked = save.settings?.sound !== false;
     $('.set-haptics').checked = save.settings?.haptics !== false;
     pick.innerHTML = avatarGrid(p.avatar);
@@ -376,12 +379,40 @@ export function createProfileScreen({ el, onRename, onAvatar, onSettings, onShar
 }
 
 // ---------- Dosenbier-Stop ----------
+// Bierdeckel-Rad als echte Pixelgrafik: 60×60 Pixel, per CSS 4× hochskaliert (pixelated).
+// Sektoren im Uhrzeigersinn ab oben, je 60°: Bernstein, Rot, Grün, Creme, Bernstein, Rot (Token-Farben).
+function drawCoaster(cv) {
+  const N = cv.width, R = N / 2, c = cv.getContext('2d'), img = c.createImageData(N, N);
+  const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const INK = rgb('#1E2A22'), PAPER = rgb('#F4E8C8'), HUB = rgb('#F2C94C');
+  const SECT = ['#E0A52B', '#B8412F', '#2F6B4F', '#F4E8C8', '#E0A52B', '#B8412F'].map(rgb);
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      const dx = x + 0.5 - R, dy = y + 0.5 - R, r = Math.hypot(dx, dy);
+      if (r > R) continue;
+      const deg = (Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360;
+      const toEdge = Math.min(deg % 60, 60 - (deg % 60)) * Math.PI / 180 * r; // Abstand zur Sektorgrenze in Pixeln
+      let col;
+      if (r > R - 1 || (r > R - 5 && r <= R - 4) || (r < 5 && r > 3.5)) col = INK; // Außenrand, Innenlinie, Nabe
+      else if (r > R - 4) col = (x + y) % 4 ? PAPER : SECT[3].map(v => v * 0.85); // Bierdeckel-Rand mit Dither
+      else if (r <= 3.5) col = HUB;
+      else if (toEdge < 0.6) col = INK;
+      else {
+        col = SECT[Math.floor(deg / 60)];
+        if (r > R - 9 && (x + y) % 2) col = col.map(v => v * 0.82); // Pixel-Dither als Schatten am Rand
+      }
+      img.data.set([...col, 255], (y * N + x) * 4);
+    }
+  }
+  c.putImageData(img, 0, 0);
+}
 // onSpin(stop) -> { sats, superCoin, xp } (Belohnung vom App-Code); Rad dreht 2 s; onDone() beim Schließen
 export function createStopScreen({ el, onSpin, onDone }) {
   const wheel = el.querySelector('.wheel'), result = el.querySelector('.stop-result'), btn = el.querySelector('.spin'), back = el.querySelector('.back');
-  const SECTORS = [20, 30, 40, 60, '🪙', 20];
+  const SECTORS = [20, 30, 40, 60, 'coin', 20];
   const KIND = { pub: 'Kneipe', bar: 'Bar', biergarten: 'Biergarten', cafe: 'Café', fast_food: 'Imbiss', convenience: 'Kiosk', kiosk: 'Kiosk', supermarket: 'Supermarkt', alcohol: 'Spirituosenladen', beverages: 'Getränkemarkt' };
-  wheel.innerHTML = SECTORS.map((s, i) => `<span style="--a:${i * 60 + 30}deg">${s}</span>`).join('');
+  wheel.innerHTML = '<canvas width="60" height="60"></canvas>' + SECTORS.map((s, i) => `<span style="--a:${i * 60 + 30}deg">${typeof s === 'number' ? s : ico('coin')}</span>`).join('');
+  drawCoaster(wheel.querySelector('canvas'));
   let stop = null, state = 'idle', timer = null;
   back.addEventListener('click', () => { if (state === 'idle') onDone(); });
   btn.addEventListener('click', () => {
@@ -397,7 +428,7 @@ export function createStopScreen({ el, onSpin, onDone }) {
     wheel.classList.add('spinning');
     wheel.style.setProperty('--turn', `${360 * 5 - (idx * 60 + 30) + jitter}deg`);
     timer = setTimeout(() => {
-      result.textContent = `+${r.sats} 💰 · +${r.xp} XP${r.superCoin ? ' · 🪙 Super-Münze!' : ''}`;
+      result.innerHTML = `+${r.sats | 0}${ico('coin', 'ico-in')}· +${r.xp | 0} XP${r.superCoin ? ` · ${ico('coin', 'ico-in')}Super-Münze!` : ''}`;
       result.classList.add('show');
       btn.textContent = 'Weiter';
       btn.disabled = false;

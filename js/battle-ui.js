@@ -1,25 +1,30 @@
 import { CONST, RARITIES } from './data.js';
 import { createBattle, tick } from './battle.js';
 import { sfx, haptic } from './audio.js';
+import { playSheet, propFx, confetti, floatText } from './fx.js';
 
 // Kampf-Bildschirm: VS-Intro mit Countdown, requestAnimationFrame-Schleife um die Engine,
-// Pointer-Eingabe, Events → CSS-Animationen (css/battle.css), Sounds, Haptik, Combo, Wut, End-Overlay.
+// Pointer-Eingabe, Events → Grafik-Effekte aus art/ über js/fx.js (Requisiten auf Pfaden, Sheets, Zahlen, Konfetti),
+// kampfeigene Kleinanimationen in css/battle.css, Sounds, Haptik, Combo, Wut, End-Overlay.
 // createBattleScreen({ el, onEnd, onEvent }) -> { start({ team, enemy, rng, arena, arenaLevel, reward, masteredAfter }), stop() }
 // onEnd({ won, retry }) genau einmal pro Kampf: Overlay-Button oder Aufgeben.
 // onEvent(e) für jedes Engine-Event, zusätzlich { type: 'combo', value } bei jeder Combo-Erhöhung.
 
 const sprite = id => `sprites/${id}.png`;
+const bossArt = id => `art/boss-${id}.png`;
+const icon = (name, cls = '') => Object.assign(document.createElement('img'), { className: `ico ${cls}`.trim(), src: `art/icon-${name}.png`, alt: '' });
 const fmt = n => n.toLocaleString('de-DE');
 const freshInput = () => ({ taps: 0, dodge: false, special: null, switchTo: null });
-const svgLine = pts => `<svg viewBox="0 0 200 120" preserveAspectRatio="none"><polyline pathLength="100" points="${pts}"/></svg>`;
-const COLORS = ['#e53935', '#fdd835', '#43a047', '#1e88e5', '#fb8c00', '#8e24aa'];
-const RARITY_COLORS = RARITIES.map(r => r.color);
-const coins = n => Array.from({ length: n }, (_, i) =>
-  `<img class="coin" src="sprites/coin.png" alt="" style="--x:${Math.round(8 + Math.random() * 84)}%;--d:${(i * 0.09).toFixed(2)}s">`).join('');
-const dots = n => Array.from({ length: n }, (_, i) =>
-  `<i style="--x:${Math.round((Math.random() - 0.5) * 120)}px;--d:${(i * 0.05).toFixed(2)}s;--c:${COLORS[i % COLORS.length]}"></i>`).join('');
-const confetti = n => Array.from({ length: n }, (_, i) =>
-  `<i style="--x:${Math.round(Math.random() * 100)}%;--d:${(Math.random() * 0.8).toFixed(2)}s;--c:${RARITY_COLORS[i % RARITY_COLORS.length]};--sx:${Math.round((Math.random() - 0.5) * 140)}px;--r:${Math.round((Math.random() - 0.5) * 1080)}deg"></i>`).join('');
+const RARITY_COLORS = RARITIES.map(r => `var(--r-${r.id})`);
+// Ankerpunkte auf der Bühne = die Pfad-Anker aus css/theme.css (--fx-enemy-*, --fx-me-*), Texte etwas darüber
+const AT = { enemy: { x: 'var(--fx-enemy-x)', y: 'var(--fx-enemy-y)' }, me: { x: 'var(--fx-me-x)', y: 'var(--fx-me-y)' } };
+const TXT = { enemy: { x: 'var(--fx-enemy-x)', y: 'calc(var(--fx-enemy-y) - 12%)' }, me: { x: 'calc(var(--fx-me-x) + 4%)', y: 'calc(var(--fx-me-y) - 14%)' } };
+// Info-Texte zum eigenen Rüther (Ausgewichen!, … du bist dran!): mittig, damit lange Namen nicht links aus der Bühne laufen,
+// und 12 % über den Schadenszahlen, damit sich beides nicht überdeckt
+const INFO_ME = { x: '50%', y: 'calc(var(--fx-me-y) - 26%)' };
+const jitter = (x, px) => `calc(${x} + ${Math.round((Math.random() - 0.5) * px)}px)`;
+// Einschlag-Sheet wächst mit dem Schaden: Tipp (3) ≈ 76 px, Spezial (40) = 224 px
+const impactSize = dmg => Math.min(256, 64 + Math.round(dmg) * 4);
 // Beben nach Schaden: klein < 15, mittel < 30, groß darüber; Lade-Attacken mindestens mittel
 const quakeFor = (dmg, charged) => dmg >= 30 ? 'quake-l' : dmg >= 15 || charged ? 'quake-m' : 'quake-s';
 const QUAKE_MS = { 'quake-s': 300, 'quake-m': 500, 'quake-l': 700 };
@@ -38,7 +43,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
 
   let state = null, raf = 0, countRaf = 0, lastTs = 0, running = false, ended = false, down = null;
   let input = freshInput(), dodgeDir = 'left', koPending = false, batchDelay = 0;
-  let combo = 0, lastHitAt = -Infinity;
+  let combo = 0, lastHitAt = -Infinity, stunTextAt = -Infinity;
   let ctx = {}; // { arena, arenaLevel, reward, masteredAfter }
   const timers = new Set();
   const pending = new Map(); // node -> { cls: timerId }: Neustart derselben Animation löscht den alten Entfern-Timer
@@ -61,32 +66,41 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
   const setWidth = (n, pct) => { const w = `${pct}%`; if (n.style.width !== w) n.style.width = w; };
   const setFrame = f => { frame.className = `frame r-${f.rarity || 'normal'}`; };
 
-  // ---------- Effekt-Elemente ----------
-  function item(cls, at, ms, { text = '', html = '', vars = {} } = {}) {
+  // ---------- Effekt-Elemente (fx.js; Verzögerungen nur über later(), damit stop() alles abräumt) ----------
+  // Kampfeigener Knoten (Tipp-Ring, M&M-Splitter, Münz-Bahn), entfernt sich nach ms
+  function node(cls, ms, parent = fx) {
     const d = document.createElement('div');
-    d.className = `fx-item at-${at} ${cls}`;
-    if (html) d.innerHTML = html; else if (text) d.textContent = text;
-    for (const [k, v] of Object.entries(vars)) d.style.setProperty(k, v);
-    fx.appendChild(d);
+    d.className = cls;
+    parent.appendChild(d);
     later(() => d.remove(), ms);
     return d;
   }
-  const num = (n, at, cls = '') => item(`num ${cls}`, at, 900, { text: n, vars: { '--x': `${Math.round((Math.random() - 0.5) * 60)}px` } });
-  const dmgNum = (n, at, cls = '') => num(`-${n}`, at, `${cls}${n >= 25 ? ' big' : ''}`);
-  const text = (t, at) => item('text', at, 1200, { text: t });
-  const emoji = (ch, cls, at, ms) => item(`emoji ${cls}`, at, ms, { text: ch });
-  const glow = color => item('glow-ring', 'enemy', 900, { vars: { '--c': color } });
-  // Versatz vom Boss (Bühnenmitte) zum eigenen Rüther (unten links), für Wurf- und Drain-Bahnen
-  function meOffset() {
-    const r = stage.getBoundingClientRect();
-    return { '--dx': `${Math.round(-0.33 * r.width)}px`, '--dy': `${Math.round(0.5 * r.height)}px` };
+  // Requisit in .fx; vars setzt Pfad-Variablen am Element (--spin Drehung bei arc-to-enemy, --dx seitlicher Versatz)
+  function prop(name, path, opts, vars = {}) {
+    const p = propFx(fx, name, path, opts);
+    for (const [k, v] of Object.entries(vars)) p.el.style.setProperty(k, v);
+    return p;
   }
+  const sheet = (name, at, opts = {}) => playSheet(fx, name, { ...AT[at], ...opts });
+  let numSeq = 0; // Zahlen in drei Höhen (−22/0/+22 px) staffeln, damit schnelle Tipps nicht übereinander liegen
+  const num = (t, at, kind = 'info', ms = 900) => floatText(fx, t, { x: jitter(TXT[at].x, 60), y: `calc(${TXT[at].y} + ${(numSeq++ % 3 - 1) * 22}px)`, kind, ms });
+  const dmgNum = (n, at) => num(`-${n}`, at, n >= 25 ? 'big' : 'hurt');
+  const text = (t, at, kind = 'info') => floatText(fx, t, { ...(at === 'me' ? INFO_ME : TXT[at]), kind, ms: 1200 });
   function hitEnemy(n) {
-    anim(enemySprite, 'shake', 350);
-    anim(enemySprite, 'hit', 120);
-    dmgNum(n, 'enemy');
-    item('boom', 'enemy', 400, { text: '💥' });
+    anim(enemySprite, 'shake', 300);
+    anim(enemySprite, 'hit', 70); // 2 Frames weiß
+    sheet('impact', 'enemy', { size: impactSize(n) });
+    later(() => dmgNum(n, 'enemy'), 50);
   }
+  // 12 kleine M&Ms in den Seltenheitsfarben fliegen vom Boss auseinander
+  function mmsBurst() {
+    node('mms-burst', 1200).innerHTML = Array.from({ length: 12 }, (_, i) => {
+      const a = (i / 12) * 2 * Math.PI;
+      return `<img src="art/fx-mms.png" alt="" style="--dx:${Math.round(Math.cos(a) * 120)}px;--dy:${Math.round(Math.sin(a) * 100)}px;--c:${RARITY_COLORS[i % RARITY_COLORS.length]}">`;
+    }).join('');
+  }
+  // Münzen wandern vom Boss zum eigenen Rüther: die Hülle läuft die Bahn (css), das Sheet spielt darin
+  const drainCoins = () => playSheet(node('drain', 900), 'coins', { x: '0px', y: '0px', size: 112, ms: 900 });
   // Combo: schnelle Treffer mit < COMBO_WINDOW Abstand (Spielzeit), Anzeige ab ×2, ab ×10 „hot"
   function comboHit() {
     const t = state.time;
@@ -104,35 +118,43 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     comboEl.className = 'combo hidden';
   }
 
-  // Spezial-Attacken nach attack.fx. Rückgabe: ms bis zum Einschlag (Zahl, Wackeln, Folge-Effekte).
+  // Spezial-Attacken nach attack.fx (Spec §4): Requisit art/fx-<name>.png auf seinem Pfad plus Sheet.
+  // Rückgabe: ms bis zum Einschlag (Sheet, Zahl, Wackeln, Folge-Effekte). Würfe fliegen 700 ms, Einschlag bei 600 ms.
   const FX = {
-    'chart-up'() { item('chart-up', 'enemy', 1800, { html: svgLine('0,110 40,90 70,100 110,60 140,70 200,10') + '<div class="big">+70 %</div>' + coins(9) }); return 500; },
-    handshake() { emoji('🤝', 'handshake', 'enemy', 1300); return 300; },
-    can() { item('emoji can', 'enemy', 600, { text: '🍺', vars: meOffset() }); return 560; },
-    family() { text('📣 Familie!', 'me'); return 0; },
-    handbag() { emoji('👜', 'handbag', 'enemy', 600); return 420; },
-    wallet() {
-      item('emoji wallet', 'me', 1000, { html: '<span class="a">🎮</span><span class="b">₿</span>' });
-      later(() => item('drain', 'enemy', 1200, { html: coins(6), vars: meOffset() }), 800);
+    'chart-up'() { prop('chart-up', 'rise-at-enemy', { ms: 1200, size: 192 }); sheet('coins', 'enemy', { y: '30%', size: 192, ms: 1200 }); return 500; },
+    handshake() { prop('handshake', 'pulse-at-enemy', { ms: 1200, size: 144 }); return 400; },
+    can() { prop('beer-can', 'arc-to-enemy', { ms: 700, size: 96 }); return 600; },
+    family() { text('Familie!', 'me'); return 0; }, // fx-family kommt mit dem summoned-Event
+    handbag() { prop('handbag', 'arc-to-enemy', { ms: 700, size: 128 }, { '--spin': '30deg' }); return 600; }, // ohne Drehung, nur Schwung
+    wallet() { // Controller klappt zur Hardware-Wallet um, dann rollen die Münzen vom Boss herüber
+      prop('controller', 'morph-at-me', { ms: 450, size: 112 });
+      later(() => prop('wallet', 'morph-at-me', { ms: 900, size: 112 }), 400);
+      later(drainCoins, 800);
       return 800;
     },
-    controller() { item('emoji controller', 'enemy', 600, { text: '🎮', vars: meOffset() }); return 520; },
-    gas() { item('gas', 'enemy', 1600); return 300; },
-    speech(atk) { item('bubble', 'me', 2000, { text: atk.flavour || 'Deutsche Bank ist kein Geringverdiener.' }); return 400; },
-    mms() { item('mms', 'enemy', 1500, { html: dots(14) }); return 450; },
-    bags() { item('bags', 'me', 1100, { html: [0, 0.15, 0.3].map(d => `<span style="--d:${d}s">🛍️</span>`).join('') }); return 0; },
+    controller() { prop('controller', 'arc-to-enemy', { ms: 700, size: 112 }); return 600; },
+    gas() { prop('gas', 'rise-at-enemy', { ms: 1200, size: 192 }); sheet('smoke', 'enemy', { y: '62%', size: 192 }); return 400; },
+    speech(atk) {
+      const t = document.createElement('span');
+      t.className = 'bubble-text';
+      t.textContent = atk.flavour || 'Deutsche Bank ist kein Geringverdiener.';
+      prop('speech', 'bubble-at-me', { ms: 2000, size: 208, html: t.outerHTML });
+      return 400;
+    },
+    mms() { prop('mms', 'rise-at-enemy', { ms: 1200, size: 160 }); later(mmsBurst, 300); return 450; },
+    bags() { [-1, 0, 1].forEach(i => later(() => prop('bags', 'arc-to-enemy', { ms: 700, size: 96 }, { '--dx': `${i * 44}px` }), (i + 1) * 150)); return 0; },
   };
   // Boss-Attacken nach attack.fx. Rückgabe: ms bis zum Einschlag beim Spieler.
   const BOSS_FX = {
-    disc() { emoji('💿', 'disc', 'me', 550); return 500; },
-    yellow() { glow('#ffd600'); return 450; },
-    firmware() { return 0; }, // Beschriftung trägt der .firmware-Balken (stun-Event)
-    crash() { item('crash', 'me', 900, { html: svgLine('0,10 40,40 70,25 110,80 140,65 200,118') }); return 450; },
-    chain() { emoji('⛓️⛓️⛓️', 'chain', 'me', 700); return 300; },
-    mining() { emoji('⛏️', 'mining', 'enemy', 800); glow('#3ddc84'); return 0; },
-    block() { emoji('🧱', 'block', 'me', 700); return 400; },
-    half() { item('half', 'enemy', 900, { text: '½' }); return 300; },
-    key() { emoji('🔑', 'key', 'enemy', 900); glow('#3ddc84'); return 0; },
+    disc() { prop('disc', 'drop-on-me', { ms: 500, size: 96 }); return 360; },
+    yellow() { prop('yellow-light', 'rise-at-enemy', { ms: 1200, size: 192 }); return 450; },
+    firmware() { return 0; }, // Requisit mit laufendem Balken kommt mit dem stun-Event (bar-on-me)
+    crash() { prop('crash', 'crash-at-me', { ms: 700, size: 144 }); return 550; },
+    chain() { prop('chain', 'drop-on-me', { ms: 900, size: 144 }); return 650; }, // drop-on-me rasselt nach dem Aufprall
+    mining() { prop('pickaxe', 'swing-at-enemy', { ms: 900, size: 144 }); return 0; },
+    block() { prop('block', 'drop-on-me', { ms: 500, size: 112 }); return 360; },
+    half() { prop('halving', 'drop-on-me', { ms: 700, size: 192 }); return 500; },
+    key() { prop('key', 'rise-at-enemy', { ms: 1200, size: 128 }); return 0; },
   };
   const run = (table, atk) => (table[atk.fx] || (() => 0))(atk);
 
@@ -144,48 +166,50 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
       case 'fast': hitEnemy(e.damage); comboHit(); break;
       case 'special':
         batchDelay = run(FX, e.attack);
+        sheet('sparkle', 'me', { size: 128, ms: 700 });
         sfx.play('special'); haptic(20);
         if (e.damage > 0) later(() => hitEnemy(e.damage), batchDelay);
         break;
       case 'specialDenied': anim(specials, 'shake-x', 400); break;
-      case 'stunnedTap': if (!fx.querySelector('.stunned-tap')) item('text stunned-tap', 'me', 1200, { text: 'betäubt' }); break;
+      case 'stunnedTap': { // höchstens ein „betäubt" gleichzeitig (lebt 1,2 s)
+        const now = performance.now();
+        if (now - stunTextAt > 1200) { stunTextAt = now; text('betäubt', 'me'); }
+        break;
+      }
       case 'warn': sfx.play('warn'); break; // Blinken und Ausholen hängen am Zustand (render)
       case 'dodge': anim(meSprite, `dodge-${dodgeDir}`, 450); text('Ausgewichen!', 'me'); sfx.play('dodge'); break;
       case 'enemyAttack':
         batchDelay = run(BOSS_FX, e.attack);
         if (e.damage > 0) later(() => {
-          if (e.dodged) { num(`-${e.damage}`, 'me', 'small'); return; }
+          if (e.dodged) { num(`-${e.damage}`, 'me'); return; }
           const q = quakeFor(e.damage, e.kind === 'charged');
           anim(stage, q, QUAKE_MS[q]);
-          anim(meSprite, 'shake', 350);
-          dmgNum(e.damage, 'me', 'hurt');
+          anim(meSprite, 'shake', 300);
+          sheet('impact', 'me', { size: impactSize(e.damage) });
+          dmgNum(e.damage, 'me');
           sfx.play('hit'); haptic(20);
         }, batchDelay);
         break;
-      case 'poisoned': later(() => item('puff', at, 800), batchDelay); break;
-      case 'poison': num(`-${e.damage}`, at, 'small'); break;
+      case 'poisoned': later(() => sheet('smoke', at, { size: 128 }), batchDelay); break;
+      case 'poison': num(`-${e.damage}`, at); break;
       case 'stun':
-        if (at === 'enemy') later(() => { for (let i = 0; i < 3; i++) item('emoji zz', 'enemy', e.ms, { text: '💤', vars: { '--d': `${i * 0.45}s` } }); }, batchDelay);
-        else later(() => item('firmware', 'me', e.ms, { html: '<span>Firmware-Update…</span>', vars: { '--ms': `${e.ms}ms` } }), batchDelay);
+        if (at === 'enemy') later(() => { for (let i = 0; i < 3; i++) later(() => num('Z', 'enemy', 'info', 1400), i * 450); }, batchDelay);
+        else later(() => prop('firmware', 'bar-on-me', { ms: e.ms, size: 144, html: '<span class="fw-label">Firmware-Update…</span>' }), batchDelay);
         break;
-      case 'weaken': later(() => item('arrow', 'enemy', 900, { text: '↓' }), batchDelay); break;
+      case 'weaken': later(() => text('geschwächt', 'enemy'), batchDelay); break;
       case 'heal':
         later(() => {
           anim(at === 'me' ? mePanel : enemyPanel, 'glow', 900);
+          sheet('sparkle', at, { size: 160, ms: 900 });
           if (e.amount > 0) num(`+${e.amount}`, at, 'heal');
         }, batchDelay);
         break;
-      case 'summoned': showHelpers(e.ids || []); break;
-      case 'summon': {
-        const h = helpers.querySelector(`[data-id="${e.id}"]`);
-        if (h) anim(h, 'hop', 400);
-        num(`-${e.damage}`, 'enemy');
-        break;
-      }
-      case 'rage': // Wutphase: roter Rand bleibt bis Kampfende, Boss wackelt, „WUT!", 🔥 im Namen (render)
+      case 'summoned': showHelpers(e.ms); break;
+      case 'summon': anim(helpers, 'hop', 300); num(`-${e.damage}`, 'enemy'); break;
+      case 'rage': // Wutphase: roter Pixel-Rahmen bleibt bis Kampfende, Boss rot getönt und wackelt, „WUT!", Plakette am Namen (render)
         stage.classList.add('rage');
         anim(enemySprite, 'rage-shake', 1000);
-        item('text rage-text', 'enemy', 1200, { text: 'WUT!' });
+        floatText(fx, 'WUT!', { ...TXT.enemy, kind: 'big', ms: 1200 });
         sfx.play('rage'); haptic([30, 30, 30, 30, 80]);
         break;
       case 'faint': // KO erst, wenn der auslösende Boss-Angriff eingeschlagen ist
@@ -212,15 +236,11 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     }
   }
 
-  function showHelpers(ids) {
+  // Familientreffen: fx-family rutscht neben den eigenen Rüther; .helpers hüpft bei jedem Schlag (summon)
+  function showHelpers(ms = 10_000) {
     helpers.innerHTML = '';
     helpers.classList.remove('hidden');
-    for (const id of ids) {
-      const img = document.createElement('img');
-      img.src = sprite(id); img.dataset.id = id; img.alt = '';
-      helpers.appendChild(img);
-      anim(img, 'slide-in', 500);
-    }
+    propFx(helpers, 'family', 'helpers', { ms, size: 128 });
   }
 
   // ---------- Buttons ----------
@@ -230,17 +250,18 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     sw.classList.add('hidden');
     me.attacks.forEach((a, i) => {
       const b = document.createElement('button');
-      b.className = 'special';
+      b.className = 'btn special';
       const n = document.createElement('span'); n.className = 'sname'; n.textContent = a.name;
       const m = document.createElement('span'); m.className = 'smeta';
-      m.textContent = `⚡${a.cost}` + (a.damage ? ` · ${a.damage} Schaden` : '') + (a.heal ? ` · +${a.heal} BTC` : '');
+      const c = document.createElement('b'); c.textContent = a.cost;
+      m.append(icon('lightning', 'ico-sm'), c, (a.damage ? ` · ${a.damage} Schaden` : '') + (a.heal ? ` · +${a.heal} BTC` : ''));
       b.append(n, m);
       b.addEventListener('click', () => { if (running && !state.over) input.special = i; });
       specials.appendChild(b);
     });
     if (state.team.length > 1) {
       const b = document.createElement('button');
-      b.className = 'swap'; b.textContent = '🔁 Wechseln';
+      b.className = 'btn swap'; b.textContent = 'Wechseln';
       b.addEventListener('click', toggleSwitch);
       specials.appendChild(b);
     }
@@ -251,14 +272,15 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     state.team.forEach((f, i) => {
       if (i === state.active || f.btc <= 0) return;
       const b = document.createElement('button');
+      b.className = 'btn';
       const n = document.createElement('span'); n.textContent = f.name;
-      const h = document.createElement('span'); h.textContent = `${f.btc} BTC · ⚡${f.energy}`;
+      const h = document.createElement('span'); h.textContent = `${f.btc} BTC · Energie ${f.energy}`;
       b.append(n, h);
       b.addEventListener('click', () => { input.switchTo = i; sw.classList.add('hidden'); });
       sw.appendChild(b);
     });
     const c = document.createElement('button');
-    c.textContent = 'Abbrechen';
+    c.className = 'btn'; c.textContent = 'Abbrechen';
     c.addEventListener('click', () => sw.classList.add('hidden'));
     sw.appendChild(c);
     sw.classList.remove('hidden');
@@ -266,12 +288,14 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
 
   // ---------- Rendern pro Frame ----------
   function panel(p, f, t) {
-    setText(p.querySelector('.fname'), `${f.rage ? '🔥 ' : ''}${f.name}${f.level ? ` · Lv. ${f.level}` : ''}`);
+    const name = p.querySelector('.fname');
+    setText(name, `${f.name}${f.level ? ` · Lv. ${f.level}` : ''}`);
+    name.classList.toggle('rage', !!f.rage);
     const pct = Math.max(0, Math.round((100 * f.btc) / f.maxBtc));
     const fill = p.querySelector('.hp .fill');
     setWidth(fill, pct);
     fill.classList.toggle('low', pct <= 25);
-    const st = [f.status.poison && '☠ Gift', f.status.stunUntil > t && '💤 betäubt', f.status.weakenedUntil > t && '↓ geschwächt'].filter(Boolean).join(' · ');
+    const st = [f.status.poison && 'Gift', f.status.stunUntil > t && 'betäubt', f.status.weakenedUntil > t && 'geschwächt'].filter(Boolean).join(' · ');
     setText(p.querySelector('.status'), st);
   }
   function render() {
@@ -279,7 +303,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     panel(enemyPanel, e, t);
     setText(enemyPanel.querySelector('.btc'), `${e.btc} / ${e.maxBtc} BTC`);
     panel(mePanel, me, t);
-    setText(mePanel.querySelector('.btc'), `${me.btc} / ${me.maxBtc} BTC · ⚡ ${me.energy}`);
+    setText(mePanel.querySelector('.btc'), `${me.btc} / ${me.maxBtc} BTC · Energie ${me.energy}`);
     setWidth(energyFill, (100 * me.energy) / CONST.MAX_ENERGY);
     energyFill.classList.toggle('full', me.energy >= CONST.MAX_ENERGY);
     const left = Math.max(0, Math.ceil((state.duration - t) / 1000));
@@ -341,9 +365,9 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
   function showIntro(then) {
     const me = state.team[state.active], boss = state.enemy;
     setText(intro.querySelector('.intro-arena'), ctx.arena?.name || 'Arena');
-    setText(intro.querySelector('.intro-level'), `Arena Lv. ${ctx.arenaLevel}${ctx.masteredAfter ? ' 👑' : ''}`);
+    setText(intro.querySelector('.intro-level'), `Arena Lv. ${ctx.arenaLevel}${ctx.masteredAfter ? ' · Meisterkampf' : ''}`);
     intro.querySelector('.intro-me').src = sprite(me.id);
-    intro.querySelector('.intro-boss').src = sprite(boss.id);
+    intro.querySelector('.intro-boss').src = bossArt(boss.id);
     setText(intro.querySelector('.intro-me-name'), me.name);
     setText(intro.querySelector('.intro-boss-name'), boss.name);
     countdown.textContent = ''; countdown.className = 'countdown';
@@ -371,7 +395,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     input.taps += 1;
     sfx.play('tap');
     const r = stage.getBoundingClientRect();
-    const ring = item('tap', 'enemy', 350);
+    const ring = node('tap', 300);
     ring.style.left = `${e.clientX - r.left}px`;
     ring.style.top = `${e.clientY - r.top}px`;
   });
@@ -390,16 +414,17 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     const t0 = performance.now();
     const step = now => {
       const k = Math.min(1, (now - t0) / 1000);
-      setText(node, `+${fmt(Math.round(target * (1 - (1 - k) ** 3)))} 💰`);
+      setText(node, `+${fmt(Math.round(target * (1 - (1 - k) ** 3)))} Sats`);
       countRaf = k < 1 ? requestAnimationFrame(step) : 0;
     };
-    setText(node, '+0 💰');
+    setText(node, '+0 Sats');
     countRaf = requestAnimationFrame(step);
   }
   function showOverlay() {
     const won = !!state.won, boss = state.enemy, img = overlay.querySelector('.boss');
-    img.src = sprite(boss.id);
+    img.src = bossArt(boss.id);
     img.classList.toggle('fall', won);
+    overlay.classList.toggle('lost', !won); // Niederlage: Papier mit Rotstempel statt Urkunde
     overlay.querySelector('.trophy').classList.toggle('hidden', !won);
     overlay.querySelector('.retry').classList.toggle('hidden', won);
     setText(overlay.querySelector('.done'), won ? 'Weiter' : 'Karte');
@@ -407,12 +432,18 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     setText(overlay.querySelector('.sub'), won
       ? `${boss.name} ist pleite. Die Arena gehört jetzt ${state.team[0].name}.`
       : state.reason === 'timeout' ? 'Die Zeit ist um.' : 'Alle Rüthers sind pleite.');
-    overlay.querySelector('.confetti').innerHTML = won ? confetti(30) : '';
+    const conf = overlay.querySelector('.confetti');
+    conf.innerHTML = '';
+    if (won) {
+      confetti(conf, 36);
+      later(() => playSheet(conf, 'coins', { x: '50%', y: '22%', size: 192, ms: 1800 }), 800);
+    }
     const gain = overlay.querySelector('.sats-gain');
+    setText(gain, '+0 Sats');
     gain.classList.toggle('hidden', !won);
-    if (won) later(() => countUp(gain, ctx.reward || 0), 800); // erst wenn .sats-gain eingeblendet ist (sats-in startet nach .8s)
+    if (won) later(() => countUp(gain, ctx.reward || 0), 800); // erst wenn .sats-gain eingeblendet ist (bt-sats-in startet nach .8s)
     setText(overlay.querySelector('.arena-note'), !won ? ''
-      : ctx.masteredAfter ? 'Arena gemeistert! 👑' : `Arena Lv. ${(ctx.arenaLevel || 1) + 1} freigeschaltet`);
+      : ctx.masteredAfter ? 'Arena gemeistert!' : `Arena Lv. ${(ctx.arenaLevel || 1) + 1} freigeschaltet`);
     overlay.classList.remove('hidden');
   }
   function end(retry) {
@@ -424,7 +455,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
   }
   overlay.querySelector('.done').addEventListener('click', () => end(false));
   // Aufgeben: Kampf sofort beenden (auch im Intro), zählt als Niederlage – außer der Kampf ist schon entschieden
-  // (zwischen KO und Overlay liegen bis ~1,7 s, ein Tipp auf ✕ darf den Sieg nicht verwerfen)
+  // (zwischen KO und Overlay liegen bis ~1,7 s, ein Tipp auf Aufgeben darf den Sieg nicht verwerfen)
   el.querySelector('.quit').addEventListener('click', () => {
     if (!state || ended) return;
     ended = true;
@@ -440,11 +471,11 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     for (const id of timers) clearTimeout(id);
     timers.clear(); pending.clear();
     window.removeEventListener('keydown', onKey);
-    fx.innerHTML = ''; helpers.innerHTML = ''; helpers.classList.add('hidden');
+    fx.innerHTML = ''; helpers.innerHTML = ''; helpers.className = 'helpers hidden';
     flash.className = 'flash'; stage.classList.remove('rage', 'quake-s', 'quake-m', 'quake-l');
     enemySprite.className = 'enemy-sprite sprite'; meSprite.className = 'sprite';
     specials.classList.remove('shake-x'); enemyPanel.classList.remove('glow'); mePanel.classList.remove('glow');
-    resetCombo();
+    resetCombo(); stunTextAt = -Infinity;
     sw.classList.add('hidden'); overlay.classList.add('hidden'); intro.classList.add('hidden');
     overlay.querySelector('.confetti').innerHTML = '';
     down = null; input = freshInput();
@@ -455,9 +486,9 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     state = createBattle({ team, enemy, rng });
     ctx = { arena, arenaLevel, reward, masteredAfter };
     ended = false; koPending = false; batchDelay = 0;
-    if (arena?.id) stage.dataset.arena = arena.id; else delete stage.dataset.arena;
+    if (arena?.id) el.dataset.arena = arena.id; else delete el.dataset.arena; // Bühne und Intro zeigen art/bg-<arena>.png (css)
     const me = state.team[state.active];
-    enemySprite.src = sprite(state.enemy.id);
+    enemySprite.src = bossArt(state.enemy.id);
     meSprite.src = sprite(me.id);
     setFrame(me);
     anim(meSprite, 'slide-in', 500);

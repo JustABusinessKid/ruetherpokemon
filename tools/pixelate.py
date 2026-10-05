@@ -109,15 +109,29 @@ def draw_coin():
 
 
 def draw_icons():
-    """PWA-Icons: Münze auf dunklem Grund mit 12 % Rand, 192 und 512 px."""
-    coin = Image.open(OUT / "coin.png").convert("RGBA")
+    """PWA-Icons: Pixel-Münze aus dem Art-Kit auf --night mit 12 % Rand, 192 und 512 px.
+    Nur die Icons neu bauen: python -c "import sys; sys.path.insert(0, 'tools'); import pixelate; pixelate.draw_icons()"
+    """
+    coin = Image.open(ROOT / "art" / "coin-big.png").convert("RGBA")
     for size in (192, 512):
         pad = round(size * 0.12)
         inner = size - 2 * pad
-        img = Image.new("RGBA", (size, size), (27, 27, 31, 255))  # #1b1b1f
+        img = Image.new("RGBA", (size, size), (27, 43, 75, 255))  # #1B2B4B (--night)
         img.alpha_composite(coin.resize((inner, inner), Image.NEAREST), (pad, pad))
         img.save(OUT / f"icon-{size}.png")
         print("ok", f"icon-{size}")
+
+
+def flatten_bg(name="bg-menu"):
+    """Tiefenunschärfe aus einem art/-Hintergrund nehmen: 1/4 per NEAREST, 32 Farben ohne Dithering, ×4 NEAREST.
+    Einmalig, überschreibt die Datei: python -c "import sys; sys.path.insert(0, 'tools'); import pixelate; pixelate.flatten_bg()"
+    """
+    path = ROOT / "art" / f"{name}.png"
+    img = Image.open(path).convert("RGB")
+    w, h = img.size[0] // 4, img.size[1] // 4
+    small = img.resize((w, h), Image.NEAREST).quantize(32, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+    small.convert("RGB").resize((w * 4, h * 4), Image.NEAREST).save(path)
+    print("ok", name)
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ import { CONST } from './data.js';
 export function createOnline({ apiBase, getPayload, onState }) {
   let available = false, lastState = null, timer = null, inflight = false;
   async function call(path, body) {
+    if (!apiBase) { available = false; return null; } // offline-Modus (lokale Tests)
     const ctrl = new AbortController();
     const to = setTimeout(() => ctrl.abort(), CONST.API_TIMEOUT);
     try {

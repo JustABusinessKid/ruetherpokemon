@@ -1,118 +1,136 @@
-:root {
-  --orange: #f7931a;
-  --bg: #1b1b1f;
-  --panel: #2a2a31;
-  --text: #f2f2f2;
-  --muted: #a0a0ab;
-  --green: #3ddc84;
-  --red: #ff5252;
-  --purple: #b36bff;
-  --r-normal: #9aa0a6;
-  --r-selten: #2a7fff;
-  --r-episch: #b36bff;
-  --r-legendaer: #f7c948;
-}
+/* Grundlagen, Kopfzeile, Karte mit Markern, Seltenheitsrahmen. Tokens und Basisklassen: css/theme.css.
+   Keyframes hier heißen map-* / frame-* (Namen sind global). */
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; overflow: hidden; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+html, body {
+  margin: 0; height: 100%; overflow: hidden;
+  font: 400 15px/1.4 var(--font-body); color: var(--paper);
+  background-color: var(--green); background-image: var(--dither-felt); background-size: 8px 8px;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+}
 img { -webkit-user-drag: none; }
-img.sprite, .spawn-icon img, .slot img { image-rendering: pixelated; }
-button { font: inherit; border: 0; border-radius: 10px; padding: 10px 14px; min-height: 44px; background: var(--panel); color: var(--text); } /* min-height: Touch-Ziel */
-button.primary { background: var(--orange); color: #111; font-weight: 700; }
-button:disabled { opacity: .4; }
+img.sprite, img[src^="art/"], img[src^="sprites/"] { image-rendering: pixelated; }
+h1, h2, h3 { font-family: var(--font-pixel); font-weight: 700; }
+p { margin: 0; }
 .hidden { display: none !important; }
+.hint { color: var(--paper); font-size: 13px; line-height: 1.4; } /* paper-2 auf Filz nur 4,4:1 */
+.panel .hint { color: var(--ink-soft); }
+/* Kit-Icon mitten im Text (ui.js kitify): wächst mit der Schrift */
+.ico.ico-in { width: 1.4em; height: 1.4em; margin: -.2em .1em; }
 
-.screen { position: fixed; inset: 0; display: none; flex-direction: column; }
+.screen { position: fixed; inset: 0; display: none; flex-direction: column; background-color: var(--green); background-image: var(--dither-felt); background-size: 8px 8px; }
 .screen.active { display: flex; }
 
-.topbar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; padding-top: calc(10px + env(safe-area-inset-top)); background: var(--panel); z-index: 1000; }
-.topbar h1, .topbar h2 { margin: 0; font-size: 20px; flex: 1; }
-.topbar .back { padding: 6px 10px; }
-.badge { font-size: 22px; }
-
-.map-wrap { position: relative; flex: 1; display: flex; }
-#map { flex: 1; background: #333; }
-.locate { position: absolute; right: 12px; bottom: 12px; z-index: 1000; width: 48px; height: 48px; border-radius: 50%; padding: 0; font-size: 22px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
-.locate.following { background: var(--orange); }
-/* Puls auf einem Pseudo-Element: Leaflet positioniert den Marker per Inline-transform, eine Animation darauf würde das überschreiben */
-.player-pulse { pointer-events: none; }
-.player-pulse::before { content: ''; position: absolute; inset: 0; border-radius: 50%; background: rgba(42,127,255,.3); animation: pulse 2s ease-out infinite; }
-@keyframes pulse { 0% { transform: scale(.4); opacity: .9; } 100% { transform: scale(1.4); opacity: 0; } }
-.bottombar { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; padding-bottom: calc(10px + env(safe-area-inset-bottom)); background: var(--panel); z-index: 1000; font-size: 14px; }
-.banner { background: var(--red); color: #fff; padding: 8px 14px; font-size: 14px; z-index: 1000; }
-.toast { position: absolute; left: 50%; bottom: 90px; transform: translateX(-50%); background: rgba(0,0,0,.85); padding: 10px 16px; border-radius: 12px; z-index: 1100; font-size: 14px; white-space: nowrap; pointer-events: none; }
-
-.spawn-icon img { width: 48px; height: 48px; border-radius: 8px; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
-.arena-icon { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: var(--purple); color: #fff; font-size: 22px; border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
-.arena-icon.beaten { background: #d4a017; }
-.arena-icon.owned { background: #d4a017; width: 48px; height: 48px; overflow: visible; }
-.arena-icon.owned img { width: 100%; height: 100%; border-radius: 50%; image-rendering: pixelated; }
-.arena-icon.owned .trophy { position: absolute; right: -8px; bottom: -8px; font-size: 18px; }
-
-.debug { position: absolute; top: calc(120px + env(safe-area-inset-top)); right: 10px; z-index: 1200; display: flex; flex-direction: column; gap: 6px; max-height: calc(100% - 130px - env(safe-area-inset-top)); overflow: auto; background: rgba(0,0,0,.9); padding: 10px; border-radius: 12px; font-size: 13px; }
-.debug button { padding: 8px 10px; font-size: 13px; }
-
-.hint { color: var(--muted); font-size: 13px; }
-
-/* Team */
-#screen-team .hint { padding: 0 14px; }
-.slots { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 14px; overflow: auto; }
-.slot { background: var(--panel); border-radius: 12px; padding: 10px; text-align: center; border: 3px solid transparent; position: relative; }
-.slot.in-team { border-color: var(--orange); }
-.slot.unknown { opacity: .5; }
-.slot img { width: 96px; height: 96px; border-radius: 8px; }
-.slot .order { position: absolute; top: 6px; left: 6px; background: var(--orange); color: #111; font-weight: 700; border-radius: 50%; width: 24px; height: 24px; line-height: 24px; }
-.slot .sub { color: var(--muted); font-size: 13px; }
-
-/* Arena */
-.arena-body { padding: 20px; text-align: center; display: flex; flex-direction: column; gap: 8px; align-items: center; }
-.arena-body .sprite { width: 160px; height: 160px; border-radius: 12px; }
-.arena-body p { margin: 0; color: var(--muted); }
-.arena-body .fight { margin-top: 12px; font-size: 18px; padding: 14px 32px; }
-
-/* Sieg */
-#screen-victory { align-items: center; justify-content: center; text-align: center; padding: 20px; background: radial-gradient(circle, #5a4a10, var(--bg)); }
-.crown { font-size: 96px; }
-
-/* Seltenheit, Rahmen, Glanz (geteilt von Karte, Sammlung, Kampf, Fangen) */
-.frame { position: relative; display: inline-block; border: 3px solid var(--r-normal); border-radius: 12px; overflow: hidden; background: #111; }
-.frame.r-selten { border-color: var(--r-selten); }
-.frame.r-episch { border-color: var(--r-episch); box-shadow: 0 0 10px var(--r-episch); }
-.frame.r-legendaer { border-color: var(--r-legendaer); box-shadow: 0 0 14px var(--r-legendaer); }
-.frame img { display: block; image-rendering: pixelated; }
-.frame .shine { display: none; position: absolute; inset: -40% -60%; background: linear-gradient(115deg, transparent 40%, rgba(255,255,255,.45) 50%, transparent 60%); pointer-events: none; }
-.frame.r-episch .shine, .frame.r-legendaer .shine { display: block; animation: shine 2.4s linear infinite; }
-@keyframes shine { from { transform: translateX(-60%); } to { transform: translateX(60%); } }
-.pill { background: rgba(255,255,255,.12); border-radius: 999px; padding: 3px 10px; font-size: 13px; }
-.sats { font-weight: 700; color: var(--orange); }
-.bottombar button { padding: 10px 16px; }
-.banner.lure { background: #7a4a00; color: #ffd27a; }
-
-/* .spawn-icon/.arena-icon: kein position: relative – Leaflet positioniert Marker absolut (sonst stapeln sie sich im Fluss der Marker-Pane) */
-.spawn-icon .aura { position: absolute; inset: -8px; border-radius: 50%; opacity: 0; pointer-events: none; }
-.spawn-icon img { position: relative; }
-.spawn-icon.r-selten img { border-color: var(--r-selten); }
-.spawn-icon.r-episch img { border-color: var(--r-episch); }
-.spawn-icon.r-legendaer img { border-color: var(--r-legendaer); }
-.spawn-icon.r-selten .aura { background: radial-gradient(circle, var(--r-selten) 0%, transparent 70%); opacity: .6; animation: aura-pulse 1.8s ease-in-out infinite; }
-.spawn-icon.r-episch .aura { background: radial-gradient(circle, var(--r-episch) 0%, transparent 70%); opacity: .7; animation: aura-pulse 1.4s ease-in-out infinite; }
-.spawn-icon.r-legendaer .aura { background: radial-gradient(circle, var(--r-legendaer) 0%, transparent 70%); opacity: .85; animation: aura-pulse 1s ease-in-out infinite; }
-.spawn-icon .star { position: absolute; top: -12px; right: -10px; font-size: 16px; animation: aura-pulse 1s ease-in-out infinite; }
-@keyframes aura-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
-
-.arena-icon { overflow: visible; }
-.arena-icon .lvl { position: absolute; left: -8px; bottom: -8px; background: #111; color: #fff; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 6px; border: 1px solid #fff; }
-.arena-icon.mastered { box-shadow: 0 0 0 3px var(--r-legendaer), 0 0 16px var(--r-legendaer); }
-
-/* Weniger Bewegung: Schmuck-Schleifen und starkes Beben aus; Gameplay-Signale (gelb/rot-Blinken, Fang-Ring, Treffer) bleiben */
-@media (prefers-reduced-motion: reduce) {
-  .frame .shine { display: none !important; }
-  .spawn-icon .aura, .spawn-icon .star, .player-pulse::before,
-  #screen-battle .stage .bg::before, #screen-battle .stage .bg::after, #screen-battle .stage[class*="quake"],
-  #screen-battle .enemy-sprite.rage-shake, #screen-battle .combo.hot::before, #screen-battle .combo.hot::after { animation: none !important; }
+/* ---------- Kopfzeile: Holzbalken ---------- */
+.topbar {
+  position: relative; z-index: 10; flex: none;
+  display: flex; align-items: center; gap: 8px;
+  min-height: 56px; padding: 8px 16px; padding-top: calc(8px + env(safe-area-inset-top));
+  border-bottom: 3px solid var(--ink);
+  box-shadow: inset 0 2px 0 rgba(244, 232, 200, .14), inset 0 -3px 0 var(--wood-2), 0 4px 0 rgba(30, 42, 34, .3);
 }
+.topbar h1, .topbar h2 {
+  flex: 1; min-width: 0; margin: 0;
+  font: 700 22px/1.1 var(--font-pixel); color: var(--paper); text-shadow: 2px 2px 0 var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.topbar button { position: relative; flex: none; min-height: 36px; padding: 4px 8px; gap: 4px; font-size: 14px; border-width: 2px; box-shadow: var(--shadow-sm); white-space: nowrap; }
+.topbar button::before { content: ''; position: absolute; inset: -4px; } /* Trefffläche 44 px bei 36 px Optik */
+.topbar .sats-chip { font-size: 16px; background: var(--gold); }
+.badge { flex: none; }
+.pill {
+  display: inline-flex; align-items: center; gap: 4px; flex: none;
+  min-height: 28px; padding: 2px 8px;
+  font: 700 14px/1 var(--font-pixel); color: var(--ink);
+  background: var(--paper); border: 2px solid var(--ink); box-shadow: var(--shadow-sm);
+  white-space: nowrap;
+}
+.pill.on { background: var(--teal); }
 
-/* v4: Dosenbier-Stops und Namensschild des globalen Arena-Besitzers (Karten-Marker) */
-.leaflet-marker-icon.stop-icon { display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--r-legendaer); border: 2px solid #fff; font-size: 18px; line-height: 1; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
-.leaflet-marker-icon.stop-icon.cooling { background: #777; opacity: .6; filter: grayscale(1); }
-.arena-icon .owner-label { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 5px; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: rgba(0,0,0,.85); color: #fff; font-size: 10px; font-weight: 700; line-height: 1; padding: 3px 7px; border-radius: 999px; border: 1px solid rgba(255,255,255,.6); pointer-events: none; }
-.arena-icon .owner-label.mine { background: var(--orange); color: #111; border-color: #fff; }
+/* ---------- Karte ---------- */
+.map-wrap { position: relative; flex: 1; display: flex; isolation: isolate; } /* Leaflet-Panes (z 400+) bleiben unter Kopfzeile und Banner */
+#map { flex: 1; background: var(--paper-2); }
+.leaflet-container { font: 400 12px/1.4 var(--font-body); background: var(--paper-2); }
+.leaflet-tile-pane { filter: sepia(.35) saturate(.75) contrast(1.05); }
+.leaflet-container .leaflet-control-attribution { padding: 0 4px; font-size: 10px; color: var(--ink); background: var(--paper); border-top: 2px solid var(--ink); border-left: 2px solid var(--ink); }
+.leaflet-container .leaflet-control-attribution a { color: var(--ink); }
+.locate { position: absolute; right: 16px; bottom: 24px; z-index: 1000; width: 48px; height: 48px; padding: 0; }
+.locate.following { background: var(--amber); }
+.online-dot { position: absolute; left: 16px; bottom: 24px; z-index: 1000; width: 16px; height: 16px; border: 3px solid var(--ink); background: var(--r-normal); box-shadow: var(--shadow-sm); }
+.online-dot.online { background: var(--teal); }
+
+/* Banner: Papierstreifen mit Icon */
+.banner { position: relative; z-index: 5; flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 16px; font: 700 14px/1.3 var(--font-body); color: var(--ink); background: var(--paper); border-bottom: 3px solid var(--ink); }
+#banner { box-shadow: inset 8px 0 0 var(--red); } /* Fehler/Hinweis aus app.js banner() */
+.banner.lure { color: var(--ink); background: var(--paper); }
+.banner.hour { color: var(--ink); background: var(--amber); }
+.banner.featured { color: var(--ink); background: var(--paper-2); }
+.banner.featured img { flex: none; width: 24px; height: 24px; border: 2px solid var(--ink); background: var(--ink); }
+
+/* Spieler: 16-px-Pixel-Kreis (.px-circle) + 3-stufiger Pixel-Puls-Ring.
+   Puls auf dem Pseudo-Element: Leaflet positioniert den Marker per Inline-transform. */
+.player-dot { --pc: var(--teal); }
+.player-pulse { pointer-events: none; }
+.player-pulse::before { content: ''; position: absolute; inset: 0; background: var(--teal); clip-path: var(--px-ring); animation: map-pulse 1.5s steps(3, end) infinite; }
+@keyframes map-pulse { 0% { transform: scale(.4); opacity: 1; } 100% { transform: scale(1.3); opacity: .2; } }
+
+/* Spawn: Gesicht im Seltenheitsrahmen. Kein position: relative auf .spawn-icon/.arena-icon (Leaflet positioniert absolut). */
+.spawn-icon img.face { position: relative; display: block; width: 48px; height: 48px; border: 3px solid var(--r-normal); background: var(--ink); box-shadow: 0 0 0 2px var(--ink), 4px 4px 0 2px rgba(30, 42, 34, .45); }
+.spawn-icon.r-selten img.face { border-color: var(--r-selten); animation: map-bob 1.2s steps(1, end) infinite; }
+.spawn-icon.r-episch img.face { border-color: var(--r-episch); animation: map-bob .9s steps(1, end) infinite; }
+.spawn-icon.r-legendaer img.face { border-color: var(--r-legendaer); animation: map-bob .6s steps(1, end) infinite; }
+.spawn-icon .star { position: absolute; top: -12px; right: -12px; width: 24px; height: 24px; animation: map-twinkle .8s steps(1, end) infinite; }
+@keyframes map-bob { 50% { transform: translateY(-4px); } }
+@keyframes map-twinkle { 50% { transform: scale(.6); } }
+
+/* Arena: Holzschild mit Icon, Level-Plakette, Namensschild des globalen Besitzers */
+.arena-icon { display: flex; align-items: center; justify-content: center; overflow: visible; background-color: var(--wood); background-image: var(--grain); border: 3px solid var(--ink); box-shadow: inset 0 2px 0 rgba(244, 232, 200, .18), 4px 4px 0 rgba(30, 42, 34, .45); }
+.arena-icon::after { content: ''; position: absolute; left: 50%; top: 100%; width: 8px; height: 8px; margin-left: -4px; margin-top: 3px; background: var(--wood-2); border: 2px solid var(--ink); border-top: 0; }
+.arena-icon .sign { width: 32px; height: 32px; image-rendering: pixelated; }
+.arena-icon.mastered { box-shadow: 0 0 0 3px var(--gold), 0 0 0 5px var(--ink), 4px 4px 0 5px rgba(30, 42, 34, .45); }
+.arena-icon .owner-face { position: absolute; top: -10px; right: -10px; width: 22px; height: 22px; border: 2px solid var(--ink); background: var(--ink); image-rendering: pixelated; }
+.arena-icon .lvl { position: absolute; left: -10px; bottom: -10px; display: flex; align-items: center; gap: 2px; padding: 0 4px; font: 800 11px/16px var(--font-body); font-variant-numeric: tabular-nums; color: var(--ink); background: var(--paper); border: 2px solid var(--ink); white-space: nowrap; }
+.arena-icon .lvl img { width: 12px; height: 12px; }
+.arena-icon .owner-label { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 14px; max-width: 112px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 6px; font: 800 11px/1 var(--font-body); color: var(--ink); background: var(--paper); border: 2px solid var(--ink); box-shadow: var(--shadow-sm); pointer-events: none; }
+.arena-icon .owner-label.mine { background: var(--amber); }
+
+/* Dosenbier-Stop: Bier auf Papier-Pixelkreis (.px-circle), abgekühlt grau */
+.leaflet-marker-icon.stop-icon { display: flex; align-items: center; justify-content: center; }
+.stop-icon img { width: 24px; height: 24px; }
+.leaflet-marker-icon.stop-icon.cooling { --pc: var(--paper-2); opacity: .7; }
+.stop-icon.cooling::before, .stop-icon.cooling img { filter: grayscale(1); }
+
+/* ---------- Debug-Panel: endet über der Tab-Leiste ---------- */
+.debug {
+  position: absolute; top: calc(120px + env(safe-area-inset-top)); right: 8px; z-index: 1200;
+  display: flex; flex-direction: column; gap: 8px;
+  max-height: calc(100% - 128px - env(safe-area-inset-top) - var(--tabbar-h) - env(safe-area-inset-bottom));
+  overflow: auto; padding: 8px;
+  font-size: 13px; color: var(--ink); background: var(--paper); border: 3px solid var(--ink); box-shadow: var(--shadow);
+}
+.debug strong { font: 700 14px var(--font-pixel); }
+.debug button { min-height: 36px; padding: 4px 8px; font-size: 13px; border-width: 2px; box-shadow: var(--shadow-sm); }
+
+/* ---------- Seltenheitsrahmen (Karte, Sammlung, Kampf, Fangen, Profil) ---------- */
+.frame { position: relative; display: inline-block; overflow: hidden; background: var(--ink); border: 3px solid var(--r-normal); box-shadow: 0 0 0 2px var(--ink), 4px 4px 0 2px var(--wood-2); }
+.frame.r-selten { border-color: var(--r-selten); }
+.frame.r-episch { border-color: var(--r-episch); }
+.frame.r-legendaer { border-color: var(--r-legendaer); animation: frame-legend 1.2s steps(1, end) infinite; }
+.frame img { display: block; image-rendering: pixelated; }
+/* Glanz = blinkender Pixel-Stern oben rechts (Episch, Legendär) */
+.frame .shine { display: none; position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; background: url(art/icon-star.png) center / contain no-repeat; image-rendering: pixelated; pointer-events: none; }
+.frame.r-episch .shine, .frame.r-legendaer .shine { display: block; animation: frame-twinkle 1.6s steps(1, end) infinite; }
+@keyframes frame-legend { 50% { border-color: var(--paper); } }
+@keyframes frame-twinkle { 0% { opacity: 0; } 40% { opacity: 1; transform: scale(.5); } 55% { transform: scale(1); } 70% { transform: scale(.5); } 85%, 100% { opacity: 0; } }
+
+/* ---------- Sieg über alle Arenen ---------- */
+#screen-victory { align-items: center; justify-content: center; padding: 24px 16px; text-align: center; background-color: var(--night); background-image: var(--dither-night); background-size: 8px 8px; }
+.victory { display: flex; flex-direction: column; align-items: center; gap: 16px; max-width: 343px; }
+.victory .crown { width: 128px; height: 128px; animation: map-bob 1s steps(1, end) infinite; }
+.victory h2 { margin: 0; font: 700 28px/1.15 var(--font-pixel); color: var(--gold); text-shadow: 3px 3px 0 var(--ink); }
+.victory p { color: var(--paper-2); }
+
+/* ---------- Weniger Bewegung: keine Schmuck-Schleifen ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .frame .shine, .frame.r-legendaer, .spawn-icon img.face, .spawn-icon .star, .player-pulse::before, .victory .crown { animation: none !important; }
+  .frame.r-episch .shine, .frame.r-legendaer .shine { opacity: 1; }
+}

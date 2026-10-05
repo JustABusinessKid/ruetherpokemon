@@ -14,7 +14,7 @@ import { catchReward, arenaWin, arenaReward, arenaScale, powerUp, buyItem, lureA
 import { dayKey, ensureDailyQuests, trackQuest, claimQuest, claimableCount, applyStreak, checkAchievements, featuredRuether, isHappyHour } from './quests.js';
 import { spinReward, stopReady, useStop, fakeStops } from './stops.js';
 import { fetchStops } from './overpass.js';
-import { setScreen, toast, popup, onTab, setTabBadge, esc } from './ui.js';
+import { setScreen, toast, popup, onTab, setTabBadge, esc, ico } from './ui.js';
 import { createOnboarding } from './onboarding.js';
 import { sfx, haptic, setHapticsEnabled } from './audio.js';
 import { createOnline } from './online.js';
@@ -47,7 +47,7 @@ document.querySelectorAll('.sats-chip').forEach(b => b.addEventListener('click',
 function banner(text, kind) {
   const b = $('#banner');
   if (!text && b.dataset.kind !== kind) return;
-  b.textContent = text; b.dataset.kind = kind; b.classList.toggle('hidden', !text);
+  b.innerHTML = text ? ico(kind === 'geo' ? 'map' : 'lock') + esc(text) : ''; b.dataset.kind = kind; b.classList.toggle('hidden', !text);
 }
 const instById = uid => save.box.find(i => i.uid === uid);
 function teamInstances() {
@@ -97,13 +97,20 @@ function updateBanners() {
 }
 setInterval(updateBanners, 1000);
 
-// XP, Erfolge, Quests nach jedem Ereignis
+// XP, Erfolge, Quests nach jedem Ereignis. Level-up-Popups warten, bis die Fangsequenz vorbei ist.
+const pendingLevelUps = [];
 function gainXp(n) {
   const r = addXp(save, n);
   for (const lv of r.levelUps) {
-    sfx.play('levelup'); haptic([40, 60, 80]);
-    popup({ title: `Trainer Lv. ${lv}!`, html: `<p>Du bist aufgestiegen.</p><p class="big">+${fmt(CONST.LEVELUP_SATS * lv)} 💰</p>` });
+    pendingLevelUps.push(lv);
     if (lv % 5 === 0 && lv <= 20) online.postEvent('level', `ist Trainer Lv. ${lv} geworden!`);
+  }
+  if (current !== 'screen-catch') showLevelUps();
+}
+function showLevelUps() {
+  for (const lv of pendingLevelUps.splice(0)) {
+    sfx.play('levelup'); haptic([40, 60, 80]);
+    popup({ title: `Trainer Lv. ${lv}!`, html: `<p>Du bist aufgestiegen.</p><p class="big">+${fmt(CONST.LEVELUP_SATS * lv)}${ico('coin', 'ico-in')}</p>` });
   }
 }
 function afterChange() {
@@ -121,7 +128,7 @@ function dailyCheck() {
   const st = applyStreak(save, today);
   if (st) {
     sfx.play('coin');
-    popup({ title: `🔥 Tag ${st.streak} in Folge`, html: `<p>${st.streak === 1 ? 'Dein Tagesbonus. Komm morgen wieder, dann gibt es mehr.' : 'Danke fürs Wiederkommen.'}</p><p class="big">+${fmt(st.bonus)} 💰</p>` });
+    popup({ title: `🔥 Tag ${st.streak} in Folge`, html: `<p>${st.streak === 1 ? 'Dein Tagesbonus. Komm morgen wieder, dann gibt es mehr.' : 'Danke fürs Wiederkommen.'}</p><p class="big">+${fmt(st.bonus)}${ico('coin', 'ico-in')}</p>` });
   }
   persist();
 }
@@ -129,7 +136,8 @@ setInterval(() => { if (dayKey() !== today) dailyCheck(); }, 60_000);
 
 // ---------- Online ----------
 const online = createOnline({
-  apiBase: API_BASE,
+  // Lokal (localhost/127.0.0.1) nur mit ?online=1 gegen das echte Backend, sonst offline: Testläufe landen nicht in der Rangliste
+  apiBase: /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && !new URLSearchParams(location.search).has('online') ? null : API_BASE,
   getPayload() {
     if (!save.profile) return null;
     return {
@@ -241,7 +249,7 @@ const catchScreen = createCatchScreen({
     afterChange();
     return { sats, newDex: r.newDex };
   },
-  onDone({ spawn }) { spawns = spawns.filter(s => s.id !== spawn.id); map.setSpawns(spawns); show('screen-map'); },
+  onDone({ spawn }) { spawns = spawns.filter(s => s.id !== spawn.id); map.setSpawns(spawns); show('screen-map'); showLevelUps(); },
   onCancel() { show('screen-map'); },
 });
 

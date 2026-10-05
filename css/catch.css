@@ -1,97 +1,121 @@
-/* Fang-Bildschirm v3: Bühne oben, Info unten. Zustand steht in #screen-catch[data-state], Seltenheit in .catch-stage[data-rarity].
-   --rc = aktuelle Seltenheitsfarbe (aus --r-* in style.css, mit Fallback). */
-#screen-catch { padding: 0; align-items: stretch; justify-content: flex-start; text-align: center; background: radial-gradient(ellipse at 50% 30%, #4a4a60 0%, #26262e 55%, var(--bg) 100%); }
-#screen-catch .back { position: absolute; top: calc(10px + env(safe-area-inset-top)); left: 10px; z-index: 3; width: 44px; height: 44px; padding: 0; border-radius: 50%; background: rgba(0,0,0,.5); font-size: 18px; transition: opacity .2s; }
-#screen-catch:not([data-state="idle"]) .back { opacity: .3; }
+/* Fang-Bildschirm v5 „Pixel-Kneipe": Bühne art/bg-catch.png oben, Papier-Info unten.
+   Zustand in #screen-catch[data-state], Seltenheit in .catch-stage[data-rarity]; --rc = Seltenheitsfarbe (Tokens aus theme.css).
+   Alle Bewegungen laufen in Stufen (steps), Schatten sind harte Versätze ohne Unschärfe. Keyframes heißen catch-*. */
+#screen-catch { padding: 0; align-items: stretch; justify-content: flex-start; text-align: center; background: var(--night); color: var(--ink); }
+#screen-catch .back { position: absolute; top: calc(10px + env(safe-area-inset-top)); left: 10px; z-index: 6; width: 44px; height: 44px; min-height: 44px; padding: 0; border: 3px solid var(--ink); border-radius: 0; background: var(--paper); color: var(--ink); box-shadow: 3px 3px 0 var(--wood-2); font: 700 20px/1 var(--font-pixel); }
+#screen-catch .back:active { transform: translate(2px, 2px); box-shadow: none; }
+#screen-catch:not([data-state="idle"]) .back { opacity: .4; }
 
-.catch-stage { position: relative; flex: 1; min-height: 60vh; overflow: hidden; touch-action: none; --rc: var(--r-normal, #9aa0a6); }
-.catch-stage[data-rarity="selten"] { --rc: var(--r-selten, #2a7fff); }
-.catch-stage[data-rarity="episch"] { --rc: var(--r-episch, #b36bff); }
-.catch-stage[data-rarity="legendaer"] { --rc: var(--r-legendaer, #f7c948); }
-.catch-stage::after { content: ''; position: absolute; left: -30%; right: -30%; bottom: -90px; height: 150px; border-radius: 50%; background: rgba(0,0,0,.22); pointer-events: none; }
+.catch-stage { position: relative; flex: 1; min-height: 60vh; overflow: hidden; touch-action: none; --rc: var(--r-normal);
+  background: var(--night) url(../art/bg-catch.png) center bottom / cover no-repeat; image-rendering: pixelated; }
+.catch-stage[data-rarity="selten"] { --rc: var(--r-selten); }
+.catch-stage[data-rarity="episch"] { --rc: var(--r-episch); }
+.catch-stage[data-rarity="legendaer"] { --rc: var(--r-legendaer); }
 
-/* Seltenheits-Badge oben in der Bühne */
-.catch-stage .rarity-badge { position: absolute; top: calc(16px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 3; padding: 4px 14px; border-radius: 999px; font-size: 14px; font-weight: 800; letter-spacing: .5px; color: var(--rc); border: 1px solid var(--rc); background: rgba(0,0,0,.5); white-space: nowrap; pointer-events: none; }
-.catch-stage[data-rarity="episch"] .rarity-badge { box-shadow: 0 0 10px var(--rc); }
-.catch-stage[data-rarity="legendaer"] .rarity-badge { animation: badge-glow 1.2s ease-in-out infinite; }
+/* Seltenheit als Papierstreifen mit Farbband links */
+.catch-stage .rarity-badge { position: absolute; top: calc(14px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 3; display: flex; align-items: center; gap: 6px; padding: 5px 12px 5px 10px; border: 3px solid var(--ink); border-left: 12px solid var(--rc); background: var(--paper); color: var(--ink); box-shadow: 4px 4px 0 var(--wood-2); font: 700 16px/1 var(--font-pixel); letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; pointer-events: none; }
+.catch-stage .rarity-badge .ico { width: 20px; height: 20px; image-rendering: pixelated; }
+.catch-stage[data-rarity="legendaer"] .rarity-badge { background: var(--gold); border-left-color: var(--red); }
+.catch-stage[data-rarity="legendaer"] .rarity-badge .ico { animation: catch-blink .8s steps(1) infinite; }
 
-/* Rüther: .target läuft hin und her (roam), der Sprite darin hüpft/wehrt sich/wird eingesaugt. .aura liegt dahinter. */
-.target { position: absolute; left: 50%; bottom: min(352px, calc(100% - 230px - env(safe-area-inset-top))); width: 160px; /* Oberkante ≥ 70 px + Inset: bleibt unter dem Badge */ height: 160px; margin-left: -80px; animation: roam 4s ease-in-out infinite; }
-.target::after { content: ''; position: absolute; left: 15%; right: 15%; bottom: -16px; height: 18px; border-radius: 50%; background: rgba(0,0,0,.5); filter: blur(4px); transition: opacity .3s; }
-.target .aura { position: absolute; inset: -30px; border-radius: 50%; background: radial-gradient(circle, var(--rc) 0%, transparent 68%); opacity: 0; pointer-events: none; transition: opacity .3s; }
-.target.r-selten .aura { opacity: .45; animation: catch-aura 1.8s ease-in-out infinite; }
-.target.r-episch .aura { opacity: .6; animation: catch-aura 1.4s ease-in-out infinite; }
-.target.r-legendaer .aura { opacity: .8; inset: -40px; animation: catch-aura 1s ease-in-out infinite; }
-.target .sprite { display: block; width: 160px; height: 160px; border-radius: 12px; position: relative; z-index: 1; }
-.target .ring { position: absolute; inset: -12px; border: 4px solid var(--orange); border-radius: 50%; box-shadow: 0 0 14px rgba(247,147,26,.6), inset 0 0 14px rgba(247,147,26,.3); animation: ring-shrink 2.4s linear infinite; pointer-events: none; z-index: 2; }
-.target.angry .sprite { animation: angry .15s linear 8; filter: sepia(1) saturate(8) hue-rotate(-35deg) drop-shadow(0 0 14px var(--red)); }
-.target.angry .ring { box-shadow: 0 0 0 3px var(--red), 0 0 24px var(--red); }
-.sprite.hop { animation: sprite-hop .5s ease-out; }
-.sprite.suck { animation: suck .4s ease-in forwards; }
-.sprite.pop { animation: pop .4s cubic-bezier(.34,1.56,.64,1) both; }
-.sprite.flee { animation: flee .7s ease-in forwards; }
+/* Rüther: .target läuft in 4-px-Schritten hin und her, der Sprite darin hüpft/wehrt sich/wird eingesaugt. */
+.target { position: absolute; left: 50%; bottom: min(352px, calc(100% - 230px - env(safe-area-inset-top))); /* Oberkante bleibt unter dem Badge */ width: 160px; height: 160px; margin-left: -80px; animation: catch-roam 4s steps(20) infinite; }
+/* Aura ab selten: drei harte Ringe mit gestufter Deckung, pulsiert in zwei Stufen */
+.target .aura { position: absolute; inset: -7px; opacity: 0; pointer-events: none;
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--rc) 75%, transparent), 0 0 0 12px color-mix(in srgb, var(--rc) 45%, transparent), 0 0 0 18px color-mix(in srgb, var(--rc) 20%, transparent); }
+.target.r-selten .aura { opacity: .7; animation: catch-aura 1.6s steps(1) infinite; }
+.target.r-episch .aura { opacity: .85; animation: catch-aura 1.2s steps(1) infinite; }
+.target.r-legendaer .aura { opacity: 1; animation: catch-aura .8s steps(1) infinite; }
+/* Seltenheitsrahmen: Farbe, außen Ink-Linie, harter Schatten */
+.target .sprite { display: block; position: relative; z-index: 1; width: 160px; height: 160px; border: 4px solid var(--rc); outline: 3px solid var(--ink); background: var(--paper-2); box-shadow: 7px 7px 0 rgba(30, 42, 34, .45); image-rendering: pixelated; }
+/* Ring: Pixel-Kreis (Treppen-Polygon im 32er-Raster) mit Ink-Kontur; schrumpft in 8 Stufen.
+   Farbe zeigt die Wertung: Creme ohne Bonus, Gold „Gut!", Teal „Super!" (Schwellen aus ringBonus in catch-logic.js). */
+.target .ring { position: absolute; inset: -12px; z-index: 2; pointer-events: none; color: var(--paper);
+  filter: drop-shadow(2px 0 0 var(--ink)) drop-shadow(-2px 0 0 var(--ink)) drop-shadow(0 2px 0 var(--ink)) drop-shadow(0 -2px 0 var(--ink));
+  animation: catch-ring 2.4s steps(8) infinite, catch-ring-color 2.4s step-end infinite; }
+.target .ring::before { content: ''; position: absolute; inset: 0; background: currentColor;
+  clip-path: var(--px-ring); }
+.target.angry { --rc: var(--red); }
+.target.angry .ring::before { background: var(--red); }
+.target.angry .sprite { animation: catch-angry .16s steps(2) 8; filter: sepia(1) saturate(5) hue-rotate(-30deg); }
+.sprite.hop { animation: catch-hop .5s steps(4); }
+.sprite.suck { animation: catch-suck .4s steps(6) forwards; }
+.sprite.pop { animation: catch-pop .4s steps(4) both; }
+.sprite.flee { animation: catch-flee .8s steps(12) forwards; }
 #screen-catch[data-state="seq"] .target { animation-play-state: paused; }
 #screen-catch[data-state="seq"] .ring,
-#screen-catch[data-state="seq"] .target .aura,
-#screen-catch[data-state="seq"] .target::after { opacity: 0; }
+#screen-catch[data-state="seq"] .target .aura { opacity: 0; }
 
-/* Effekt-Ebene: Ring-Bewertung, Sterne, Legendär-Konfetti und -Schriftzug */
+/* Effekt-Ebene: Sheets/Konfetti aus fx.js, dazu Wertung und Legendär-Schriftzug (Ink-Kontur rundum, lesbar auf Himmel und Fassaden) */
 .catch-fx { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
-.catch-fx .rating { position: absolute; font-size: 30px; font-weight: 800; color: var(--orange); text-shadow: 0 2px 8px rgba(0,0,0,.6); animation: float .9s ease-out forwards; white-space: nowrap; }
-.catch-fx .star { position: absolute; font-size: 26px; color: var(--rc); text-shadow: 0 0 10px #fff; animation: star .8s ease-out forwards; }
-.catch-fx .legend { position: absolute; font-size: 44px; font-weight: 900; letter-spacing: 2px; white-space: nowrap; color: var(--r-legendaer, #f7c948); text-shadow: 0 0 24px var(--r-legendaer, #f7c948), 0 3px 0 #7a5a00, 0 6px 14px rgba(0,0,0,.7); animation: legend-pop .6s cubic-bezier(.34,1.56,.64,1) both; }
-.catch-fx .confetti { position: absolute; width: 8px; height: 14px; border-radius: 2px; background: var(--c, #f7c948); box-shadow: 0 0 6px var(--c, #f7c948); animation: catch-confetti 2s ease-in var(--d, 0s) both; }
+.catch-fx .rating { position: absolute; font: 700 30px/1 var(--font-pixel); color: var(--gold); text-shadow: 2px 0 0 var(--ink), -2px 0 0 var(--ink), 0 2px 0 var(--ink), 0 -2px 0 var(--ink), 3px 3px 0 var(--ink); white-space: nowrap; animation: catch-rating .9s steps(6) forwards; }
+.catch-fx .legend { position: absolute; font: 700 44px/1 var(--font-pixel); letter-spacing: 2px; white-space: nowrap; color: var(--gold); text-shadow: 2px 0 0 var(--ink), -2px 0 0 var(--ink), 0 2px 0 var(--ink), 0 -2px 0 var(--ink), 3px 3px 0 var(--ink), 6px 6px 0 var(--wood-2); animation: catch-legend .5s steps(4) both; }
 
-.catch-msg { position: absolute; left: 0; right: 0; bottom: 150px; z-index: 4; font-size: 30px; font-weight: 800; text-shadow: 0 2px 10px rgba(0,0,0,.7); opacity: 0; transform: scale(.7); transition: opacity .15s, transform .3s cubic-bezier(.34,1.56,.64,1); pointer-events: none; }
-.catch-msg.show { opacity: 1; transform: scale(1); }
+/* Meldung als Papierstreifen, mittig, bricht bei langen Namen um */
+.catch-msg { position: absolute; left: 0; right: 0; bottom: 178px; z-index: 4; width: max-content; max-width: calc(100% - 32px); margin: 0 auto; padding: 4px 12px; font: 700 30px/1.1 var(--font-pixel); color: var(--ink); background: var(--paper); border: 3px solid var(--ink); box-shadow: var(--shadow); opacity: 0; pointer-events: none; }
+.catch-msg:empty { visibility: hidden; }
+.catch-msg.show { opacity: 1; animation: catch-msg .24s steps(3); }
 
-/* Belohnung nach „Gefangen!": springt rein, darunter ggf. Dex-Hinweis */
-.catch-stage .reward { position: absolute; left: 0; right: 0; top: 48%; z-index: 5; pointer-events: none; animation: reward-in .5s cubic-bezier(.34,1.56,.64,1) both; }
-.catch-stage .reward .amount { font-size: 48px; font-weight: 900; color: var(--orange); text-shadow: 0 3px 12px rgba(0,0,0,.7), 0 0 24px rgba(247,147,26,.6); }
-.catch-stage .reward .newdex { margin-top: 4px; font-size: 18px; font-weight: 800; color: var(--r-legendaer, #f7c948); text-shadow: 0 2px 8px rgba(0,0,0,.7); animation: reward-in .4s .25s cubic-bezier(.34,1.56,.64,1) both; }
+/* Belohnung als angehefteter Papierzettel */
+.catch-stage .reward { position: absolute; left: 50%; top: 46%; z-index: 5; min-width: 200px; padding: 14px 18px 12px; border: 3px solid var(--ink); background: var(--paper); color: var(--ink); box-shadow: 6px 6px 0 var(--wood-2); pointer-events: none; transform: translateX(-50%) rotate(-2deg); animation: catch-reward .4s steps(4) both; }
+.catch-stage .reward::before { content: ''; position: absolute; top: -8px; left: 50%; width: 12px; height: 12px; margin-left: -6px; background: var(--red); border: 2px solid var(--ink); }
+.catch-stage .reward .amount { display: flex; align-items: center; justify-content: center; gap: 8px; font: 700 36px/1 var(--font-pixel); }
+.catch-stage .reward .amount small { font-size: 18px; color: var(--ink-soft); }
+.catch-stage .reward .ico { width: 32px; height: 32px; image-rendering: pixelated; }
+.catch-stage .reward .newdex { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 8px; padding-top: 6px; border-top: 2px dashed var(--ink-soft); font: 800 15px/1.2 var(--font-body); color: var(--green); }
+.catch-stage .reward .newdex .ico { width: 20px; height: 20px; }
 
-/* Münze: Position über --x/--y, Drehung --r, Größe --s. Keyframes bauen auf denselben Variablen auf.
-   Auf .catch-stage gescoped, weil auch der Kampf <img class="coin"> nutzt (battle.css). */
-.catch-stage .coin { position: absolute; left: 50%; bottom: 52px; /* über dem 44-px-Super-Münzen-Schalter */ width: 96px; height: 96px; z-index: 3; cursor: grab; touch-action: none; transition: none; filter: drop-shadow(0 6px 8px rgba(0,0,0,.5));
+/* Münze art/coin-big.png: Position über --x/--y, Drehung --r, Größe --s; die Keyframes bauen auf denselben Variablen auf.
+   Auf .catch-stage gescoped, weil auch der Kampf .coin nutzt. */
+.catch-stage .coin { position: absolute; left: 50%; bottom: 52px; /* über dem Super-Münzen-Schalter */ z-index: 3; width: 112px; height: 112px; cursor: grab; touch-action: none; transition: none; image-rendering: pixelated; filter: drop-shadow(0 6px 0 rgba(30, 42, 34, .45));
   transform: translate(calc(-50% + var(--x, 0px)), var(--y, 0px)) rotate(var(--r, 0deg)) scale(var(--s, 1)); }
-.catch-stage .coin.super { animation: super-pulse 1.2s ease-in-out infinite; } /* nur filter, damit transform frei bleibt */
-.catch-stage .coin.drag { cursor: grabbing; filter: drop-shadow(0 14px 14px rgba(0,0,0,.5)); }
-.catch-stage .coin.return { transition: transform .35s cubic-bezier(.2,.8,.3,1); }
-.catch-stage .coin.fall { animation: coin-miss .3s ease-in forwards; }
-.catch-stage .coin.drop { animation: drop .2s ease-in; }
-.catch-stage .coin.wobble { animation: wobble .6s ease-in-out; }
-.catch-stage .coin.glow { animation: glow .5s ease-in-out infinite; }
-.catch-stage .coin.burst { animation: burst .35s ease-out forwards; }
+.catch-stage .coin.super { animation: catch-super .8s steps(1) infinite; } /* nur filter, damit transform frei bleibt */
+.catch-stage .coin.drag { cursor: grabbing; filter: drop-shadow(0 14px 0 rgba(30, 42, 34, .35)); }
+.catch-stage .coin.return { transition: transform .35s steps(6); }
+.catch-stage .coin.fall { animation: catch-coin-miss .3s steps(6) forwards; }
+.catch-stage .coin.drop { animation: catch-drop .2s steps(4); }
+.catch-stage .coin.wobble { animation: catch-wobble .6s steps(6); }
+.catch-stage .coin.glow { animation: catch-glow .4s steps(1) infinite; }
+.catch-stage .coin.burst { animation: catch-burst .35s steps(5) forwards; }
 
-/* Super-Münzen-Schalter unter der Münze, nur sichtbar bei Vorrat (.hidden aus style.css) */
-.catch-stage .supercoin { position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); z-index: 3; padding: 5px 12px; font-size: 13px; font-weight: 700; border-radius: 999px; background: rgba(0,0,0,.55); border: 1px solid var(--r-legendaer, #f7c948); color: #fff; white-space: nowrap; transition: background .2s, box-shadow .2s, opacity .2s; }
-.catch-stage .supercoin.active { background: var(--r-legendaer, #f7c948); color: #111; box-shadow: 0 0 16px var(--r-legendaer, #f7c948); }
-#screen-catch:not([data-state="idle"]) .supercoin { opacity: .4; }
+/* Super-Münzen-Schalter unter der Münze, nur bei Vorrat sichtbar (.hidden) */
+.catch-stage .supercoin { position: absolute; left: 0; right: 0; bottom: 6px; width: max-content; margin: 0 auto; /* ohne transform zentriert: theme.css drückt per transform */ z-index: 3; display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 4px 12px; border: 3px solid var(--ink); border-radius: 0; background: var(--paper); color: var(--ink); box-shadow: 3px 3px 0 var(--wood-2); font: 700 14px/1 var(--font-pixel); white-space: nowrap; }
+.catch-stage .supercoin .ico { width: 20px; height: 20px; image-rendering: pixelated; }
+.catch-stage .supercoin.active { background: var(--gold); transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--wood-2); }
+#screen-catch:not([data-state="idle"]) .supercoin { opacity: .5; }
 
-.catch-info { flex: 0 0 auto; padding: 12px 20px calc(14px + env(safe-area-inset-bottom)); }
-.catch-info .name { margin: 0; font-size: 22px; }
-.catch-info .title { color: var(--orange); margin: 2px 0; }
-.catch-info .desc { color: var(--muted); font-size: 14px; margin: 4px 0; }
-.catch-info .throws { margin: 6px 0 0; font-weight: 600; }
+/* Info unten: Papier unter einer Holzkante */
+.catch-info { flex: 0 0 auto; padding: 10px 20px calc(12px + env(safe-area-inset-bottom)); background: var(--paper); border-top: 6px solid var(--wood); box-shadow: inset 0 3px 0 var(--wood-2); color: var(--ink); }
+.catch-info .name { margin: 0; font: 700 24px/1.2 var(--font-pixel); }
+.catch-info .title { margin: 2px 0; font-weight: 800; color: var(--wood); }
+.catch-info .desc { margin: 4px 0; font-size: 14px; color: var(--ink-soft); }
+.catch-info .throws { margin: 6px 0 0; font: 700 16px/1.2 var(--font-pixel); }
+.catch-info .hint { margin: 4px 0 0; font-size: 13px; color: var(--ink-soft); }
 
-/* ---- Keyframes (Namen sind global; battle.css hat eigene hop/fall/confetti, style.css aura-pulse, daher eigene Namen) ---- */
-@keyframes roam { 0%, 100% { transform: translateX(-40px); } 50% { transform: translateX(40px); } }
-@keyframes sprite-hop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-30px); } }
-@keyframes angry { 0%, 100% { transform: translateX(0) rotate(0); } 25% { transform: translateX(-7px) rotate(-5deg); } 75% { transform: translateX(7px) rotate(5deg); } }
-@keyframes ring-shrink { from { transform: scale(1); border-color: var(--orange); } to { transform: scale(.3); border-color: var(--green); } }
-@keyframes catch-aura { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.2); } }
-@keyframes badge-glow { 0%, 100% { box-shadow: 0 0 10px var(--rc); } 50% { box-shadow: 0 0 24px var(--rc), 0 0 40px var(--rc); } }
-@keyframes suck { 30% { filter: brightness(2); } to { transform: translate(var(--sx, 0px), var(--sy, 0px)) scale(0) rotate(90deg); opacity: 0; filter: brightness(3); } }
-@keyframes drop { from { transform: translate(calc(-50% + var(--x)), calc(var(--y) - 60px)) scale(var(--s)); } to { transform: translate(calc(-50% + var(--x)), var(--y)) scale(var(--s)); } }
-@keyframes wobble { 0%, 100% { transform: translate(calc(-50% + var(--x)), var(--y)) rotate(0) scale(var(--s)); } 25% { transform: translate(calc(-50% + var(--x)), var(--y)) rotate(-20deg) scale(var(--s)); } 75% { transform: translate(calc(-50% + var(--x)), var(--y)) rotate(20deg) scale(var(--s)); } }
-@keyframes glow { 0%, 100% { filter: drop-shadow(0 0 8px var(--rc)) brightness(1.1); } 50% { filter: drop-shadow(0 0 30px var(--rc)) drop-shadow(0 0 12px #fff) brightness(1.8); } }
-@keyframes super-pulse { 0%, 100% { filter: drop-shadow(0 0 8px var(--r-legendaer, #f7c948)) drop-shadow(0 6px 8px rgba(0,0,0,.5)); } 50% { filter: drop-shadow(0 0 22px var(--r-legendaer, #f7c948)) brightness(1.3); } }
-@keyframes star { from { transform: translate(-50%, -50%) scale(.5); opacity: 1; } to { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.4) rotate(180deg); opacity: 0; } }
-@keyframes burst { 0% { transform: translate(calc(-50% + var(--x)), var(--y)) scale(var(--s)); opacity: 1; } 60% { transform: translate(calc(-50% + var(--x)), var(--y)) scale(calc(var(--s) * 1.8)); opacity: 1; filter: brightness(2); } 100% { transform: translate(calc(-50% + var(--x)), var(--y)) scale(calc(var(--s) * 2.4)); opacity: 0; } }
-@keyframes pop { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-@keyframes legend-pop { from { transform: translate(-50%, -50%) scale(0) rotate(-8deg); opacity: 0; } to { transform: translate(-50%, -50%) scale(1) rotate(-4deg); opacity: 1; } }
-@keyframes catch-confetti { from { transform: translateY(0) rotate(0); opacity: 1; } 80% { opacity: 1; } to { transform: translateY(var(--h, 700px)) rotate(var(--rot, 720deg)); opacity: 0; } }
-@keyframes reward-in { from { transform: translateY(40px) scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
-@keyframes flee { 0% { transform: translateX(0); } 25% { transform: translate(25vw, -24px) rotate(6deg); } 50% { transform: translate(55vw, 0) rotate(0); } 75% { transform: translate(85vw, -24px) rotate(6deg); } 100% { transform: translateX(130vw); } }
-@keyframes float { from { transform: translate(-50%, 0) scale(.6); opacity: 0; } 25% { transform: translate(-50%, -12px) scale(1.2); opacity: 1; } to { transform: translate(-50%, -60px) scale(1); opacity: 0; } }
-@keyframes coin-miss { to { transform: translate(calc(-50% + var(--x)), calc(var(--y) + 600px)) rotate(var(--r)) scale(var(--s)); opacity: .2; } }
+/* ---- Keyframes (global, daher alle mit catch-) ---- */
+@keyframes catch-roam { 0%, 100% { transform: translateX(-40px); } 50% { transform: translateX(40px); } }
+@keyframes catch-hop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-32px); } }
+@keyframes catch-angry { 0%, 100% { transform: translateX(-6px); } 50% { transform: translateX(6px); } }
+@keyframes catch-ring { from { transform: scale(1); } to { transform: scale(.3); } }
+@keyframes catch-ring-color { 0% { color: var(--paper); } 37.5% { color: var(--gold); } 75% { color: var(--teal); } }
+@keyframes catch-aura { 50% { transform: scale(1.05); } } /* nicht opacity: die blendet in seq aus */
+@keyframes catch-blink { 50% { opacity: 0; } }
+@keyframes catch-suck { 30% { filter: brightness(2); } to { transform: translate(var(--sx, 0px), var(--sy, 0px)) scale(0); opacity: 0; filter: brightness(3); } }
+@keyframes catch-pop { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes catch-flee { 0% { transform: translateX(0); } 25% { transform: translate(25vw, -24px); } 50% { transform: translate(55vw, 0); } 75% { transform: translate(85vw, -24px); } 100% { transform: translateX(130vw); } }
+@keyframes catch-drop { from { transform: translate(calc(-50% + var(--x)), calc(var(--y) - 60px)) scale(var(--s)); } to { transform: translate(calc(-50% + var(--x)), var(--y)) scale(var(--s)); } }
+@keyframes catch-wobble { 0%, 100% { transform: translate(calc(-50% + var(--x)), var(--y)) rotate(0) scale(var(--s)); } 25% { transform: translate(calc(-50% + var(--x)), var(--y)) rotate(-20deg) scale(var(--s)); } 75% { transform: translate(calc(-50% + var(--x)), var(--y)) rotate(20deg) scale(var(--s)); } }
+@keyframes catch-glow { 0%, 100% { filter: brightness(1.15) drop-shadow(3px 0 0 var(--rc)) drop-shadow(-3px 0 0 var(--rc)) drop-shadow(0 3px 0 var(--rc)) drop-shadow(0 -3px 0 var(--rc)); } 50% { filter: brightness(1.7) drop-shadow(3px 0 0 var(--paper)) drop-shadow(-3px 0 0 var(--paper)) drop-shadow(0 3px 0 var(--paper)) drop-shadow(0 -3px 0 var(--paper)); } }
+@keyframes catch-super { 0%, 100% { filter: drop-shadow(3px 0 0 var(--gold)) drop-shadow(-3px 0 0 var(--gold)) drop-shadow(0 3px 0 var(--gold)) drop-shadow(0 -3px 0 var(--gold)); } 50% { filter: brightness(1.25) drop-shadow(3px 0 0 var(--teal)) drop-shadow(-3px 0 0 var(--teal)) drop-shadow(0 3px 0 var(--teal)) drop-shadow(0 -3px 0 var(--teal)); } }
+@keyframes catch-burst { 0% { transform: translate(calc(-50% + var(--x)), var(--y)) scale(var(--s)); opacity: 1; } 60% { transform: translate(calc(-50% + var(--x)), var(--y)) scale(calc(var(--s) * 1.8)); opacity: 1; filter: brightness(2); } 100% { transform: translate(calc(-50% + var(--x)), var(--y)) scale(calc(var(--s) * 2.4)); opacity: 0; } }
+@keyframes catch-coin-miss { to { transform: translate(calc(-50% + var(--x)), calc(var(--y) + 600px)) rotate(var(--r)) scale(var(--s)); opacity: .2; } }
+@keyframes catch-rating { from { transform: translate(-50%, 0) scale(.5); opacity: 0; } 25% { transform: translate(-50%, -12px) scale(1.2); opacity: 1; } to { transform: translate(-50%, -60px); opacity: 0; } }
+@keyframes catch-legend { from { transform: translate(-50%, -50%) scale(0) rotate(-8deg); } to { transform: translate(-50%, -50%) rotate(-4deg); } }
+@keyframes catch-msg { from { transform: scale(.6); } }
+@keyframes catch-reward { from { transform: translate(-50%, 40px) rotate(-8deg) scale(.4); opacity: 0; } to { transform: translateX(-50%) rotate(-2deg); opacity: 1; } }
+
+/* Weniger Bewegung: keine Loops (Laufen, Aura, Blinken, Super-Puls); der Ring bleibt, er ist Spielmechanik. */
+@media (prefers-reduced-motion: reduce) {
+  .target, .target .aura, .catch-stage .coin.super, .catch-stage .coin.glow, .catch-stage[data-rarity="legendaer"] .rarity-badge .ico { animation: none !important; } /* !important: .target.r-* .aura ist spezifischer */
+  .catch-stage .coin.super { filter: drop-shadow(3px 0 0 var(--gold)) drop-shadow(-3px 0 0 var(--gold)) drop-shadow(0 3px 0 var(--gold)) drop-shadow(0 -3px 0 var(--gold)); }
+}

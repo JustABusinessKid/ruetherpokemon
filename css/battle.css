@@ -1,275 +1,254 @@
-/* Kampf-Bildschirm (Echtzeit). Layout passt auf 375×812 ohne Scroll.
-   Alle Bewegungen sind CSS-Keyframes; js/battle-ui.js setzt nur Klassen und erzeugt .fx-item-Elemente.
-   Einmal-Animationen nutzen die Einzel-Eigenschaften translate/rotate/scale, damit sie sich nicht gegenseitig überschreiben.
+/* Kampf-Bildschirm „Pixel-Kneipe" (v5). Layout passt auf 375×812 ohne Scroll.
+   Tokens, Fonts, Buttons, Balken, .fx-sheet/.fx-prop/.fx-text und die Pfad-Keyframes stehen in css/theme.css; js/fx.js
+   spielt die Grafiken aus art/ ab. Hier: Bühne, HUD, Intro, Overlay und kampfeigene Kleinanimationen (Präfix bt-).
+   Bewegung in ganzen Pixeln bzw. mit steps(); keine weichen Schatten, keine Verläufe außer Dither und Segmenten.
+   Einmal-Animationen nutzen translate/rotate/scale einzeln, damit sie sich nicht gegenseitig überschreiben.
    Ebenen: .bg 0 · Boss 1 · .rage::after/.helpers 2 · .fx/.combo 3 · .flash 5 · .switch 6 · .intro 8 · .quit 9 · .overlay 10 */
 
-#screen-battle { position: fixed; inset: 0; overflow: hidden; gap: 8px; padding: 8px 10px; padding-top: calc(8px + env(safe-area-inset-top)); padding-bottom: calc(8px + env(safe-area-inset-bottom)); background: radial-gradient(ellipse at 50% 35%, #34344b 0%, var(--bg) 70%); }
+#screen-battle {
+  --bt-outline: 2px 0 0 var(--ink), -2px 0 0 var(--ink), 0 2px 0 var(--ink), 0 -2px 0 var(--ink), 3px 3px 0 var(--ink);
+  --bt-outline-lg: 3px 0 0 var(--ink), -3px 0 0 var(--ink), 0 3px 0 var(--ink), 0 -3px 0 var(--ink), 5px 5px 0 var(--ink);
+  position: fixed; inset: 0; overflow: hidden; gap: 8px; padding: 8px 10px;
+  padding-top: calc(8px + env(safe-area-inset-top)); padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  color: var(--ink);
+  background-color: var(--night); background-image: var(--dither-night); background-size: 8px 8px;
+}
+/* Arena-Hintergrund für Bühne und Intro (data-arena setzt battle-ui.js am Screen) */
+#screen-battle[data-arena="worringen"] { --arena-bg: url(../art/bg-worringen.png); }
+#screen-battle[data-arena="huettenberg"] { --arena-bg: url(../art/bg-huettenberg.png); }
+#screen-battle[data-arena="pcsale"] { --arena-bg: url(../art/bg-pcsale.png); }
 
-/* Blinken bei Warnung */
+/* Warn-Blinken vor Boss-Angriffen: gelb = schnell, rot = Lade-Attacke */
 #screen-battle .flash { position: absolute; inset: 0; z-index: 5; pointer-events: none; opacity: 0; }
-#screen-battle .flash.yellow { background: #ffd600; animation: flash-pulse .35s ease-in-out infinite alternate; }
-#screen-battle .flash.red { background: #ff1744; animation: flash-pulse .2s ease-in-out infinite alternate; }
-@keyframes flash-pulse { from { opacity: .05; } to { opacity: .4; } }
+#screen-battle .flash.yellow { background: var(--gold); animation: bt-flash .3s steps(1) infinite; }
+#screen-battle .flash.red { background: var(--red); animation: bt-flash .2s steps(1) infinite; }
+@keyframes bt-flash { 0% { opacity: .1; } 50% { opacity: .35; } }
 
-/* Panels */
-#screen-battle .fighter { display: flex; flex-direction: row; align-items: center; gap: 10px; flex: none; background: var(--panel); border-radius: 14px; padding: 8px 10px; }
-#screen-battle .fighter.glow { animation: heal-glow .9s ease-out; }
-@keyframes heal-glow { 0% { box-shadow: 0 0 0 0 rgba(61,220,132,0); } 30% { box-shadow: 0 0 24px 4px rgba(61,220,132,.9); } 100% { box-shadow: 0 0 0 0 rgba(61,220,132,0); } }
+/* HUD-Panels: Papier im Holzrahmen (wie .panel.thin aus theme.css) */
+#screen-battle .fighter {
+  display: flex; align-items: center; gap: 10px; flex: none; padding: 6px 10px;
+  background-color: var(--paper); background-clip: padding-box; border: 3px solid var(--ink); border-radius: 0;
+  border-image: url(../art/frame-panel.png) 16 fill / 8px / 0 stretch; image-rendering: pixelated;
+  box-shadow: var(--shadow);
+}
+#screen-battle .fighter.glow { animation: bt-glow .9s steps(1); }
+@keyframes bt-glow { 0%, 40%, 80% { outline: 3px solid var(--teal); } 20%, 60%, 100% { outline: 3px solid transparent; } }
 #screen-battle .fighter .info { flex: 1; min-width: 0; }
-#screen-battle .fname { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#screen-battle .bar { height: 10px; background: #111; border-radius: 5px; overflow: hidden; margin: 4px 0; }
-#screen-battle .bar .fill { height: 100%; width: 100%; border-radius: 5px; background: var(--green); transition: width .25s ease-out; }
-#screen-battle .bar.hp .fill.low { background: var(--red); }
-#screen-battle .bar.energy { height: 7px; }
-#screen-battle .bar.energy .fill { background: var(--orange); transition: width .15s ease-out; }
-#screen-battle .bar.energy .fill.full { box-shadow: 0 0 10px var(--orange); }
-#screen-battle .btc { font-size: 12px; color: var(--muted); }
-#screen-battle .status { font-size: 12px; min-height: 16px; }
-#screen-battle .battle-top { padding-left: 48px; }
-#screen-battle .quit { position: absolute; left: 10px; top: calc(10px + env(safe-area-inset-top)); z-index: 9; width: 44px; height: 44px; padding: 0; border-radius: 50%; background: rgba(0,0,0,.55); color: var(--muted); font-size: 16px; }
-#screen-battle .timer { font-size: 28px; font-weight: 800; min-width: 52px; text-align: center; font-variant-numeric: tabular-nums; }
-#screen-battle .timer.low { color: var(--red); animation: timer-pulse .5s ease-in-out infinite alternate; }
-@keyframes timer-pulse { from { scale: 1; } to { scale: 1.2; } }
-/* Eigener Rüther im Seltenheitsrahmen (.frame/.shine/--r-* aus style.css, Klasse r-<rarity> setzt JS) */
-#screen-battle .fighter.me .frame { flex: none; width: 72px; height: 72px; border-radius: 10px; }
-#screen-battle .fighter.me .frame .sprite { display: block; width: 100%; height: 100%; }
+#screen-battle .fname { font: 700 16px/1.15 var(--font-pixel); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#screen-battle .fname.rage::before { content: 'WUT'; display: inline-block; margin-right: 6px; padding: 0 4px; font: 800 12px/15px var(--font-body); vertical-align: 2px; color: var(--paper); background: var(--red); border: 2px solid var(--ink); }
+#screen-battle .bar { margin: 3px 0; }
+/* unter 16 px Nunito statt Pixelify (dort lesen sich 420/440 BTC wie 480/440 GTC) */
+#screen-battle .btc { font: 800 12px/1.3 var(--font-body); font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+#screen-battle .status { min-height: 14px; font: 800 12px/14px var(--font-body); color: var(--red); text-transform: uppercase; }
 
-/* Bühne */
-#screen-battle .stage { flex: 1; min-height: 0; position: relative; display: flex; align-items: center; justify-content: center; touch-action: none; overflow: hidden; border-radius: 16px; background: radial-gradient(ellipse at 50% 72%, rgba(255,255,255,.07), transparent 60%); cursor: pointer; }
-/* Beben nach Schaden: s < 15, m < 30, l darüber */
-#screen-battle .stage.quake-s { animation: quake-s .3s; }
-#screen-battle .stage.quake-m { animation: quake .5s; }
-#screen-battle .stage.quake-l { animation: quake-l .7s; }
-@keyframes quake-s { 0%, 100% { translate: 0 0; } 25% { translate: -3px 2px; } 50% { translate: 3px -2px; } 75% { translate: -2px 0; } }
-@keyframes quake { 0%, 100% { translate: 0 0; } 10% { translate: -8px 4px; } 20% { translate: 8px -4px; } 30% { translate: -7px -3px; } 40% { translate: 7px 3px; } 50% { translate: -5px 2px; } 60% { translate: 5px -2px; } 70% { translate: -3px 1px; } 80% { translate: 3px -1px; } }
-@keyframes quake-l { 0%, 100% { translate: 0 0; rotate: 0deg; } 8% { translate: -16px 8px; rotate: -1.5deg; } 16% { translate: 16px -8px; rotate: 1.5deg; } 24% { translate: -14px -6px; rotate: -1deg; } 32% { translate: 14px 6px; rotate: 1deg; } 45% { translate: -10px 4px; rotate: -.6deg; } 58% { translate: 10px -4px; rotate: .6deg; } 72% { translate: -5px 2px; rotate: 0deg; } 86% { translate: 4px -1px; } }
-#screen-battle .enemy-sprite { width: 48%; max-width: 240px; max-height: 65%; aspect-ratio: 1; object-fit: contain; border-radius: 18px; z-index: 1; filter: drop-shadow(0 14px 18px rgba(0,0,0,.55)); transition: scale .4s ease-out, rotate .4s ease-out, opacity .3s, filter .3s; }
-#screen-battle .enemy-sprite.windup { scale: 1.15; rotate: -8deg; }
-#screen-battle .enemy-sprite.weak { opacity: .5; }
-#screen-battle .sprite.poisoned { filter: sepia(1) hue-rotate(60deg) saturate(2.5) drop-shadow(0 0 14px #3ddc84); }
-#screen-battle .enemy-sprite.stunned { filter: grayscale(1) brightness(.8); rotate: 15deg; }
-/* Treffer-Blitz: sofort weiß, blendet über die normale filter-Transition (.3s) wieder aus.
-   Basis-Liste als Präfix: filter interpoliert nur, wenn die Listen gleich beginnen, sonst schaltet der Browser hart. */
-#screen-battle .enemy-sprite.hit { filter: drop-shadow(0 14px 18px rgba(0,0,0,.55)) brightness(3) drop-shadow(0 0 22px #fff); transition: scale .4s ease-out, rotate .4s ease-out, opacity .3s, filter 0s; }
-#screen-battle .stage-hint { position: absolute; left: 0; bottom: 6px; width: 100%; margin: 0; text-align: center; font-size: 12px; color: var(--muted); pointer-events: none; }
+/* Aufgeben und Timer */
+#screen-battle .battle-top { padding-left: 52px; }
+#screen-battle .quit { position: absolute; left: 10px; top: calc(10px + env(safe-area-inset-top)); z-index: 9; width: 44px; height: 44px; padding: 0; font-size: 20px; }
+#screen-battle .timer {
+  flex: none; min-width: 56px; padding: 5px 6px; text-align: center;
+  font: 700 26px/1 var(--font-pixel); font-variant-numeric: tabular-nums; color: var(--gold);
+  background: var(--ink); border: 2px solid var(--wood-2); box-shadow: inset 0 0 0 2px var(--green-2);
+}
+#screen-battle .timer.low { color: #E0634C; /* --red auf Ink nur 2,7:1 */ animation: bt-timer .5s steps(1) infinite; }
+@keyframes bt-timer { 50% { color: var(--paper); } }
 
-/* Arena-Hintergründe (.stage[data-arena], nur CSS) */
-#screen-battle .stage .bg { position: absolute; inset: 0; z-index: 0; overflow: hidden; border-radius: inherit; pointer-events: none; }
-#screen-battle .stage .bg::before, #screen-battle .stage .bg::after { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; pointer-events: none; }
-/* Regen: nahtlos gekachelte SVG-Glyphen (200×240), background-position-y wandert genau eine Kachelhöhe → lückenlos, Loop ohne Sprung */
-@keyframes rain { to { background-position-y: 240px; } }
-@keyframes rain-small { to { background-position-y: 168px; } } /* hintere Ebene: Kachel 0,7-fach (140×168) */
-/* pcsale: dunkelblau, Scanlines, heller Streifen läuft alle 4 s von oben nach unten */
-#screen-battle .stage[data-arena="pcsale"] .bg { background: linear-gradient(180deg, #070c26 0%, #121c52 55%, #070c26 100%); }
-#screen-battle .stage[data-arena="pcsale"] .bg::before { content: ''; background: repeating-linear-gradient(180deg, rgba(140,180,255,.09) 0 1px, transparent 1px 4px); }
-#screen-battle .stage[data-arena="pcsale"] .bg::after { content: ''; top: -20%; height: 20%; background: linear-gradient(180deg, transparent, rgba(130,180,255,.4) 50%, transparent); animation: sweep 4s linear infinite; }
-@keyframes sweep { to { translate: 0 600%; } }
-/* huettenberg: zwei Ebenen regnender ₿ (hinten kleiner, blasser, langsamer), oranger Schein unten */
-#screen-battle .stage[data-arena="huettenberg"] .bg { background: radial-gradient(ellipse at 50% 115%, rgba(247,147,26,.6), transparent 55%), linear-gradient(180deg, #14100a, #1f1608); }
-#screen-battle .stage[data-arena="huettenberg"] .bg::before, #screen-battle .stage[data-arena="huettenberg"] .bg::after { content: ''; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='240'%3E%3Cg font-family='system-ui,sans-serif' fill='%23f7931a'%3E%3Ctext x='20' y='40' font-size='22' fill-opacity='0.38'%3E&%23x20BF;%3C/text%3E%3Ctext x='110' y='24' font-size='22' fill-opacity='0.38'%3E&%23x20BF;%3C/text%3E%3Ctext x='160' y='90' font-size='22' fill-opacity='0.38'%3E&%23x20BF;%3C/text%3E%3Ctext x='60' y='120' font-size='22' fill-opacity='0.38'%3E&%23x20BF;%3C/text%3E%3Ctext x='130' y='170' font-size='22' fill-opacity='0.38'%3E&%23x20BF;%3C/text%3E%3Ctext x='30' y='215' font-size='22' fill-opacity='0.38'%3E&%23x20BF;%3C/text%3E%3Ctext x='90' y='70' font-size='14' fill-opacity='0.25'%3E&%23x20BF;%3C/text%3E%3Ctext x='180' y='30' font-size='14' fill-opacity='0.25'%3E&%23x20BF;%3C/text%3E%3Ctext x='10' y='150' font-size='14' fill-opacity='0.25'%3E&%23x20BF;%3C/text%3E%3Ctext x='150' y='230' font-size='14' fill-opacity='0.25'%3E&%23x20BF;%3C/text%3E%3Ctext x='75' y='195' font-size='14' fill-opacity='0.25'%3E&%23x20BF;%3C/text%3E%3Ctext x='186' y='140' font-size='14' fill-opacity='0.25'%3E&%23x20BF;%3C/text%3E%3C/g%3E%3C/svg%3E"); background-repeat: repeat; background-size: 200px 240px; animation: rain 7s linear infinite; }
-#screen-battle .stage[data-arena="huettenberg"] .bg::after { background-size: 140px 168px; background-position-x: 70px; opacity: .55; animation: rain-small 11s linear infinite; }
-/* worringen: fallende grüne Hex-Zeichen in Spalten (Kopf unten hell, Schweif blass; hintere Ebene kleiner und langsamer) auf fast schwarz */
-#screen-battle .stage[data-arena="worringen"] .bg { background: radial-gradient(ellipse at 50% 60%, rgba(61,220,132,.08), transparent 70%), #04080a; }
-#screen-battle .stage[data-arena="worringen"] .bg::before, #screen-battle .stage[data-arena="worringen"] .bg::after { content: ''; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='240'%3E%3Cg font-family='ui-monospace,Menlo,Consolas,monospace' font-size='14' fill='%233ddc84'%3E%3Ctext x='14' y='24' fill-opacity='.15'%3E0%3C/text%3E%3Ctext x='14' y='54' fill-opacity='.2'%3E1%3C/text%3E%3Ctext x='14' y='84' fill-opacity='.25'%3Ea%3C/text%3E%3Ctext x='14' y='114' fill-opacity='.3'%3Ef%3C/text%3E%3Ctext x='14' y='144' fill-opacity='.38'%3E3%3C/text%3E%3Ctext x='14' y='174' fill-opacity='.48'%3Ec%3C/text%3E%3Ctext x='14' y='204' fill-opacity='.65'%3E7%3C/text%3E%3Ctext x='14' y='234' fill-opacity='.9'%3Ee%3C/text%3E%3Ctext x='46' y='24' fill-opacity='.15'%3E9%3C/text%3E%3Ctext x='46' y='54' fill-opacity='.2'%3Eb%3C/text%3E%3Ctext x='46' y='84' fill-opacity='.25'%3E2%3C/text%3E%3Ctext x='46' y='114' fill-opacity='.3'%3Ed%3C/text%3E%3Ctext x='46' y='144' fill-opacity='.38'%3E4%3C/text%3E%3Ctext x='46' y='174' fill-opacity='.48'%3E8%3C/text%3E%3Ctext x='46' y='204' fill-opacity='.65'%3Ef%3C/text%3E%3Ctext x='46' y='234' fill-opacity='.9'%3E0%3C/text%3E%3Ctext x='80' y='24' fill-opacity='.15'%3Ec%3C/text%3E%3Ctext x='80' y='54' fill-opacity='.2'%3E6%3C/text%3E%3Ctext x='80' y='84' fill-opacity='.25'%3Ea%3C/text%3E%3Ctext x='80' y='114' fill-opacity='.3'%3E1%3C/text%3E%3Ctext x='80' y='144' fill-opacity='.38'%3Ee%3C/text%3E%3Ctext x='80' y='174' fill-opacity='.48'%3E5%3C/text%3E%3Ctext x='80' y='204' fill-opacity='.65'%3Eb%3C/text%3E%3Ctext x='80' y='234' fill-opacity='.9'%3E9%3C/text%3E%3Ctext x='114' y='24' fill-opacity='.15'%3E3%3C/text%3E%3Ctext x='114' y='54' fill-opacity='.2'%3Ed%3C/text%3E%3Ctext x='114' y='84' fill-opacity='.25'%3E7%3C/text%3E%3Ctext x='114' y='114' fill-opacity='.3'%3Ef%3C/text%3E%3Ctext x='114' y='144' fill-opacity='.38'%3E2%3C/text%3E%3Ctext x='114' y='174' fill-opacity='.48'%3E0%3C/text%3E%3Ctext x='114' y='204' fill-opacity='.65'%3E4%3C/text%3E%3Ctext x='114' y='234' fill-opacity='.9'%3E8%3C/text%3E%3Ctext x='148' y='24' fill-opacity='.15'%3Ea%3C/text%3E%3Ctext x='148' y='54' fill-opacity='.2'%3Ec%3C/text%3E%3Ctext x='148' y='84' fill-opacity='.25'%3E1%3C/text%3E%3Ctext x='148' y='114' fill-opacity='.3'%3Ee%3C/text%3E%3Ctext x='148' y='144' fill-opacity='.38'%3E9%3C/text%3E%3Ctext x='148' y='174' fill-opacity='.48'%3Eb%3C/text%3E%3Ctext x='148' y='204' fill-opacity='.65'%3E3%3C/text%3E%3Ctext x='148' y='234' fill-opacity='.9'%3E5%3C/text%3E%3Ctext x='182' y='24' fill-opacity='.15'%3Ed%3C/text%3E%3Ctext x='182' y='54' fill-opacity='.2'%3E7%3C/text%3E%3Ctext x='182' y='84' fill-opacity='.25'%3Ef%3C/text%3E%3Ctext x='182' y='114' fill-opacity='.3'%3E6%3C/text%3E%3Ctext x='182' y='144' fill-opacity='.38'%3Ea%3C/text%3E%3Ctext x='182' y='174' fill-opacity='.48'%3E0%3C/text%3E%3Ctext x='182' y='204' fill-opacity='.65'%3Ec%3C/text%3E%3Ctext x='182' y='234' fill-opacity='.9'%3E2%3C/text%3E%3C/g%3E%3C/svg%3E"); background-repeat: repeat; background-size: 200px 240px; animation: rain 6s linear infinite; }
-#screen-battle .stage[data-arena="worringen"] .bg::after { background-size: 140px 168px; background-position-x: 90px; opacity: .45; animation: rain-small 9.5s linear infinite; }
+/* Eigener Rüther im Pixel-Rahmen in Seltenheitsfarbe (Klasse r-<rarity> setzt JS) */
+#screen-battle .fighter.me .frame {
+  --rc: var(--r-normal);
+  flex: none; width: 72px; height: 72px; margin: 2px; padding: 0; overflow: hidden;
+  background: var(--paper-2); border: 4px solid var(--rc); border-radius: 0;
+  outline: 2px solid var(--ink); box-shadow: 4px 4px 0 2px var(--wood-2);
+}
+#screen-battle .fighter.me .frame.r-selten { --rc: var(--r-selten); }
+#screen-battle .fighter.me .frame.r-episch { --rc: var(--r-episch); }
+#screen-battle .fighter.me .frame.r-legendaer { --rc: var(--r-legendaer); }
+#screen-battle .fighter.me .frame .shine { display: none; }
+#screen-battle .fighter.me .frame .sprite { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
 
-/* Wutphase: roter pulsierender Innenschatten (Pseudo-Element, damit das Beben auf .stage weiterläuft) */
-#screen-battle .stage.rage::after { content: ''; position: absolute; inset: 0; z-index: 2; border-radius: inherit; pointer-events: none; box-shadow: inset 0 0 40px 12px rgba(255,23,68,.75); animation: rage-pulse .8s ease-in-out infinite alternate; }
-@keyframes rage-pulse { from { opacity: .45; } to { opacity: 1; } }
-@keyframes rage-shake { 0%, 100% { translate: 0 0; rotate: 0deg; scale: 1; } 10% { translate: -10px 0; rotate: -6deg; scale: 1.1; } 20% { translate: 10px 0; rotate: 6deg; scale: 1.15; } 30% { translate: -10px 2px; rotate: -6deg; scale: 1.2; } 40% { translate: 10px -2px; rotate: 6deg; scale: 1.2; } 50% { translate: -8px 0; rotate: -5deg; scale: 1.2; } 60% { translate: 8px 0; rotate: 5deg; scale: 1.15; } 70% { translate: -6px 0; rotate: -4deg; scale: 1.1; } 80% { translate: 6px 0; rotate: 4deg; scale: 1.05; } 90% { translate: -3px 0; rotate: -2deg; } }
-.fx-item.text.rage-text { font-size: 56px; color: var(--red); text-shadow: 0 0 24px rgba(255,23,68,.9), 0 4px 0 #000; animation: rage-in 1.2s ease-out forwards; }
-@keyframes rage-in { 0% { translate: 0 -200px; scale: 2.2; opacity: 0; } 20% { translate: 0 0; scale: 1; opacity: 1; } 28% { translate: -6px 0; rotate: -3deg; } 36% { translate: 6px 0; rotate: 3deg; } 44% { translate: -6px 0; rotate: -3deg; } 52% { translate: 6px 0; rotate: 3deg; } 60% { translate: -4px 0; rotate: -2deg; } 68% { translate: 4px 0; rotate: 2deg; } 80% { translate: 0 0; rotate: 0deg; opacity: 1; } 100% { translate: 0 -30px; opacity: 0; } }
+/* Bühne: art/bg-<arena>.png, mit Nacht-Dither abgedunkelt, damit Boss und Effekte vorne stehen */
+#screen-battle .stage {
+  flex: 1; min-height: 0; position: relative; display: flex; align-items: center; justify-content: center;
+  overflow: hidden; touch-action: none; cursor: pointer; user-select: none; -webkit-user-select: none;
+  background: var(--night); border: 3px solid var(--ink); border-radius: 0; box-shadow: var(--shadow);
+}
+#screen-battle .stage .bg {
+  position: absolute; inset: 0; z-index: 0; pointer-events: none; image-rendering: pixelated;
+  background: repeating-conic-gradient(rgba(27, 43, 75, .4) 0 25%, transparent 0 50%) 0 0 / 4px 4px, var(--arena-bg, none) center / cover no-repeat, var(--night);
+}
+#screen-battle .stage-hint {
+  position: absolute; left: 0; right: 0; bottom: 0; margin: 0; padding: 3px 6px; pointer-events: none;
+  text-align: center; font: 800 11px/1.2 var(--font-body); color: var(--paper); background: rgba(30, 42, 34, .8);
+}
+/* Beben nach Schaden in ganzen Pixeln: s < 15 (2 px), m < 30 (4 px), l darüber (6 px) */
+#screen-battle .stage.quake-s { animation: bt-quake-s .3s steps(1); }
+#screen-battle .stage.quake-m { animation: bt-quake-m .5s steps(1); }
+#screen-battle .stage.quake-l { animation: bt-quake-l .7s steps(1); }
+@keyframes bt-quake-s { 0% { translate: -2px 0; } 25% { translate: 2px 2px; } 50% { translate: -2px -2px; } 75% { translate: 2px 0; } 100% { translate: 0 0; } }
+@keyframes bt-quake-m { 0% { translate: -4px 2px; } 12% { translate: 4px -2px; } 25% { translate: -4px -2px; } 37% { translate: 4px 2px; } 50% { translate: -2px 2px; } 62% { translate: 2px -2px; } 75% { translate: -2px 0; } 87% { translate: 2px 0; } 100% { translate: 0 0; } }
+@keyframes bt-quake-l { 0% { translate: -6px 4px; } 10% { translate: 6px -4px; } 20% { translate: -6px -2px; } 30% { translate: 6px 4px; } 40% { translate: -4px 2px; } 50% { translate: 4px -2px; } 60% { translate: -4px 0; } 70% { translate: 2px 2px; } 80% { translate: -2px 0; } 90% { translate: 2px 0; } 100% { translate: 0 0; } }
 
-/* Combo-Zähler über dem Boss */
-#screen-battle .combo { position: absolute; left: 50%; top: 8px; z-index: 3; translate: -50% 0; font-size: 34px; font-weight: 900; font-style: italic; color: #fff; text-shadow: 0 2px 0 #000, 0 0 14px rgba(0,0,0,.8); pointer-events: none; }
-#screen-battle .combo.bump { animation: combo-bump .2s ease-out; }
-@keyframes combo-bump { 0% { scale: 1.7; } 100% { scale: 1; } }
-#screen-battle .combo.hot { color: var(--r-legendaer, #f7c948); text-shadow: 0 2px 0 #6b4a00, 0 0 18px rgba(247,201,72,.95); }
-#screen-battle .combo.hot::before, #screen-battle .combo.hot::after { content: '✨'; position: absolute; bottom: 0; font-size: 20px; font-style: normal; animation: rise 1s ease-out infinite; }
+/* Boss: art/boss-<id>.png (256 px), Atmen = 2-Frame-Pixelwackeln */
+#screen-battle .enemy-sprite {
+  z-index: 1; width: min(256px, 74%); max-height: 64%; aspect-ratio: 1; object-fit: contain; image-rendering: pixelated;
+  animation: bt-breathe 1.2s steps(1) infinite;
+  transition: scale .3s steps(3), rotate .3s steps(3), opacity .3s steps(3);
+}
+@keyframes bt-breathe { 50% { translate: 0 -4px; } }
+#screen-battle .enemy-sprite.windup { scale: 1.12; rotate: -6deg; }
+#screen-battle .enemy-sprite.weak { opacity: .7; }
+#screen-battle .sprite.poisoned { filter: sepia(1) hue-rotate(60deg) saturate(2.5); }
+#screen-battle .enemy-sprite.stunned { filter: grayscale(1) brightness(.8); rotate: 12deg; }
+/* Wut: roter Pixel-Rahmen blinkt bis Kampfende, Boss rot getönt */
+#screen-battle .stage.rage::after { content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none; border: 4px solid var(--red); animation: bt-rage .5s steps(1) infinite; }
+@keyframes bt-rage { 50% { border-color: transparent; } }
+#screen-battle .stage.rage .enemy-sprite { filter: sepia(1) saturate(5) hue-rotate(-40deg) brightness(.95); }
+/* Treffer-Blitz: 2 Frames reines Weiß (JS nimmt .hit nach 70 ms wieder ab), schlägt Gift- und Wut-Tönung */
+#screen-battle .stage .enemy-sprite.hit { filter: brightness(0) invert(1); }
+
+/* Combo-Zähler über dem Boss, ab ×10 blinkend mit Sternen */
+#screen-battle .combo { position: absolute; left: 50%; top: 8px; z-index: 3; translate: -50% 0; font: 700 34px/1 var(--font-pixel); color: var(--gold); text-shadow: var(--bt-outline); pointer-events: none; }
+#screen-battle .combo.bump { animation: bt-bump .2s steps(2); }
+#screen-battle .combo.hot { animation: bt-hot .3s steps(1) infinite; }
+#screen-battle .combo.hot.bump { animation: bt-bump .2s steps(2), bt-hot .3s steps(1) infinite; }
+@keyframes bt-bump { 0% { scale: 1.6; } 100% { scale: 1; } }
+@keyframes bt-hot { 50% { color: var(--paper); } }
+#screen-battle .combo.hot::before, #screen-battle .combo.hot::after { content: ''; position: absolute; top: 4px; width: 24px; height: 24px; background: url(../art/icon-star.png) center / contain no-repeat; image-rendering: pixelated; animation: bt-twinkle .4s steps(1) infinite; }
 #screen-battle .combo.hot::before { left: -30px; }
-#screen-battle .combo.hot::after { right: -30px; animation-delay: .5s; }
+#screen-battle .combo.hot::after { right: -30px; animation-delay: .2s; }
+@keyframes bt-twinkle { 50% { opacity: 0; } }
 
-/* Herbeigerufene (Familientreffen) */
-#screen-battle .helpers { position: absolute; left: 10px; bottom: 28px; z-index: 2; display: flex; gap: 6px; }
-#screen-battle .helpers img { width: 56px; height: 56px; border-radius: 10px; border: 2px solid var(--orange); image-rendering: pixelated; }
-#screen-battle .helpers img.hop { animation: hop .4s ease-out; }
-@keyframes hop { 0%, 100% { translate: 0 0; } 50% { translate: 0 -30px; } }
+/* Familientreffen: fx-family (Pfad helpers) liegt in .helpers, die ganze Ebene hüpft bei jedem Schlag */
+#screen-battle .helpers { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+#screen-battle .helpers.hop { animation: bt-hop .3s steps(3); }
+@keyframes bt-hop { 50% { translate: 0 -12px; } }
 
-/* Einmal-Animationen auf Sprites (Klasse wird von JS nach Ablauf entfernt) */
-#screen-battle .sprite.shake { animation: shake .35s; }
-@keyframes shake { 0%, 100% { translate: 0 0; } 15% { translate: -10px 0; } 30% { translate: 9px -2px; } 45% { translate: -7px 2px; } 60% { translate: 6px 0; } 75% { translate: -3px 0; } }
-#screen-battle .sprite.dodge-left { animation: dodge-left .45s ease-out; }
-#screen-battle .sprite.dodge-right { animation: dodge-right .45s ease-out; }
-@keyframes dodge-left { 0%, 100% { translate: 0 0; rotate: 0deg; scale: 1; } 40% { translate: -28px 0; rotate: -10deg; scale: .9; } }
-@keyframes dodge-right { 0%, 100% { translate: 0 0; rotate: 0deg; scale: 1; } 40% { translate: 28px 0; rotate: 10deg; scale: .9; } }
-#screen-battle .slide-in { animation: slide-in .5s cubic-bezier(.2, .9, .3, 1.2); }
-@keyframes slide-in { from { translate: -80px 0; opacity: 0; } to { translate: 0 0; opacity: 1; } }
-#screen-battle .sprite.ko { animation: ko .9s ease-in forwards; }
-@keyframes ko { 0% { rotate: 0deg; translate: 0 0; opacity: 1; } 60% { rotate: 80deg; translate: 20px 30px; opacity: .9; } 100% { rotate: 90deg; translate: 30px 60px; opacity: 0; } }
-#screen-battle .enemy-sprite.rage-shake { animation: rage-shake 1s ease-in-out; } /* nach .shake: gewinnt, solange die Wut-Animation läuft */
+/* Einmal-Animationen auf Sprites (Klasse nimmt JS nach Ablauf wieder ab) */
+#screen-battle .sprite.shake { animation: bt-shake .3s steps(1); }
+@keyframes bt-shake { 0% { translate: -6px 0; } 20% { translate: 6px -2px; } 40% { translate: -4px 2px; } 60% { translate: 4px 0; } 80% { translate: -2px 0; } 100% { translate: 0 0; } }
+#screen-battle .sprite.dodge-left { animation: bt-dodge-l .45s steps(5); }
+#screen-battle .sprite.dodge-right { animation: bt-dodge-r .45s steps(5); }
+@keyframes bt-dodge-l { 40% { translate: -24px 0; rotate: -10deg; scale: .9; } }
+@keyframes bt-dodge-r { 40% { translate: 24px 0; rotate: 10deg; scale: .9; } }
+#screen-battle .slide-in { animation: bt-slide-in .5s steps(6); }
+@keyframes bt-slide-in { from { translate: -64px 0; opacity: 0; } }
+#screen-battle .sprite.ko { animation: bt-ko .9s steps(6) forwards; }
+@keyframes bt-ko { 60% { rotate: 80deg; translate: 16px 24px; opacity: .9; } 100% { rotate: 90deg; translate: 24px 48px; opacity: 0; } }
+#screen-battle .enemy-sprite.rage-shake { animation: bt-rage-shake 1s steps(1); } /* nach .shake: gewinnt, solange die Wut-Animation läuft */
+@keyframes bt-rage-shake { 0% { translate: -8px 0; rotate: -6deg; scale: 1.1; } 10% { translate: 8px 0; rotate: 6deg; scale: 1.15; } 20% { translate: -8px 2px; rotate: -6deg; scale: 1.2; } 30% { translate: 8px -2px; rotate: 6deg; } 40% { translate: -6px 0; rotate: -5deg; } 50% { translate: 6px 0; rotate: 5deg; } 60% { translate: -4px 0; rotate: -4deg; scale: 1.1; } 70% { translate: 4px 0; rotate: 4deg; } 80% { translate: -2px 0; rotate: -2deg; scale: 1.05; } 90%, 100% { translate: 0 0; rotate: 0deg; scale: 1; } }
 
-/* Effekt-Ebene */
+/* Effekt-Ebene (Requisiten, Sheets, Zahlen aus fx.js) und kampfeigene Teile; Anker --fx-* aus theme.css */
 #screen-battle .fx { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 3; }
-.fx-item { position: absolute; left: 0; width: 100%; text-align: center; pointer-events: none; }
-.fx-item.at-enemy { top: 50%; margin-top: -.5em; }
-.fx-item.at-me { bottom: 10%; }
-.fx-item.emoji { font-size: 64px; line-height: 1; }
-.fx-item .coin { position: absolute; width: 36px; height: 36px; image-rendering: pixelated; }
+#screen-battle .fx .tap { position: absolute; width: 32px; height: 32px; margin: -16px 0 0 -16px; border: 3px solid var(--paper); box-shadow: 0 0 0 2px var(--ink), inset 0 0 0 2px var(--ink); animation: bt-tap .3s steps(3) forwards; }
+@keyframes bt-tap { from { scale: .5; } to { scale: 1.5; opacity: 0; } }
+/* Hardware-Wallet: Münz-Sheet wandert vom Boss zum eigenen Rüther */
+#screen-battle .fx .drain { position: absolute; left: var(--fx-enemy-x); top: var(--fx-enemy-y); animation: bt-drain .9s steps(9) forwards; }
+@keyframes bt-drain { to { left: var(--fx-me-x); top: var(--fx-me-y); } }
+/* Abgelaufene M&Ms: 12 kleine Kopien mit Pixelrand in Seltenheitsfarbe fliegen auseinander */
+#screen-battle .mms-burst { position: absolute; left: var(--fx-enemy-x); top: var(--fx-enemy-y); }
+#screen-battle .mms-burst img {
+  position: absolute; width: 32px; height: 32px; margin: -16px; image-rendering: pixelated;
+  filter: drop-shadow(2px 0 0 var(--c)) drop-shadow(-2px 0 0 var(--c)) drop-shadow(0 2px 0 var(--c)) drop-shadow(0 -2px 0 var(--c));
+  animation: bt-mms .8s steps(8) forwards;
+}
+@keyframes bt-mms { 80% { opacity: 1; } to { translate: var(--dx) var(--dy); opacity: 0; } }
+/* Sprechblase (bubble-at-me): Text im Blasenkörper von art/fx-speech.png */
+#screen-battle .fx-prop .bubble-text { top: 9%; bottom: 30%; left: 12%; right: 12%; line-height: 1.2; }
+/* Firmware-Update (bar-on-me): Beschriftung über dem Requisit, den Balken zeichnet theme.css */
+#screen-battle .fx-prop .fw-label { top: auto; right: auto; bottom: 100%; left: 50%; translate: -50% 0; padding: 2px 6px; white-space: nowrap; font: 800 12px/1.15 var(--font-body); color: var(--paper); background: var(--ink); }
 
-/* Zahlen, Texte, Tipp-Ring */
-.fx-item.num { font-size: 30px; font-weight: 900; color: #fff; text-shadow: 0 2px 0 #000, 0 0 10px rgba(0,0,0,.8); margin-left: var(--x, 0px); animation: float-up .9s ease-out forwards; }
-.fx-item.num.hurt { color: var(--red); }
-.fx-item.num.heal { color: var(--green); }
-.fx-item.num.small { font-size: 18px; color: var(--green); }
-.fx-item.num.big { font-size: 48px; letter-spacing: -1px; text-shadow: 0 3px 0 #000, 0 0 18px rgba(0,0,0,.9); }
-@keyframes float-up { 0% { opacity: 0; translate: 0 10px; scale: .5; } 15% { opacity: 1; scale: 1.25; } 30% { scale: 1; } 100% { opacity: 0; translate: 0 -80px; scale: 1; } }
-.fx-item.boom { font-size: 44px; line-height: 1; animation: boom .4s ease-out forwards; }
-@keyframes boom { 0% { scale: .3; opacity: 1; } 100% { scale: 1.5; opacity: 0; } }
-.fx-item.text { font-size: 22px; font-weight: 800; color: #fff; text-shadow: 0 2px 0 #000, 0 0 12px rgba(0,0,0,.8); animation: text-pop 1.2s ease-out forwards; }
-@keyframes text-pop { 0% { scale: .4; opacity: 0; } 15% { scale: 1.15; opacity: 1; } 30% { scale: 1; } 75% { opacity: 1; translate: 0 0; } 100% { opacity: 0; translate: 0 -30px; } }
-.fx-item.tap { width: 44px; height: 44px; margin: -22px 0 0 -22px; border: 3px solid rgba(255,255,255,.8); border-radius: 50%; animation: tap .35s ease-out forwards; }
-@keyframes tap { from { scale: .4; opacity: 1; } to { scale: 1.6; opacity: 0; } }
-
-/* Status-Effekte */
-.fx-item.puff, .fx-item.gas, .fx-item.glow-ring { left: 50%; border-radius: 50%; }
-.fx-item.puff { width: 70px; height: 70px; margin: -35px 0 0 -35px; background: radial-gradient(circle, rgba(61,220,132,.9), transparent 70%); filter: blur(4px); animation: gas .8s ease-out forwards; }
-.fx-item.gas { width: 180px; height: 180px; margin: -90px 0 0 -90px; background: radial-gradient(circle, rgba(61,220,132,.95) 0%, rgba(61,220,132,.5) 45%, transparent 70%); filter: blur(8px); animation: gas 1.6s ease-out forwards; }
-@keyframes gas { 0% { scale: .2; opacity: 0; } 25% { opacity: 1; } 100% { scale: 2.4; opacity: 0; } }
-.fx-item.glow-ring { width: 240px; height: 240px; margin: -120px 0 0 -120px; background: radial-gradient(circle, var(--c) 0%, transparent 70%); filter: blur(6px); animation: glow-burst .9s ease-out forwards; }
-@keyframes glow-burst { 0% { scale: .3; opacity: 0; } 30% { opacity: .9; scale: 1; } 100% { scale: 1.6; opacity: 0; } }
-.fx-item.at-me.puff, .fx-item.at-me.glow-ring { left: 18%; }
-.fx-item.zz { font-size: 34px; margin-left: 60px; animation: rise 1.4s ease-out var(--d, 0s) both; }
-@keyframes rise { 0% { translate: 0 50px; opacity: 0; scale: .6; } 25% { opacity: 1; scale: 1; } 100% { translate: 0 -90px; opacity: 0; scale: 1; } }
-.fx-item.firmware { left: 15%; width: 70%; height: 24px; overflow: hidden; background: #111; border: 2px solid #fff; border-radius: 8px; font-size: 12px; line-height: 20px; color: #fff; }
-.fx-item.firmware::before { content: ''; position: absolute; inset: 0; background: #2a7fff; transform-origin: left; animation: fill-x var(--ms, 2s) linear forwards; }
-.fx-item.firmware span { position: relative; }
-@keyframes fill-x { from { scale: 0 1; } to { scale: 1 1; } }
-.fx-item.arrow { font-size: 56px; line-height: 1; font-weight: 900; color: var(--purple); text-shadow: 0 0 12px var(--purple); animation: fall-in .9s ease-in forwards; }
-@keyframes fall-in { 0% { translate: 0 -120px; opacity: 0; } 40% { translate: 0 0; opacity: 1; } 80% { opacity: 1; } 100% { translate: 0 10px; opacity: 0; } }
-
-/* Spezial-Attacken (fx aus data.js) */
-/* chart-up: grüne Kurslinie, „+70 %", Münzregen */
-.fx-item.chart-up { inset: 0; margin: 0; height: 100%; }
-.fx-item.chart-up svg { position: absolute; left: 15%; top: 15%; width: 70%; height: 55%; overflow: visible; }
-.fx-item svg polyline { fill: none; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 100; stroke-dashoffset: 100; animation: draw .7s ease-out forwards; } /* pathLength="100" am Element */
-.fx-item.chart-up polyline { stroke: var(--green); filter: drop-shadow(0 0 6px var(--green)); }
-@keyframes draw { to { stroke-dashoffset: 0; } }
-.fx-item.chart-up .big { position: absolute; left: 0; top: 8%; width: 100%; font-size: 56px; font-weight: 900; color: var(--green); text-shadow: 0 3px 0 #063, 0 0 20px rgba(61,220,132,.7); animation: big-in 1.4s ease-out .4s both; }
-@keyframes big-in { 0% { scale: .3; opacity: 0; } 20% { scale: 1.2; opacity: 1; } 35% { scale: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
-.fx-item.chart-up .coin { left: var(--x); top: -40px; animation: coin-fall 1.1s ease-in var(--d) both; }
-@keyframes coin-fall { 0% { translate: 0 0; rotate: 0deg; opacity: 1; } 90% { opacity: 1; } 100% { translate: 0 520px; rotate: 540deg; opacity: 0; } }
-/* handshake: 🤝 wächst pulsierend, Boss wird blass über .weak */
-.fx-item.handshake { animation: handshake 1.3s ease-in-out forwards; }
-@keyframes handshake { 0% { scale: .2; opacity: 0; } 20% { scale: 1.5; opacity: 1; } 40% { scale: 1.1; } 60% { scale: 1.6; } 80% { scale: 1.2; opacity: 1; } 100% { scale: 1.4; opacity: 0; } }
-/* can: 🍺 im Bogen von unten links (eigener Rüther) zum Boss, 2 Umdrehungen */
-.fx-item.can { animation: throw-arc .6s ease-in forwards; }
-@keyframes throw-arc { 0% { translate: var(--dx) var(--dy); rotate: 0deg; scale: .8; opacity: 1; } 50% { translate: calc(var(--dx) / 2) calc(var(--dy) / 2 - 90px); rotate: 360deg; scale: 1.1; } 85% { opacity: 1; } 100% { translate: 0 0; rotate: 720deg; scale: 1; opacity: 0; } }
-/* handbag: 👜 schwingt von rechts in den Boss */
-.fx-item.handbag { animation: swing-in .6s cubic-bezier(.3, .7, .4, 1) forwards; }
-@keyframes swing-in { 0% { translate: 190px -50px; rotate: -60deg; opacity: 1; } 70% { translate: 0 0; rotate: 20deg; opacity: 1; } 100% { translate: -10px 5px; rotate: 25deg; opacity: 0; } }
-/* wallet: 🎮 klappt zu ₿ um, danach Münzen vom Boss zum Rüther (.drain) */
-.fx-item.wallet { perspective: 300px; }
-.fx-item.wallet span { display: inline-block; backface-visibility: hidden; }
-.fx-item.wallet .a { animation: flip-out 1s ease-in forwards; }
-.fx-item.wallet .b { position: absolute; left: 0; width: 100%; color: var(--orange); font-weight: 900; text-shadow: 0 0 16px var(--orange); animation: flip-in 1s ease-out forwards; }
-@keyframes flip-out { 0% { transform: rotateY(0); } 50%, 100% { transform: rotateY(90deg); } }
-@keyframes flip-in { 0%, 50% { transform: rotateY(-90deg); opacity: 0; } 51% { opacity: 1; } 85% { transform: rotateY(0); opacity: 1; } 100% { transform: rotateY(0); opacity: 0; } }
-.fx-item.drain { inset: 0; margin: 0; height: 100%; }
-.fx-item.drain .coin { left: calc(32% + var(--x) * .35); top: 50%; margin: -18px 0 0 -18px; animation: drain .7s ease-in var(--d) both; }
-@keyframes drain { 0% { translate: 0 0; scale: 1; opacity: 1; } 100% { translate: var(--dx) var(--dy); scale: .6; opacity: 0; } }
-/* controller: 🎮 fliegt rotierend vom Rüther zum Boss */
-.fx-item.controller { animation: fly-spin .6s ease-in forwards; }
-@keyframes fly-spin { 0% { translate: var(--dx) var(--dy); rotate: 0deg; opacity: 1; } 85% { opacity: 1; } 100% { translate: 0 0; rotate: 900deg; opacity: 0; } }
-/* speech: Sprechblase beim eigenen Rüther; Boss kippt über .stunned + 💤 */
-.fx-item.bubble { left: 10%; width: 80%; padding: 10px 14px; background: #fff; color: #111; border-radius: 16px; font-size: 15px; font-weight: 700; animation: bubble 2s ease-out forwards; }
-.fx-item.bubble::after { content: ''; position: absolute; left: 24px; bottom: -12px; border: 12px solid transparent; border-top-color: #fff; border-bottom: 0; }
-@keyframes bubble { 0% { scale: .3; opacity: 0; } 12% { scale: 1.05; opacity: 1; } 20% { scale: 1; } 85% { opacity: 1; } 100% { opacity: 0; } }
-/* mms: 14 bunte Punkte prasseln auf den Boss */
-.fx-item.mms { height: 0; }
-.fx-item.mms i { position: absolute; left: 50%; top: 0; width: 14px; height: 14px; margin: -7px; border-radius: 50%; background: var(--c); box-shadow: inset -2px -2px 0 rgba(0,0,0,.25); animation: mms .7s var(--d) both; }
-@keyframes mms { 0% { translate: var(--x) -260px; opacity: 0; animation-timing-function: ease-in; } 10% { opacity: 1; } 70% { translate: var(--x) 0; animation-timing-function: ease-out; } 85% { translate: calc(var(--x) * 1.3) -30px; animation-timing-function: ease-in; } 100% { translate: calc(var(--x) * 1.5) 10px; opacity: 0; } }
-/* bags: 🛍️ hüpfen nacheinander beim Rüther */
-.fx-item.bags span { display: inline-block; font-size: 44px; line-height: 1; animation: hop .6s ease-out var(--d) both; }
-
-/* Boss-Attacken (fx aus data.js) */
-/* disc: 💿 fliegt von oben auf den Spieler */
-.fx-item.disc { animation: disc-fly .55s ease-in forwards; }
-@keyframes disc-fly { 0% { translate: 0 -260px; rotate: 0deg; scale: .6; opacity: 1; } 85% { opacity: 1; } 100% { translate: 0 0; rotate: 720deg; scale: 1; opacity: 0; } }
-/* yellow: gelbes Leuchten um den Boss (.glow-ring mit --c) */
-/* firmware: Balken mit Beschriftung kommt über .firmware beim stun-Event */
-/* crash: rote fallende Kurslinie über dem Spieler */
-.fx-item.crash { animation: fade-out .9s ease-in forwards; }
-.fx-item.crash svg { width: 70%; height: 120px; overflow: visible; }
-.fx-item.crash polyline { stroke: var(--red); filter: drop-shadow(0 0 6px var(--red)); animation-duration: .5s; animation-timing-function: ease-in; }
-@keyframes fade-out { 0%, 60% { opacity: 1; } 100% { opacity: 0; } }
-/* chain: ⛓️⛓️⛓️ rasselt vor dem Spieler */
-.fx-item.chain { letter-spacing: -8px; animation: rattle .7s linear forwards; }
-@keyframes rattle { 0% { translate: 0 0; rotate: 0deg; opacity: 1; } 10% { translate: -6px 2px; rotate: -6deg; } 20% { translate: 6px -2px; rotate: 6deg; } 30% { translate: -6px 0; rotate: -6deg; } 40% { translate: 6px 2px; rotate: 6deg; } 50% { translate: -5px 0; rotate: -4deg; } 60% { translate: 5px 0; rotate: 4deg; } 70% { translate: -3px 0; rotate: -2deg; opacity: 1; } 100% { translate: 0 20px; rotate: 0deg; opacity: 0; } }
-/* mining: ⛏️ schwingt beim Boss + grünes Leuchten (.glow-ring) */
-.fx-item.mining { transform-origin: calc(50% + 13px) 80%; animation: swing .8s ease-in-out forwards; } /* Griffende der zentrierten 64-px-Glyphe, nicht der ganzen Bühne */
-@keyframes swing { 0% { rotate: -40deg; opacity: 0; } 15% { opacity: 1; } 35% { rotate: 30deg; } 60% { rotate: -35deg; } 85% { rotate: 25deg; opacity: 1; } 100% { rotate: 0deg; opacity: 0; } }
-/* block: 🧱 fällt auf den Spieler und hüpft */
-.fx-item.block { animation: drop-bounce .7s forwards; }
-@keyframes drop-bounce { 0% { translate: 0 -280px; opacity: 1; animation-timing-function: ease-in; } 55% { translate: 0 0; animation-timing-function: ease-out; } 70% { translate: 0 -40px; animation-timing-function: ease-in; } 85% { translate: 0 0; opacity: 1; } 100% { translate: 0 0; opacity: 0; } }
-/* half: riesiges „½" skaliert ein und verblasst */
-.fx-item.half { font-size: 160px; line-height: 1; font-weight: 900; color: #fff; text-shadow: 0 0 30px var(--red), 0 4px 0 #000; animation: zoom-fade .9s ease-out forwards; }
-@keyframes zoom-fade { 0% { scale: 3; opacity: 0; } 30% { scale: 1; opacity: 1; } 70% { opacity: 1; } 100% { scale: .9; opacity: 0; } }
-/* key: 🔑 steigt beim Boss auf + grünes Leuchten (.glow-ring) */
-.fx-item.key { animation: rise .9s ease-out forwards; }
-
-/* Spezial-Buttons */
+/* Spezial-Buttons: Papier; bereit = Bernstein-Pixelrahmen (wie button.primary) */
 #screen-battle .specials { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: none; }
-#screen-battle .specials.shake-x { animation: shake-x .4s; }
-@keyframes shake-x { 0%, 100% { translate: 0 0; } 20% { translate: -8px 0; } 40% { translate: 8px 0; } 60% { translate: -5px 0; } 80% { translate: 5px 0; } }
-#screen-battle .specials button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 54px; padding: 6px 8px; font-size: 13px; line-height: 1.15; border: 2px solid transparent; overflow-wrap: anywhere; transition: background .2s, opacity .2s; }
-#screen-battle .specials button .smeta { font-size: 12px; font-weight: 700; color: var(--orange); }
-#screen-battle .specials button.ready { border-color: var(--orange); background: #3b2a12; animation: ready-pulse 1s ease-in-out infinite; }
-@keyframes ready-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(247,147,26,0); scale: 1; } 50% { box-shadow: 0 0 16px 2px rgba(247,147,26,.8); scale: 1.03; } }
-#screen-battle .specials button.swap { background: #222; }
+#screen-battle .specials.shake-x { animation: bt-shake-x .4s steps(1); }
+@keyframes bt-shake-x { 0% { translate: -6px 0; } 25% { translate: 6px 0; } 50% { translate: -4px 0; } 75% { translate: 4px 0; } 100% { translate: 0 0; } }
+#screen-battle .specials button { flex-direction: column; gap: 3px; min-height: 54px; padding: 6px 8px; font-size: 14px; line-height: 1.1; text-align: center; overflow-wrap: anywhere; }
+#screen-battle .specials button:disabled { opacity: 1; color: var(--ink-soft); background: var(--paper-2); box-shadow: var(--shadow-sm); }
+#screen-battle .specials button:disabled .ico { filter: grayscale(1); opacity: .6; }
+#screen-battle .specials button.ready { background: var(--amber); background-clip: padding-box; border-image: url(../art/frame-button.png) 16 fill / 8px / 0 stretch; image-rendering: pixelated; box-shadow: var(--shadow); animation: bt-ready 1s steps(1) infinite; }
+@keyframes bt-ready { 50% { filter: brightness(1.15); } }
+#screen-battle .specials .smeta { display: flex; align-items: center; gap: 3px; font: 800 12px/1 var(--font-body); font-variant-numeric: tabular-nums; color: var(--wood); }
+/* Wechseln: aktiv Papier wie die anderen, deaktiviert paper-2; allein in der letzten Zeile über die volle Breite */
+#screen-battle .specials .swap:nth-child(odd):last-child { grid-column: 1 / -1; min-height: 44px; }
 
 /* Wechsel-Liste (liegt über den Buttons, verschiebt nichts) */
-#screen-battle .switch { position: absolute; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 6; display: grid; gap: 6px; padding: 10px; background: #111; border: 2px solid var(--orange); border-radius: 14px; }
-#screen-battle .switch button { display: flex; justify-content: space-between; gap: 10px; padding: 12px 14px; }
+#screen-battle .switch {
+  position: absolute; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 6;
+  display: grid; gap: 6px; padding: 10px 12px;
+  background-color: var(--paper); background-clip: padding-box; border: 3px solid var(--ink);
+  border-image: url(../art/frame-panel.png) 16 fill / 8px / 0 stretch; image-rendering: pixelated; box-shadow: var(--shadow);
+}
+#screen-battle .switch button { justify-content: space-between; gap: 10px; font-size: 14px; background: var(--paper-2); }
 
-/* VS-Intro (2,6 s): Kopf fällt ein, Rüther von links, Boss von rechts, „VS" platzt, Countdown springt */
-#screen-battle .intro { position: absolute; inset: 0; z-index: 8; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; background: radial-gradient(ellipse at 50% 40%, rgba(60,30,90,.85), rgba(8,8,12,.96) 70%); animation: fade-in .3s; }
-#screen-battle .intro-head { display: flex; flex-direction: column; align-items: center; gap: 4px; animation: intro-drop .5s cubic-bezier(.2, .9, .3, 1.25) both; }
-#screen-battle .intro-arena { font-size: 22px; font-weight: 800; text-align: center; }
-#screen-battle .intro-level { font-size: 14px; font-weight: 700; color: var(--orange); letter-spacing: 1px; text-transform: uppercase; }
-@keyframes intro-drop { from { translate: 0 -60px; opacity: 0; } to { translate: 0 0; opacity: 1; } }
-#screen-battle .intro-row, #screen-battle .intro-names { display: grid; grid-template-columns: 120px 70px 120px; align-items: center; justify-items: center; }
+/* VS-Intro (2,6 s) vor der Arena: Holz-Banner fällt ein, Rüther von links, Boss von rechts, „VS" platzt, Countdown springt */
+#screen-battle .intro {
+  position: absolute; inset: 0; z-index: 8; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 24px; color: var(--paper); image-rendering: pixelated;
+  background: repeating-conic-gradient(rgba(27, 43, 75, .88) 0 25%, rgba(27, 43, 75, .62) 0 50%) 0 0 / 4px 4px, var(--arena-bg, none) center / cover no-repeat, var(--night);
+  animation: bt-fade-in .3s steps(3);
+}
+@keyframes bt-fade-in { from { opacity: 0; } }
+#screen-battle .intro-head {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; max-width: 100%; padding: 8px 18px;
+  background-color: var(--wood); background-image: var(--grain);
+  border: 3px solid var(--ink); box-shadow: inset 0 0 0 2px var(--wood-2), 4px 4px 0 var(--ink);
+  animation: bt-drop .5s steps(5) both;
+}
+@keyframes bt-drop { from { translate: 0 -60px; opacity: 0; } }
+#screen-battle .intro-arena { font: 700 22px/1.15 var(--font-pixel); text-align: center; color: var(--paper); text-shadow: 2px 2px 0 var(--wood-2); }
+#screen-battle .intro-level { font: 700 14px/1.2 var(--font-pixel); letter-spacing: 1px; text-transform: uppercase; color: var(--gold); }
+#screen-battle .intro-row, #screen-battle .intro-names { display: grid; grid-template-columns: 1fr 76px 1fr; align-items: center; justify-items: center; width: 100%; max-width: 340px; }
 #screen-battle .intro-row { margin-top: 10px; }
-#screen-battle .intro-me, #screen-battle .intro-boss { width: 120px; height: 120px; border-radius: 16px; filter: drop-shadow(0 10px 14px rgba(0,0,0,.6)); }
-#screen-battle .intro-me { animation: intro-left .6s cubic-bezier(.2, .9, .3, 1.15) both; }
-#screen-battle .intro-boss { animation: intro-right .6s cubic-bezier(.2, .9, .3, 1.15) both; }
-@keyframes intro-left { from { translate: -140px 0; opacity: 0; } to { translate: 0 0; opacity: 1; } }
-@keyframes intro-right { from { translate: 140px 0; opacity: 0; } to { translate: 0 0; opacity: 1; } }
-#screen-battle .intro-vs { font-size: 44px; font-weight: 900; font-style: italic; color: var(--red); text-shadow: 0 0 22px rgba(255,82,82,.9), 0 3px 0 #000; animation: vs-pop .6s cubic-bezier(.34, 1.56, .64, 1) .35s both; }
-@keyframes vs-pop { 0% { scale: 3; opacity: 0; } 60% { scale: .85; opacity: 1; } 100% { scale: 1; opacity: 1; } }
-#screen-battle .intro-names { font-size: 14px; font-weight: 700; text-align: center; animation: fade-in .4s .5s both; }
+#screen-battle .intro-me { width: 104px; height: 104px; image-rendering: pixelated; background: var(--paper-2); border: 4px solid var(--paper); outline: 3px solid var(--ink); box-shadow: 6px 6px 0 3px var(--ink); animation: bt-from-l .6s steps(6) both; }
+#screen-battle .intro-boss { width: 128px; height: 128px; image-rendering: pixelated; animation: bt-from-r .6s steps(6) both; }
+@keyframes bt-from-l { from { translate: -140px 0; opacity: 0; } }
+@keyframes bt-from-r { from { translate: 140px 0; opacity: 0; } }
+#screen-battle .intro-vs { font: 700 48px/1 var(--font-pixel); color: var(--gold); text-shadow: var(--bt-outline-lg), 7px 7px 0 var(--red); animation: bt-vs .6s steps(4) .35s both; }
+@keyframes bt-vs { 0% { scale: 3; opacity: 0; } 60% { scale: .85; opacity: 1; } 100% { scale: 1; opacity: 1; } }
+#screen-battle .intro-names { font: 700 14px/1.2 var(--font-pixel); text-align: center; color: var(--paper); text-shadow: 2px 2px 0 var(--ink); animation: bt-fade-in .4s steps(2) .5s both; }
 #screen-battle .intro-boss-name { grid-column: 3; }
-#screen-battle .countdown { min-height: 80px; margin-top: 10px; font-size: 68px; font-weight: 900; line-height: 80px; color: #fff; text-shadow: 0 4px 0 #000, 0 0 24px rgba(255,255,255,.5); }
-#screen-battle .countdown.pop { animation: count-pop .45s cubic-bezier(.34, 1.56, .64, 1); }
-@keyframes count-pop { 0% { scale: 2.4; opacity: 0; } 50% { scale: .9; opacity: 1; } 100% { scale: 1; } }
-#screen-battle .countdown.go { font-size: 56px; color: var(--orange); text-shadow: 0 4px 0 #000, 0 0 30px rgba(247,147,26,.9); }
+#screen-battle .countdown { min-height: 80px; margin-top: 10px; font: 700 64px/80px var(--font-pixel); color: var(--paper); text-shadow: var(--bt-outline-lg); }
+#screen-battle .countdown.pop { animation: bt-pop .45s steps(4); }
+@keyframes bt-pop { 0% { scale: 2.4; opacity: 0; } 50% { scale: .9; opacity: 1; } 100% { scale: 1; } }
+#screen-battle .countdown.go { font-size: 52px; color: var(--gold); }
 
-/* End-Overlay */
-#screen-battle .overlay { position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; text-align: center; background: rgba(10,10,14,.9); animation: fade-in .4s; }
-@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-#screen-battle .overlay .boss { width: 150px; height: 150px; border-radius: 16px; }
-#screen-battle .overlay .boss.fall { animation: fall 1.2s ease-in forwards; }
-@keyframes fall { 0% { rotate: 0deg; translate: 0 0; opacity: 1; } 70% { rotate: 90deg; translate: 40px 40px; opacity: .6; } 100% { rotate: 90deg; translate: 40px 60px; opacity: 0; } }
-#screen-battle .overlay .trophy { font-size: 110px; line-height: 1; margin-top: -90px; animation: trophy-in .9s cubic-bezier(.34, 1.56, .64, 1) .6s both; }
-@keyframes trophy-in { 0% { scale: 0; rotate: -30deg; opacity: 0; } 60% { scale: 1.3; rotate: 5deg; opacity: 1; } 100% { scale: 1; rotate: 0deg; opacity: 1; } }
-#screen-battle .overlay .title { margin: 0; font-size: 30px; }
-#screen-battle .overlay .sub { margin: 0; font-size: 15px; color: var(--muted); }
-/* Sats-Zähler (JS zählt hoch) und Arena-Hinweis */
-#screen-battle .overlay .sats-gain { margin: 4px 0 0; font-size: 36px; font-weight: 900; color: var(--r-legendaer, #f7c948); text-shadow: 0 0 20px rgba(247,201,72,.6), 0 3px 0 #000; font-variant-numeric: tabular-nums; animation: sats-in .5s cubic-bezier(.34, 1.56, .64, 1) .8s both; }
-@keyframes sats-in { 0% { scale: .3; opacity: 0; } 100% { scale: 1; opacity: 1; } }
-#screen-battle .overlay .arena-note { margin: 0; min-height: 18px; font-size: 15px; font-weight: 700; color: var(--orange); animation: fade-in .5s 1.4s both; }
-/* Konfetti: 30 Partikel in den vier Seltenheitsfarben, fallen 2 s mit Drehung */
-#screen-battle .overlay .confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-#screen-battle .confetti i { position: absolute; left: var(--x); top: -20px; width: 10px; height: 16px; border-radius: 2px; background: var(--c); opacity: 0; animation: confetti-fall 2s ease-in var(--d) both; }
-@keyframes confetti-fall { 0% { translate: 0 0; rotate: 0deg; opacity: 1; } 75% { opacity: 1; } 100% { translate: var(--sx) 105vh; rotate: var(--r); opacity: 0; } }
-#screen-battle .overlay-buttons { display: flex; gap: 10px; margin-top: 10px; }
-#screen-battle .overlay-buttons button { font-size: 16px; padding: 12px 22px; }
+/* End-Overlay: Papierurkunde im Holzrahmen (wie .panel), mittig, Rest des Screens abgedunkelt; Niederlage mit Rotstempel */
+#screen-battle .overlay {
+  position: absolute; left: 16px; right: 16px; top: 50%; translate: 0 -50%; z-index: 10;
+  max-height: calc(100% - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 28px 20px 24px; overflow: hidden;
+  text-align: center; color: var(--ink);
+  background-color: var(--paper); background-clip: padding-box; border: 3px solid var(--ink);
+  border-image: url(../art/frame-panel.png) 16 fill / 16px / 0 stretch; image-rendering: pixelated;
+  box-shadow: 0 0 0 100vmax rgba(27, 43, 75, .82);
+  animation: bt-fade-in .4s steps(4);
+}
+#screen-battle .overlay .confetti { position: absolute; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; }
+#screen-battle .overlay .boss { width: 128px; height: 128px; image-rendering: pixelated; }
+#screen-battle .overlay .boss.fall { animation: bt-fall 1.2s steps(8) forwards; }
+@keyframes bt-fall { 70% { rotate: 90deg; translate: 32px 32px; opacity: .6; } 100% { rotate: 90deg; translate: 32px 56px; opacity: 0; } }
+#screen-battle .overlay .trophy { margin-top: -138px; line-height: 0; animation: bt-trophy .9s steps(6) .6s both; }
+#screen-battle .overlay .trophy img { width: 128px; height: 128px; image-rendering: pixelated; }
+@keyframes bt-trophy { 0% { scale: 0; rotate: -30deg; opacity: 0; } 60% { scale: 1.25; rotate: 6deg; opacity: 1; } 100% { scale: 1; rotate: 0deg; opacity: 1; } }
+#screen-battle .overlay .title { margin: 0; font: 700 30px/1.1 var(--font-pixel); color: var(--ink); }
+#screen-battle .overlay .sub { margin: 0; font-size: 15px; line-height: 1.35; color: var(--ink-soft); }
+#screen-battle .overlay .sats-gain {
+  display: flex; align-items: center; gap: 8px; margin: 4px 0 0;
+  font: 700 36px/1 var(--font-pixel); font-variant-numeric: tabular-nums; color: var(--gold); text-shadow: var(--bt-outline);
+  animation: bt-sats-in .5s steps(4) .8s both;
+}
+#screen-battle .overlay .sats-gain::before { content: ''; flex: none; width: 32px; height: 32px; background: url(../art/icon-coin.png) center / contain no-repeat; image-rendering: pixelated; }
+@keyframes bt-sats-in { 0% { scale: .3; opacity: 0; } 100% { scale: 1; opacity: 1; } }
+#screen-battle .overlay .arena-note { margin: 0; min-height: 18px; font: 700 15px/1.2 var(--font-pixel); color: var(--green); animation: bt-fade-in .5s steps(2) 1.4s both; }
+#screen-battle .overlay.lost .boss { filter: grayscale(.6); }
+#screen-battle .overlay.lost .title { margin: 6px 0; padding: 4px 14px; font-size: 34px; letter-spacing: 3px; text-transform: uppercase; color: var(--red); border: 4px solid var(--red); rotate: -8deg; animation: bt-stamp .35s steps(3) .2s both; }
+@keyframes bt-stamp { from { scale: 2.2; opacity: 0; } }
+#screen-battle .overlay-buttons { position: relative; z-index: 2; display: flex; gap: 10px; margin-top: 10px; }
+#screen-battle .overlay-buttons button { min-height: 48px; padding: 10px 20px; font-size: 18px; }
+
+/* Reduzierte Bewegung: keine Schleifen (Atmen, Blinken, Funkeln), Beben aus, Warnung statisch */
+@media (prefers-reduced-motion: reduce) {
+  #screen-battle .enemy-sprite { animation: none; }
+  #screen-battle .stage[class*="quake"], #screen-battle .stage.rage::after, #screen-battle .timer.low,
+  #screen-battle .specials button.ready, #screen-battle .combo.hot, #screen-battle .combo.hot::before, #screen-battle .combo.hot::after,
+  #screen-battle .enemy-sprite.rage-shake, #screen-battle .helpers.hop { animation: none !important; }
+  #screen-battle .flash.yellow, #screen-battle .flash.red { animation: none; opacity: .25; }
+}

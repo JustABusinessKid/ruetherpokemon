@@ -1,0 +1,353 @@
+/* Rüther GO v5 – Designsystem „Pixel-Kneipe" (Spec §2). Alle anderen CSS-Dateien bauen hierauf auf.
+   Fonts: Pixelify Sans 400/700 und Nunito 400/700/800 per <link> in index.html.
+   Regeln: Ecken 0 oder 4 px, harte Versatz-Schatten ohne Unschärfe, keine Verläufe außer Dither/Segmenten. */
+
+/* Ziffern aus Jersey 10: in Pixelify sieht die 5 wie ein S aus (Tiny5/Silkscreen: 8 wie $). unicode-range hält die Zeilenmaße bei Pixelify. */
+@font-face {
+  font-family: 'PixelDigits';
+  src: url(https://fonts.gstatic.com/s/jersey10/v4/GftH7vZKsggXMf9n_J5n_5jh6V89Sg.woff2) format('woff2');
+  unicode-range: U+0030-0039;
+  font-display: swap;
+}
+/* Pixelify zeichnet „fi" als A-ähnliche Ligatur („ProAl"). !important, weil jede font-Kurzschreibweise sie zurücksetzt. */
+*, *::before, *::after { font-variant-ligatures: none !important; }
+
+:root {
+  --paper: #F4E8C8;
+  --paper-2: #E8D7A8;
+  --ink: #1E2A22;
+  --ink-soft: #4A5A4F;
+  --wood: #5A3A1E;
+  --wood-2: #3D2612;
+  --green: #2F6B4F;
+  --green-2: #1F4A36;
+  --red: #B03B2B; /* Spec #B8412F, abgedunkelt für 4,5:1 mit Creme */
+  --amber: #E0A52B;
+  --gold: #F2C94C;
+  --teal: #3FC1B0;
+  --night: #1B2B4B;
+  --r-normal: #9AA0A6;
+  --r-selten: #3F8EF5;
+  --r-episch: #A24FE0;
+  --r-legendaer: #F2C94C;
+
+  --font-pixel: 'PixelDigits', 'Pixelify Sans', ui-monospace, monospace;
+  --font-body: 'Nunito', system-ui, sans-serif;
+  --shadow: 4px 4px 0 var(--wood-2);
+  --shadow-sm: 2px 2px 0 var(--wood-2);
+  --tabbar-h: 64px;
+
+  /* Dither-Texturen (einzige erlaubte „Verläufe": harte 2-px-Muster) */
+  --dither-paper: repeating-conic-gradient(rgba(30, 42, 34, .04) 0 25%, transparent 0 50%);
+  --dither-felt: conic-gradient(from 90deg at 2px 2px, transparent 75%, rgba(31, 74, 54, .55) 0);
+  --dither-night: conic-gradient(from 90deg at 2px 2px, transparent 75%, rgba(63, 193, 176, .10) 0);
+  --grain: repeating-linear-gradient(180deg, rgba(61, 38, 18, .12) 0 1px, transparent 1px 7px),
+           repeating-linear-gradient(180deg, rgba(61, 38, 18, .12) 0 1px, transparent 1px 11px);
+
+  /* Pixel-Kreise als Treppen-Polygone: Scheibe im 16er-Raster, Ring (2 Stufen breit) im 32er-Raster */
+  --px-disc: polygon(31.25% 0, 68.75% 0, 68.75% 6.25%, 81.25% 6.25%, 81.25% 12.5%, 87.5% 12.5%, 87.5% 18.75%, 93.75% 18.75%, 93.75% 31.25%, 100% 31.25%, 100% 68.75%, 93.75% 68.75%, 93.75% 81.25%, 87.5% 81.25%, 87.5% 87.5%, 81.25% 87.5%, 81.25% 93.75%, 68.75% 93.75%, 68.75% 100%, 31.25% 100%, 31.25% 93.75%, 18.75% 93.75%, 18.75% 87.5%, 12.5% 87.5%, 12.5% 81.25%, 6.25% 81.25%, 6.25% 68.75%, 0 68.75%, 0 31.25%, 6.25% 31.25%, 6.25% 18.75%, 12.5% 18.75%, 12.5% 12.5%, 18.75% 12.5%, 18.75% 6.25%, 31.25% 6.25%);
+  --px-ring: polygon(evenodd,62.5% 0%,62.5% 3.125%,71.875% 3.125%,71.875% 6.25%,78.125% 6.25%,78.125% 9.375%,81.25% 9.375%,81.25% 12.5%,84.375% 12.5%,84.375% 15.625%,87.5% 15.625%,87.5% 18.75%,90.625% 18.75%,90.625% 21.875%,93.75% 21.875%,93.75% 28.125%,96.875% 28.125%,96.875% 37.5%,100% 37.5%,100% 62.5%,96.875% 62.5%,96.875% 71.875%,93.75% 71.875%,93.75% 78.125%,90.625% 78.125%,90.625% 81.25%,87.5% 81.25%,87.5% 84.375%,84.375% 84.375%,84.375% 87.5%,81.25% 87.5%,81.25% 90.625%,78.125% 90.625%,78.125% 93.75%,71.875% 93.75%,71.875% 96.875%,62.5% 96.875%,62.5% 100%,37.5% 100%,37.5% 96.875%,28.125% 96.875%,28.125% 93.75%,21.875% 93.75%,21.875% 90.625%,18.75% 90.625%,18.75% 87.5%,15.625% 87.5%,15.625% 84.375%,12.5% 84.375%,12.5% 81.25%,9.375% 81.25%,9.375% 78.125%,6.25% 78.125%,6.25% 71.875%,3.125% 71.875%,3.125% 62.5%,0% 62.5%,0% 37.5%,3.125% 37.5%,3.125% 28.125%,6.25% 28.125%,6.25% 21.875%,9.375% 21.875%,9.375% 18.75%,12.5% 18.75%,12.5% 15.625%,15.625% 15.625%,15.625% 12.5%,18.75% 12.5%,18.75% 9.375%,21.875% 9.375%,21.875% 6.25%,28.125% 6.25%,28.125% 3.125%,37.5% 3.125%,37.5% 0%,62.5% 0%,62.5% 6.25%,62.5% 9.375%,68.75% 9.375%,68.75% 12.5%,75% 12.5%,75% 15.625%,78.125% 15.625%,78.125% 18.75%,81.25% 18.75%,81.25% 21.875%,84.375% 21.875%,84.375% 25%,87.5% 25%,87.5% 31.25%,90.625% 31.25%,90.625% 37.5%,93.75% 37.5%,93.75% 62.5%,90.625% 62.5%,90.625% 68.75%,87.5% 68.75%,87.5% 75%,84.375% 75%,84.375% 78.125%,81.25% 78.125%,81.25% 81.25%,78.125% 81.25%,78.125% 84.375%,75% 84.375%,75% 87.5%,68.75% 87.5%,68.75% 90.625%,62.5% 90.625%,62.5% 93.75%,37.5% 93.75%,37.5% 90.625%,31.25% 90.625%,31.25% 87.5%,25% 87.5%,25% 84.375%,21.875% 84.375%,21.875% 81.25%,18.75% 81.25%,18.75% 78.125%,15.625% 78.125%,15.625% 75%,12.5% 75%,12.5% 68.75%,9.375% 68.75%,9.375% 62.5%,6.25% 62.5%,6.25% 37.5%,9.375% 37.5%,9.375% 31.25%,12.5% 31.25%,12.5% 25%,15.625% 25%,15.625% 21.875%,18.75% 21.875%,18.75% 18.75%,21.875% 18.75%,21.875% 15.625%,25% 15.625%,25% 12.5%,31.25% 12.5%,31.25% 9.375%,37.5% 9.375%,37.5% 6.25%,62.5% 6.25%);
+
+  /* Effekt-Anker (fx.js-Pfade). Der Effekt-Container darf sie überschreiben, z.B. .fx { --fx-me-y: 92%; } */
+  --fx-enemy-x: 50%;
+  --fx-enemy-y: 42%;
+  --fx-me-x: 22%;
+  --fx-me-y: 86%;
+}
+
+/* ---------- Flächen ---------- */
+.paper { color: var(--ink); background-color: var(--paper); background-image: var(--dither-paper); background-size: 4px 4px; }
+.wood { color: var(--paper); background-color: var(--wood); background-image: var(--grain); box-shadow: inset 0 2px 0 rgba(244, 232, 200, .14), inset 0 -2px 0 var(--wood-2); }
+.felt { background-color: var(--green); background-image: var(--dither-felt); background-size: 8px 8px; }
+.night { background-color: var(--night); background-image: var(--dither-night); background-size: 8px 8px; }
+
+/* Papier im Holzrahmen (9-Slice, Slice 16). Fallback ohne Bild: 3-px-Ink-Rand + 2-px-Innenlinie paper-2. */
+.panel {
+  color: var(--ink);
+  background-color: var(--paper);
+  background-clip: padding-box; /* die transparente Außenkante des Rahmenbilds zeigt sonst einen Creme-Saum */
+  border: 3px solid var(--ink);
+  box-shadow: inset 0 0 0 2px var(--paper-2), var(--shadow);
+  border-image: url(../art/frame-panel.png) 16 fill / 16px / 0 stretch;
+  image-rendering: pixelated;
+  padding: 16px;
+}
+.panel.thin { border-image-width: 8px; padding: 8px 12px; }
+.px-shadow { box-shadow: var(--shadow); }
+.px-shadow-sm { box-shadow: var(--shadow-sm); }
+
+/* Pixel-Kreis: Fläche (--pc) auf ::before, Ink-Kontur per drop-shadow am Element – clip-path schnitte border und
+   box-shadow mit ab. Das Element braucht eine Positionierung (Leaflet-Marker sind schon absolut). */
+.px-circle { filter: drop-shadow(2px 0 0 var(--ink)) drop-shadow(-2px 0 0 var(--ink)) drop-shadow(0 2px 0 var(--ink)) drop-shadow(0 -2px 0 var(--ink)) drop-shadow(3px 3px 0 rgba(30, 42, 34, .45)); }
+.px-circle::before { content: ''; position: absolute; inset: 0; z-index: -1; background: var(--pc, var(--paper)); clip-path: var(--px-disc); }
+
+/* ---------- Buttons: jeder <button> hat die .btn-Optik ---------- */
+button, .btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; padding: 8px 16px;
+  font: 700 16px/20px var(--font-pixel); color: var(--ink);
+  background: var(--paper);
+  border: 3px solid var(--ink); border-radius: 0;
+  box-shadow: inset 0 -3px 0 var(--paper-2), var(--shadow);
+  cursor: pointer; touch-action: manipulation;
+}
+button.primary, .btn.primary {
+  background: var(--amber); background-clip: padding-box;
+  box-shadow: var(--shadow);
+  border-image: url(../art/frame-button.png) 16 fill / 8px / 0 stretch;
+  image-rendering: pixelated;
+}
+button.danger, .btn.danger { color: var(--paper); background: var(--red); box-shadow: inset 0 -3px 0 rgba(30, 42, 34, .35), var(--shadow); }
+button:not(:disabled):active, .btn:not(:disabled):active { transform: translateY(2px); box-shadow: none; }
+button:disabled, .btn:disabled { opacity: .5; box-shadow: none; cursor: default; }
+button:focus-visible, .btn:focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+
+/* ---------- Pixel-Balken: 12 px, Ink-Rand, Füllung in 8-px-Segmenten mit 1-px-Fuge ---------- */
+.bar { position: relative; height: 12px; border: 2px solid var(--ink); background: var(--paper-2); box-shadow: inset 0 2px 0 rgba(30, 42, 34, .25); overflow: hidden; }
+.bar .fill {
+  height: 100%; width: 0;
+  background-color: var(--green);
+  background-image: repeating-linear-gradient(90deg, transparent 0 7px, rgba(30, 42, 34, .45) 7px 8px);
+  box-shadow: inset 0 2px 0 rgba(244, 232, 200, .3);
+  transition: width .3s steps(6, end);
+}
+.bar.hp .fill { background-color: #5BB55A; }
+.bar.hp .fill.low { background-color: var(--red); }
+.bar.energy .fill { background-color: var(--teal); }
+.bar.energy .fill.full { animation: bar-full .5s steps(2, end) infinite; }
+.bar.xp .fill { background-color: var(--gold); }
+@keyframes bar-full { 50% { background-color: var(--paper); } }
+
+/* ---------- Icons aus art/icon-*.png ---------- */
+.ico { display: inline-block; flex: none; width: 24px; height: 24px; vertical-align: middle; object-fit: contain; image-rendering: pixelated; background: center / contain no-repeat; }
+.ico-sm { width: 16px; height: 16px; }
+.ico-lg { width: 28px; height: 28px; }
+.ico-xl { width: 48px; height: 48px; }
+
+/* ---------- Plaketten und Bänder ---------- */
+.badge-pixel {
+  display: inline-flex; align-items: center; gap: 4px;
+  min-height: 20px; padding: 0 6px;
+  font: 800 12px/16px var(--font-body); font-variant-numeric: tabular-nums; color: var(--ink); /* Pixelify erst ab 16 px lesbar */
+  background: var(--paper-2); border: 2px solid var(--ink); box-shadow: var(--shadow-sm);
+  white-space: nowrap;
+}
+.ribbon {
+  display: inline-block; padding: 0 8px;
+  font: 800 12px/18px var(--font-body); color: var(--ink); letter-spacing: .04em; text-transform: uppercase;
+  background: var(--r-normal); border: 2px solid var(--ink); box-shadow: var(--shadow-sm);
+  white-space: nowrap;
+}
+.ribbon.r-selten { background: var(--r-selten); }
+.ribbon.r-episch { background: #7A30B0; color: var(--paper); } /* dunkleres Episch-Lila: Creme darauf 6:1 */
+.ribbon.r-legendaer { background: var(--r-legendaer); }
+
+/* =====================================================================
+   Effekte (Vertrag mit js/fx.js): fx.js setzt nur Klassen, data-Attribute und Variablen
+   --x/--y (Mitte, px oder %), --size (px), --ms (Dauer mit Einheit), --dx (Drift, px).
+   ===================================================================== */
+
+/* Sheet: 4×4-Raster, Frame für Frame über background-position */
+.fx-sheet {
+  position: absolute; left: var(--x, 50%); top: var(--y, 50%); z-index: 6;
+  width: var(--size, 128px); height: var(--size, 128px);
+  margin: calc(var(--size, 128px) / -2) 0 0 calc(var(--size, 128px) / -2);
+  background-repeat: no-repeat; background-size: 400% 400%;
+  image-rendering: pixelated; pointer-events: none;
+  animation: sheet-4x4 var(--ms, 800ms) step-end both;
+}
+.fx-sheet.loop { animation-iteration-count: infinite; }
+.fx-sheet[data-sheet="coins"] { animation-name: sheet-4x4-8; }
+@keyframes sheet-4x4 {
+  0% { background-position: 0 0; }
+  6.25% { background-position: 33.333% 0; }
+  12.5% { background-position: 66.667% 0; }
+  18.75% { background-position: 100% 0; }
+  25% { background-position: 0 33.333%; }
+  31.25% { background-position: 33.333% 33.333%; }
+  37.5% { background-position: 66.667% 33.333%; }
+  43.75% { background-position: 100% 33.333%; }
+  50% { background-position: 0 66.667%; }
+  56.25% { background-position: 33.333% 66.667%; }
+  62.5% { background-position: 66.667% 66.667%; }
+  68.75% { background-position: 100% 66.667%; }
+  75% { background-position: 0 100%; }
+  81.25% { background-position: 33.333% 100%; }
+  87.5% { background-position: 66.667% 100%; }
+  93.75%, 100% { background-position: 100% 100%; }
+}
+/* coins: nur die ersten 8 Frames (Regen) */
+@keyframes sheet-4x4-8 {
+  0% { background-position: 0 0; }
+  12.5% { background-position: 33.333% 0; }
+  25% { background-position: 66.667% 0; }
+  37.5% { background-position: 100% 0; }
+  50% { background-position: 0 33.333%; }
+  62.5% { background-position: 33.333% 33.333%; }
+  75% { background-position: 66.667% 33.333%; }
+  87.5%, 100% { background-position: 100% 33.333%; }
+}
+
+/* Requisit auf einem Pfad. Grundposition = Ziel (so steht es bei reduzierter Bewegung statisch da). */
+.fx-prop {
+  position: absolute; z-index: 5;
+  left: var(--fx-enemy-x); top: var(--fx-enemy-y);
+  width: var(--size, 160px); height: var(--size, 160px);
+  margin: calc(var(--size, 160px) / -2) 0 0 calc(var(--size, 160px) / -2);
+  pointer-events: none; image-rendering: pixelated;
+  animation: var(--ms, 900ms) linear both;
+}
+.fx-prop > img { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+/* Zusatz-Inhalt (opts.html), z.B. Sprechblasentext */
+.fx-prop > :not(img) {
+  position: absolute; left: 14%; right: 14%; top: 20%; bottom: 36%;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  font: 700 13px/1.15 var(--font-pixel); color: var(--ink);
+}
+
+.fx-prop.path-arc-to-enemy { animation-name: path-arc-to-enemy; left: calc(var(--fx-enemy-x) + var(--dx, 0px)); }
+@keyframes path-arc-to-enemy {
+  0% { left: var(--fx-me-x); top: var(--fx-me-y); transform: rotate(0) scale(.55); opacity: 1; }
+  45% { left: calc((var(--fx-me-x) + var(--fx-enemy-x)) / 2 + var(--dx, 0px) / 2); top: calc(var(--fx-enemy-y) - 24%); transform: rotate(calc(var(--spin, 360deg) / 2)) scale(.8); animation-timing-function: ease-in; }
+  86% { left: calc(var(--fx-enemy-x) + var(--dx, 0px)); top: var(--fx-enemy-y); transform: rotate(var(--spin, 360deg)) scale(1); opacity: 1; animation-timing-function: steps(2, end); }
+  100% { left: calc(var(--fx-enemy-x) + var(--dx, 0px)); top: var(--fx-enemy-y); transform: rotate(var(--spin, 360deg)) scale(1.15); opacity: 0; }
+}
+
+.fx-prop.path-rise-at-enemy { animation-name: path-rise-at-enemy; animation-timing-function: steps(5, end); top: calc(var(--fx-enemy-y) - 14%); }
+@keyframes path-rise-at-enemy {
+  0% { top: calc(var(--fx-enemy-y) - 4%); transform: scale(.25); opacity: 0; }
+  15% { opacity: 1; transform: scale(.75); }
+  40% { top: calc(var(--fx-enemy-y) - 14%); transform: scale(1); opacity: 1; }
+  75% { opacity: 1; }
+  100% { top: calc(var(--fx-enemy-y) - 24%); transform: scale(1.25); opacity: 0; }
+}
+
+.fx-prop.path-drop-on-me { animation-name: path-drop-on-me; left: var(--fx-me-x); top: var(--fx-me-y); }
+@keyframes path-drop-on-me {
+  0% { left: var(--fx-me-x); top: -20%; transform: rotate(-15deg); opacity: 1; animation-timing-function: ease-in; }
+  72% { top: var(--fx-me-y); transform: rotate(0); animation-timing-function: step-end; }
+  78% { transform: translateX(-6px); }
+  84% { transform: translateX(6px); }
+  90% { transform: translateX(-6px); opacity: 1; }
+  96% { transform: translateX(0); }
+  100% { left: var(--fx-me-x); top: var(--fx-me-y); transform: none; opacity: 0; }
+}
+
+.fx-prop.path-morph-at-me { animation-name: path-morph-at-me; animation-timing-function: steps(4, end); left: var(--fx-me-x); top: calc(var(--fx-me-y) - 10%); }
+@keyframes path-morph-at-me {
+  0% { transform: scale(.4) rotateY(180deg); opacity: 0; }
+  20% { opacity: 1; }
+  50% { transform: scale(1) rotateY(0); }
+  85% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(.9); opacity: 0; }
+}
+
+.fx-prop.path-bubble-at-me { animation-name: path-bubble-at-me; animation-timing-function: steps(3, end); left: calc(var(--fx-me-x) + 26%); top: calc(var(--fx-me-y) - 26%); }
+@keyframes path-bubble-at-me {
+  0% { transform: scale(.3); opacity: 0; }
+  10% { transform: scale(1.08); opacity: 1; }
+  16% { transform: scale(1); }
+  88% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(.9); opacity: 0; }
+}
+
+.fx-prop.path-helpers { animation-name: path-helpers; left: calc(var(--fx-me-x) + 24%); top: var(--fx-me-y); }
+.fx-prop.path-helpers > img { animation: fx-hop .5s steps(2, end) infinite; }
+@keyframes path-helpers {
+  0% { left: calc(var(--fx-me-x) - 30%); opacity: 0; }
+  6% { left: calc(var(--fx-me-x) + 24%); opacity: 1; }
+  94% { left: calc(var(--fx-me-x) + 24%); opacity: 1; }
+  100% { left: calc(var(--fx-me-x) - 30%); opacity: 0; }
+}
+@keyframes fx-hop { 50% { transform: translateY(-6px); } }
+
+/* Firmware-Update: Requisit über dem eigenen Rüther, darunter ein Pixel-Balken, der in 8 Stufen vollläuft */
+.fx-prop.path-bar-on-me { animation-name: path-bar-on-me; animation-timing-function: steps(3, end); left: var(--fx-me-x); top: calc(var(--fx-me-y) - 22%); }
+.fx-prop.path-bar-on-me::after {
+  content: ''; position: absolute; left: 8%; right: 8%; bottom: -10px; height: 12px;
+  border: 2px solid var(--ink);
+  background: var(--wood-2) repeating-linear-gradient(90deg, var(--teal) 0 7px, var(--ink) 7px 8px) no-repeat 0 0 / 0 100%;
+  animation: fx-bar-fill var(--ms, 1200ms) steps(8, end) forwards;
+}
+@keyframes path-bar-on-me {
+  0% { transform: scale(.5); opacity: 0; }
+  10% { transform: scale(1); opacity: 1; }
+  90% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes fx-bar-fill { to { background-size: 100% 100%; } }
+
+.fx-prop.path-crash-at-me { animation-name: path-crash-at-me; left: var(--fx-me-x); top: var(--fx-me-y); }
+@keyframes path-crash-at-me {
+  0% { left: calc(var(--fx-me-x) + 44%); top: calc(var(--fx-me-y) - 56%); opacity: 1; animation-timing-function: ease-in; }
+  78% { left: var(--fx-me-x); top: var(--fx-me-y); opacity: 1; animation-timing-function: steps(2, end); }
+  100% { left: var(--fx-me-x); top: var(--fx-me-y); transform: translateY(8px); opacity: 0; }
+}
+
+.fx-prop.path-swing-at-enemy { animation-name: path-swing-at-enemy; animation-timing-function: steps(3, end); left: calc(var(--fx-enemy-x) + 16%); top: calc(var(--fx-enemy-y) - 8%); transform-origin: 25% 80%; }
+@keyframes path-swing-at-enemy {
+  0% { transform: rotate(-70deg); opacity: 0; }
+  10% { opacity: 1; }
+  30% { transform: rotate(20deg); }
+  50% { transform: rotate(-70deg); }
+  70% { transform: rotate(20deg); }
+  88% { opacity: 1; }
+  100% { transform: rotate(-20deg); opacity: 0; }
+}
+
+.fx-prop.path-pulse-at-enemy { animation-name: path-pulse-at-enemy; animation-timing-function: steps(3, end); }
+@keyframes path-pulse-at-enemy {
+  0% { transform: scale(.5); opacity: 0; }
+  15% { transform: scale(1.1); opacity: 1; }
+  35% { transform: scale(.9); }
+  55% { transform: scale(1.1); }
+  75% { transform: scale(.95); opacity: 1; }
+  100% { transform: scale(1.2); opacity: 0; }
+}
+
+/* Pixel-Konfetti: jedes Stück ist ein .fx-confetti (Farbe setzt fx.js als background) */
+.fx-confetti {
+  position: absolute; left: var(--x, 50%); top: var(--y, -8px); z-index: 7;
+  width: var(--size, 8px); height: var(--size, 8px);
+  background: var(--gold);
+  box-shadow: inset -2px -2px 0 rgba(30, 42, 34, .35);
+  pointer-events: none;
+  animation: fx-confetti-fall var(--ms, 2000ms) linear both;
+}
+@keyframes fx-confetti-fall {
+  0% { top: var(--y, -8px); transform: translateX(0) scaleX(1); opacity: 1; }
+  25% { transform: translateX(calc(var(--dx, 0px) * .25)) scaleX(.5); }
+  50% { transform: translateX(calc(var(--dx, 0px) * .5)) scaleX(1); }
+  75% { transform: translateX(calc(var(--dx, 0px) * .75)) scaleX(.5); opacity: 1; }
+  100% { top: 105%; transform: translateX(var(--dx, 0px)) scaleX(1); opacity: 0; }
+}
+
+/* Schwebender Text (Schaden, Heilung, Hinweise) */
+.fx-text {
+  position: absolute; left: var(--x, 50%); top: var(--y, 40%); z-index: 8;
+  font: 700 24px/1 var(--font-pixel); color: var(--paper); white-space: nowrap;
+  text-shadow: 2px 0 0 var(--ink), -2px 0 0 var(--ink), 0 2px 0 var(--ink), 0 -2px 0 var(--ink), 3px 3px 0 var(--ink);
+  pointer-events: none;
+  animation: fx-text-rise var(--ms, 900ms) steps(9, end) both;
+}
+.fx-text.hurt { color: #E0634C; }
+.fx-text.heal { color: var(--teal); }
+.fx-text.info { color: var(--paper); font-size: 18px; }
+.fx-text.big { color: var(--gold); font-size: 36px; }
+@keyframes fx-text-rise {
+  0% { transform: translate(-50%, -50%) scale(.6); opacity: 0; }
+  15% { transform: translate(-50%, -80%) scale(1.15); opacity: 1; }
+  30% { transform: translate(-50%, -100%) scale(1); }
+  80% { opacity: 1; }
+  100% { transform: translate(-50%, -220%) scale(1); opacity: 0; }
+}
+
+/* ---------- Weniger Bewegung: keine Loops, Effekte stehen statisch am Ziel ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .fx-prop, .fx-prop > img, .fx-prop::after, .fx-confetti, .bar.energy .fill.full { animation: none !important; }
+  .fx-prop.path-bar-on-me::after { background-size: 100% 100%; }
+  .fx-sheet { animation: none !important; background-position: 33.333% 33.333%; }
+  .fx-confetti { display: none; }
+  .fx-text { animation: none !important; transform: translate(-50%, -100%); }
+  .bar .fill { transition: none; }
+}
