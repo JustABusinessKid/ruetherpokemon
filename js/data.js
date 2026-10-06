@@ -9,8 +9,8 @@ export const CONST = {
   LOCAL_SPAWN_RING: [30, 150],
   SPAWN_FORGET: 1000,
   SPAWN_WALK: 50,          // so viele Meter gelaufen → Spawns auffüllen
-  CATCH_RANGE: 50,
-  ARENA_RANGE: 100,
+  CATCH_RANGE: 120,       // v6: großzügig, viele Spawns liegen auf Privatgrund
+  ARENA_RANGE: 150,
   BREAKOUTS: 3,            // Ausbrüche, bis der Rüther abhaut
   MAX_CATCH_CHANCE: 0.95,
   MIN_CATCH_CHANCE: 0.05,
@@ -61,7 +61,7 @@ export const CONST = {
   STARTER_SUPERCOINS: 1,
   FUSION_COUNT: 3,
   STOP_RADIUS: 600,
-  STOP_RANGE: 40,
+  STOP_RANGE: 80,
   STOP_COOLDOWN: 300_000,
   STOP_MAX: 25,
   STOP_CACHE_MS: 600_000,
@@ -75,6 +75,18 @@ export const CONST = {
   STATE_POLL: 60_000,
   API_TIMEOUT: 6000,
   SPLASH_MS: 600,
+  // v6: Wildkampf, Duplikate
+  WILD_DURATION: 60_000,
+  WILD_HP_MULT: 1.6,       // wilde Rüther halten etwas mehr aus als im eigenen Team
+  WILD_FAST_DAMAGE: 6,     // × Hashrate des wilden Rüthers
+  WILD_FAST_EVERY: 2600,
+  WILD_CHARGED_MULT: 0.7,  // Spezialschaden des wilden Rüthers × Hashrate × 0,7
+  WILD_WIN_SATS: { normal: 30, selten: 80, episch: 200, legendaer: 500 },
+  XP_WILD_WIN: 80,
+  WIN_LEVEL_UP: 1,         // Sieg: beteiligte Rüther steigen um 1 Level (max LEVEL_MAX)
+  FEED_LEVELS: 2,          // Füttern: ein Duplikat desselben Rüthers gibt +2 Level
+  SELL_MULT: 2,            // Verkaufen: 2 × Fang-Sats der Seltenheit
+  CINEMATIC_MS: 1500,      // Standard-Freeze einer Spezial-Sequenz
 };
 
 export const API_BASE = 'https://ruether-go.higgsfield.app';
@@ -151,41 +163,41 @@ export const RUETHERS = [
     id: 'christian', name: 'Christian', title: 'Herr der Netzwerke', btc: 100, catchChance: 0.5, spawn: 'anywhere',
     desc: 'Handelt mit Bitcoin, bei ihm steigt der Kurs immer um 70 %. Ex-Vice-President der Deutschen Bank.',
     attacks: [
-      { name: 'Plus 70 Prozent', cost: 100, damage: 40, fx: 'chart-up' },
-      { name: 'Vice-President-Handschlag', cost: 50, damage: 10, weaken: 8000, fx: 'handshake' },
-      { name: 'Werfen mit Dosenbier', cost: 50, damage: 20, fx: 'can' },
+      { name: 'Plus 70 Prozent', cost: 100, damage: 40, fx: 'chart-up', prop: 'chart-up' },
+      { name: 'Vice-President-Handschlag', cost: 50, damage: 10, weaken: 8000, fx: 'handshake', prop: 'handshake' },
+      { name: 'Werfen mit Dosenbier', cost: 50, damage: 20, fx: 'can', prop: 'beer-can' },
     ],
   },
   {
     id: 'hildegard', name: 'Hildegard', title: 'Herrscherin der Schanze', btc: 120, catchChance: 0.35, spawn: 'huettenberg',
     desc: 'Herrscht über die Rütherschanze. Ruft die Familie zu Hilfe.',
     attacks: [
-      { name: 'Familientreffen', cost: 100, damage: 0, once: true, summonMs: 10_000, summon: [{ id: 'christian', name: 'Christian', damage: 4 }, { id: 'micha', name: 'Onkel Micha', damage: 4 }], fx: 'family' },
-      { name: 'Handtaschen-Hieb', cost: 50, damage: 20, fx: 'handbag' },
+      { name: 'Familientreffen', cost: 100, damage: 0, once: true, summonMs: 10_000, summon: [{ id: 'christian', name: 'Christian', damage: 4 }, { id: 'micha', name: 'Onkel Micha', damage: 4 }], fx: 'family', prop: 'family' },
+      { name: 'Handtaschen-Hieb', cost: 50, damage: 20, fx: 'handbag', prop: 'handbag' },
     ],
   },
   {
     id: 'micha', name: 'Onkel Micha', title: 'Herrscher des PC Sale', btc: 100, catchChance: 0.35, spawn: 'pcsale',
     desc: 'Hat eine PS3 und baut sie zur Hardware-Wallet um.',
     attacks: [
-      { name: 'Hardware-Wallet-Umbau', cost: 100, damage: 30, drain: true, fx: 'wallet' },
-      { name: 'Controllerwurf', cost: 50, damage: 25, fx: 'controller' },
+      { name: 'Hardware-Wallet-Umbau', cost: 100, damage: 30, drain: true, fx: 'wallet', prop: 'wallet' },
+      { name: 'Controllerwurf', cost: 50, damage: 25, fx: 'controller', prop: 'controller' },
     ],
   },
   {
     id: 'viktor', name: 'Viktor', title: 'Möchtegern-Herrscher der Börse', btc: 90, catchChance: 0.5, spawn: 'anywhere',
     desc: 'Stinkt stark. Hat vor der Börse in New York gestanden.',
     attacks: [
-      { name: 'Giftgas', cost: 100, damage: 10, poison: { perSec: 5, ms: 8000 }, fx: 'gas' },
-      { name: 'Ungeschlagene Argumentationslogik', cost: 50, damage: 10, stun: 3000, flavour: 'Deutsche Bank ist kein Geringverdiener.', fx: 'speech' },
+      { name: 'Giftgas', cost: 100, damage: 10, poison: { perSec: 5, ms: 8000 }, fx: 'gas', prop: 'gas' },
+      { name: 'Ungeschlagene Argumentationslogik', cost: 50, damage: 10, stun: 3000, flavour: 'Deutsche Bank ist kein Geringverdiener.', fx: 'speech', prop: 'speech' },
     ],
   },
   {
     id: 'ramona', name: 'Ramona Rüther', title: 'Herrscherin der Arbeitslosigkeit', btc: 90, catchChance: 0.35, spawn: 'worringen',
     desc: 'Frau von Christian. Hat seit sieben Jahren offene M&Ms.',
     attacks: [
-      { name: 'Abgelaufene M&Ms', cost: 100, damage: 15, poison: { perSec: 4, ms: 8000 }, fx: 'mms' },
-      { name: 'Unlimited Credits', cost: 50, damage: 0, heal: 40, fx: 'bags' },
+      { name: 'Abgelaufene M&Ms', cost: 100, damage: 15, poison: { perSec: 4, ms: 8000 }, fx: 'mms', prop: 'mms' },
+      { name: 'Unlimited Credits', cost: 50, damage: 0, heal: 40, fx: 'bags', prop: 'bags' },
     ],
   },
 ];
@@ -220,3 +232,45 @@ export const BOSSES = {
 
 export const RUETHER_BY_ID = Object.fromEntries(RUETHERS.map(r => [r.id, r]));
 export const ARENA_BY_ID = Object.fromEntries(ARENAS.map(a => [a.id, a]));
+
+// v6: Sprüche. Der Humor des Spiels hängt an den echten Leuten: Diese Zeilen erscheinen beim Auftauchen
+// (Fang-Screen), im Kampf (Sprechblase des Gegners, Banner der eigenen Attacke), beim Fang und beim Abhauen.
+export const LINES = {
+  christian: {
+    appear: ['Plus 70 Prozent. Wie immer.', 'Ich war Vice President. Ich weiß, was ich tu.', 'Der Kurs geht hoch, egal was der Markt sagt.'],
+    fight: ['Bei mir geht nichts runter.', 'Das hab ich bei der Deutschen Bank gelernt.', 'Dosenbier ist auch eine Anlageklasse.'],
+    caught: ['Na gut. Aber nur gegen Provision.', 'Gute Investition. 70 Prozent garantiert.'],
+    flee: ['Muss los, der Kurs ruft.', 'Christian ist weiter zum nächsten Deal.'],
+  },
+  hildegard: {
+    appear: ['Auf der Schanze bestimme ich.', 'Christian! Micha! Kommt mal her!'],
+    fight: ['Familientreffen. Jetzt.', 'Ich ruf die Jungs.', 'Die Handtasche ist nicht nur zum Tragen da.'],
+    caught: ['Dann eben Familientreffen bei dir.', 'Aber sonntags bin ich auf der Schanze.'],
+    flee: ['Hildegard ist zurück auf die Schanze.', 'Die Familie wartet.'],
+  },
+  micha: {
+    appear: ['Die PS3 ist eine Hardware-Wallet, wenn man weiß wie.', 'Ich hab noch drei PS3 im Laden.'],
+    fight: ['Controller kommt!', 'Deine Bitcoins? Jetzt meine.', 'Firmware hab ich selbst geschrieben.'],
+    caught: ['Hast du zufällig noch eine PS3?', 'Okay, aber der PC Sale bleibt meiner.'],
+    flee: ['Micha muss in den Laden, PC Sale macht gleich zu.', 'Onkel Micha baut lieber noch eine Wallet.'],
+  },
+  viktor: {
+    appear: ['Deutsche Bank ist kein Geringverdiener.', 'Riechst du das? Das ist Erfolg.'],
+    fight: ['Ungeschlagene Argumentationslogik.', 'Ich steh vor der Börse, du nicht.', 'Atme ruhig tief ein.'],
+    caught: ['Ungeschlagene Argumentationslogik: Du hast gewonnen.', 'Ich wollte eh zu dir.'],
+    flee: ['Viktor ist weg. Der Geruch bleibt.', 'Viktor ist zur Börse gelaufen. Rückwärts.'],
+  },
+  ramona: {
+    appear: ['Willst du ein M&M? Die sind noch gut.', 'Unlimited Credits bei Trollkids!'],
+    fight: ['Sieben Jahre gereift.', 'Ich geh shoppen, du gehst k.o.', 'GAP hat gerade Sale.'],
+    caught: ['Okay, aber nur mit Kundenkarte.', 'Ich bring M&Ms mit.'],
+    flee: ['Ramona muss noch zu GAP.', 'Ramona ist zu Trollkids. Unlimited Credits.'],
+  },
+  satoshi: { appear: ['Wer ich bin? Unwichtig.', 'Ich hab Bitcoin erfunden. Und du?'], fight: ['Halving.', 'Not your keys, not your coins.'] },
+  schanze: { appear: ['Die Schanze gehört mir.', 'Mein Kopf ist mehr wert als deiner.'], fight: ['Kurssturz!', 'Mining läuft.'] },
+  ps3: { appear: ['*lautes Lüfterrauschen*', 'Bitte Firmware aktualisieren.'], fight: ['Yellow Light of Death!', 'Disc-Fehler.'] },
+};
+export const pickLine = (id, kind, rng = Math.random) => {
+  const list = LINES[id]?.[kind];
+  return list && list.length ? list[Math.floor(rng() * list.length)] : '';
+};
