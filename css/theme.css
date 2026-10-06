@@ -158,6 +158,25 @@ button:focus-visible, .btn:focus-visible { outline: 3px solid var(--teal); outli
 }
 .fx-sheet.loop { animation-iteration-count: infinite; }
 .fx-sheet[data-sheet="coins"] { animation-name: sheet-4x4-8; }
+.fx-sheet[data-sheet="btcspin"] { animation-name: sheet-4x4-15; }
+/* btc-spin: Bild 16 = Bild 1, darum nur 15 Bilder pro Runde */
+@keyframes sheet-4x4-15 {
+  0.0% { background-position: 0 0; }
+  6.667% { background-position: 33.333% 0; }
+  13.333% { background-position: 66.667% 0; }
+  20.0% { background-position: 100% 0; }
+  26.667% { background-position: 0 33.333%; }
+  33.333% { background-position: 33.333% 33.333%; }
+  40.0% { background-position: 66.667% 33.333%; }
+  46.667% { background-position: 100% 33.333%; }
+  53.333% { background-position: 0 66.667%; }
+  60.0% { background-position: 33.333% 66.667%; }
+  66.667% { background-position: 66.667% 66.667%; }
+  73.333% { background-position: 100% 66.667%; }
+  80.0% { background-position: 0 100%; }
+  86.667% { background-position: 33.333% 100%; }
+  93.333% { background-position: 66.667% 100%; }
+}
 @keyframes sheet-4x4 {
   0% { background-position: 0 0; }
   6.25% { background-position: 33.333% 0; }
@@ -188,7 +207,7 @@ button:focus-visible, .btn:focus-visible { outline: 3px solid var(--teal); outli
   87.5%, 100% { background-position: 100% 33.333%; }
 }
 
-/* Requisit auf einem Pfad. Grundposition = Ziel (so steht es bei reduzierter Bewegung statisch da). */
+/* Requisit auf einem Pfad (Wurfbögen bleiben unter dem Spezial-Banner oben). Grundposition = Ziel (so steht es bei reduzierter Bewegung statisch da). */
 .fx-prop {
   position: absolute; z-index: 5;
   left: var(--fx-enemy-x); top: var(--fx-enemy-y);
@@ -208,7 +227,7 @@ button:focus-visible, .btn:focus-visible { outline: 3px solid var(--teal); outli
 .fx-prop.path-arc-to-enemy { animation-name: path-arc-to-enemy; left: calc(var(--fx-enemy-x) + var(--dx, 0px)); }
 @keyframes path-arc-to-enemy {
   0% { left: var(--fx-me-x); top: var(--fx-me-y); transform: rotate(0) scale(.55); opacity: 1; }
-  45% { left: calc((var(--fx-me-x) + var(--fx-enemy-x)) / 2 + var(--dx, 0px) / 2); top: calc(var(--fx-enemy-y) - 24%); transform: rotate(calc(var(--spin, 360deg) / 2)) scale(.8); animation-timing-function: ease-in; }
+  45% { left: calc((var(--fx-me-x) + var(--fx-enemy-x)) / 2 + var(--dx, 0px) / 2); top: calc(var(--fx-enemy-y) - 8%); transform: rotate(calc(var(--spin, 360deg) / 2)) scale(.8); animation-timing-function: ease-in; }
   86% { left: calc(var(--fx-enemy-x) + var(--dx, 0px)); top: var(--fx-enemy-y); transform: rotate(var(--spin, 360deg)) scale(1); opacity: 1; animation-timing-function: steps(2, end); }
   100% { left: calc(var(--fx-enemy-x) + var(--dx, 0px)); top: var(--fx-enemy-y); transform: rotate(var(--spin, 360deg)) scale(1.15); opacity: 0; }
 }
@@ -251,15 +270,6 @@ button:focus-visible, .btn:focus-visible { outline: 3px solid var(--teal); outli
   100% { transform: scale(.9); opacity: 0; }
 }
 
-.fx-prop.path-helpers { animation-name: path-helpers; left: calc(var(--fx-me-x) + 24%); top: var(--fx-me-y); }
-.fx-prop.path-helpers > img { animation: fx-hop .5s steps(2, end) infinite; }
-@keyframes path-helpers {
-  0% { left: calc(var(--fx-me-x) - 30%); opacity: 0; }
-  6% { left: calc(var(--fx-me-x) + 24%); opacity: 1; }
-  94% { left: calc(var(--fx-me-x) + 24%); opacity: 1; }
-  100% { left: calc(var(--fx-me-x) - 30%); opacity: 0; }
-}
-@keyframes fx-hop { 50% { transform: translateY(-6px); } }
 
 /* Firmware-Update: Requisit über dem eigenen Rüther, darunter ein Pixel-Balken, der in 8 Stufen vollläuft */
 .fx-prop.path-bar-on-me { animation-name: path-bar-on-me; animation-timing-function: steps(3, end); left: var(--fx-me-x); top: calc(var(--fx-me-y) - 22%); }
@@ -342,8 +352,119 @@ button:focus-visible, .btn:focus-visible { outline: 3px solid var(--teal); outli
   100% { transform: translate(-50%, -220%) scale(1); opacity: 0; }
 }
 
+/* mega („+70 %"): platzt auf und steht, liegt über Banner und Einschlag */
+.fx-text.mega { z-index: 10; color: #6BE36B; font-size: 60px; text-shadow: 3px 0 0 var(--ink), -3px 0 0 var(--ink), 0 3px 0 var(--ink), 0 -3px 0 var(--ink), 5px 5px 0 var(--green-2); animation-name: fx-text-mega; animation-timing-function: steps(10, end); }
+@keyframes fx-text-mega {
+  0% { transform: translate(-50%, -50%) scale(2.4); opacity: 0; }
+  12% { transform: translate(-50%, -50%) scale(.9); opacity: 1; }
+  20% { transform: translate(-50%, -50%) scale(1.08); }
+  30%, 80% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -80%) scale(1); opacity: 0; }
+}
+
+/* =====================================================================
+   v6: echte Gesichter in den Effekten, ₿-Regen, Banner, Sprechblasen, neue Pfade
+   ===================================================================== */
+
+/* Reiter: echtes Gesicht des Angreifers (sprites/<id>.png) im Requisit, Pixel-Rahmen in Seltenheitsfarbe (Spec §0.2).
+   Lage/Größe/Ebene/Tönung je Requisit über --rider-x/-y/-size/-z/-filter (z -1 = hinter dem Requisit). */
+.fx-prop > img.rider {
+  position: absolute; z-index: var(--rider-z, 1);
+  left: var(--rider-x, 28%); top: var(--rider-y, 4%);
+  width: var(--rider-size, 44%); height: var(--rider-size, 44%);
+  background: var(--paper-2); border: 3px solid var(--rc, var(--r-normal)); outline: 2px solid var(--ink);
+  box-shadow: 3px 3px 0 2px var(--ink); filter: var(--rider-filter, none);
+}
+.fx-prop > img.rider.r-normal, .fx-board .portrait.r-normal { --rc: var(--r-normal); }
+.fx-prop > img.rider.r-selten, .fx-board .portrait.r-selten { --rc: var(--r-selten); }
+.fx-prop > img.rider.r-episch, .fx-board .portrait.r-episch { --rc: var(--r-episch); }
+.fx-prop > img.rider.r-legendaer, .fx-board .portrait.r-legendaer { --rc: var(--r-legendaer); }
+
+/* ₿-Regen: drehender Bitcoin (Sheet-Frames) fällt zugleich durch den Container */
+.fx-sheet.fx-btc { z-index: 7; animation: sheet-4x4-15 var(--ms, 1000ms) step-end infinite, fx-btc-fall var(--fall, 2000ms) linear both; }
+@keyframes fx-btc-fall {
+  0% { top: var(--y, -40px); transform: translateX(0); opacity: 1; }
+  80% { opacity: 1; }
+  100% { top: 105%; transform: translateX(var(--dx, 0px)); opacity: 0; }
+}
+
+/* Holzbanner einer Spezial-Attacke: Brett fährt ein, steht, fährt aus; .fx-dim dunkelt die Bühne (unter den Requisiten) ab */
+.fx-banner { position: absolute; inset: 0; pointer-events: none; }
+.fx-banner .fx-dim { position: absolute; inset: 0; z-index: 4; background: rgba(27, 43, 75, .55); animation: fx-dim var(--ms, 1100ms) steps(4, end) both; }
+.fx-banner .fx-board {
+  position: absolute; z-index: 9; left: 8px; right: 8px; top: 8px;
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+  color: var(--paper); background-color: var(--wood); background-image: var(--grain);
+  border: 3px solid var(--ink); box-shadow: inset 0 0 0 2px var(--wood-2), 4px 4px 0 var(--ink);
+  animation: fx-banner var(--ms, 1100ms) linear both;
+}
+.fx-board .portrait {
+  flex: none; width: 56px; height: 56px; image-rendering: pixelated;
+  background: var(--paper-2); border: 3px solid var(--rc, var(--r-normal)); outline: 2px solid var(--ink);
+}
+.fx-board-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.fx-board-text b { font: 700 22px/1.05 var(--font-pixel); color: var(--gold); text-shadow: 2px 2px 0 var(--wood-2); overflow-wrap: anywhere; }
+.fx-board-text span { font: 800 13px/1.25 var(--font-body); color: var(--paper); }
+@keyframes fx-banner {
+  0% { translate: -110% 0; animation-timing-function: steps(4, end); }
+  12% { translate: 0 0; }
+  90% { translate: 0 0; opacity: 1; animation-timing-function: steps(3, end); }
+  100% { translate: 110% 0; opacity: 0; }
+}
+@keyframes fx-dim { 0% { opacity: 0; } 12%, 88% { opacity: 1; } 100% { opacity: 0; } }
+
+/* Sprechblase: Papier, Ink-Rand, Pixel-Zipfel unten (links bzw. rechts); der Zipfel zeigt auf --x/--y */
+.fx-say {
+  position: absolute; left: var(--x, 50%); top: var(--y, 30%); z-index: 8;
+  width: max-content; max-width: min(220px, calc(100% - var(--x, 50%) - 8px));
+  padding: 6px 10px; font: 800 13px/1.25 var(--font-body); color: var(--ink);
+  background: var(--paper); border: 3px solid var(--ink); box-shadow: 3px 3px 0 var(--ink);
+  translate: -14px calc(-100% - 14px); transform-origin: 14px 100%;
+  pointer-events: none;
+  animation: fx-say var(--ms, 2200ms) steps(3, end) both;
+}
+.fx-say.right { max-width: min(220px, calc(var(--x, 50%) - 8px)); translate: calc(-100% + 14px) calc(-100% - 14px); transform-origin: calc(100% - 14px) 100%; }
+.fx-say::after {
+  content: ''; position: absolute; top: calc(100% - 1px); left: 6px; width: 4px; height: 4px; background: var(--ink);
+  box-shadow: 4px 0 var(--paper), 8px 0 var(--paper), 12px 0 var(--ink), 0 4px var(--ink), 4px 4px var(--paper), 8px 4px var(--ink), 0 8px var(--ink), 4px 8px var(--ink), 0 12px var(--ink);
+}
+.fx-say.right::after { left: auto; right: 6px; transform: scaleX(-1); }
+@keyframes fx-say { 0% { scale: .4; opacity: 0; } 10% { scale: 1.06; opacity: 1; } 16% { scale: 1; } 90% { opacity: 1; } 100% { opacity: 0; } }
+
+/* Kerzen steigen von unten neben dem Boss auf (Plus 70 Prozent) */
+.fx-prop.path-rise-from-bottom { animation-name: path-rise-from-bottom; animation-timing-function: steps(8, end); left: calc(var(--fx-enemy-x) - 14%); top: calc(var(--fx-enemy-y) + 14%); }
+@keyframes path-rise-from-bottom {
+  0% { top: calc(100% + var(--size, 160px) / 2); opacity: 1; }
+  45% { top: calc(var(--fx-enemy-y) + 14%); }
+  85% { opacity: 1; }
+  100% { top: calc(var(--fx-enemy-y) + 10%); opacity: 0; }
+}
+
+/* Rakete: zündet unten links beim eigenen Rüther (wackelt), schießt zum Boss, bleibt im Einschlag stehen */
+.fx-prop.path-launch { animation-name: path-launch; left: var(--fx-enemy-x); top: var(--fx-enemy-y); }
+@keyframes path-launch {
+  0% { left: var(--fx-me-x); top: calc(var(--fx-me-y) + 6%); transform: rotate(-12deg) scale(.6); opacity: 0; animation-timing-function: steps(2, end); }
+  6% { opacity: 1; transform: rotate(-12deg) scale(.6) translateX(-3px); }
+  12% { transform: rotate(-12deg) scale(.6) translateX(3px); }
+  18% { left: var(--fx-me-x); top: calc(var(--fx-me-y) + 2%); transform: rotate(-12deg) scale(.65); animation-timing-function: ease-in; }
+  57% { left: var(--fx-enemy-x); top: var(--fx-enemy-y); transform: rotate(-12deg) scale(1.05); opacity: 1; animation-timing-function: steps(2, end); }
+  72% { transform: rotate(-12deg) scale(1.2); opacity: 1; }
+  80%, 100% { left: var(--fx-enemy-x); top: var(--fx-enemy-y); transform: rotate(-12deg) scale(1.3); opacity: 0; }
+}
+
+/* Wurf vom Gegner zum eigenen Rüther (wilder Rüther); --spin Drehung, Standard eine halbe Rückwärtsdrehung */
+.fx-prop.path-arc-to-me { animation-name: path-arc-to-me; left: var(--fx-me-x); top: var(--fx-me-y); }
+@keyframes path-arc-to-me {
+  0% { left: var(--fx-enemy-x); top: var(--fx-enemy-y); transform: rotate(0) scale(.7); opacity: 1; }
+  45% { left: calc((var(--fx-me-x) + var(--fx-enemy-x)) / 2); top: calc(var(--fx-enemy-y) - 14%); transform: rotate(calc(var(--spin, -180deg) / 2)) scale(.9); animation-timing-function: ease-in; }
+  86% { left: var(--fx-me-x); top: var(--fx-me-y); transform: rotate(var(--spin, -180deg)) scale(1); opacity: 1; animation-timing-function: steps(2, end); }
+  100% { left: var(--fx-me-x); top: var(--fx-me-y); transform: rotate(var(--spin, -180deg)) scale(1.15); opacity: 0; }
+}
+
 /* ---------- Weniger Bewegung: keine Loops, Effekte stehen statisch am Ziel ---------- */
 @media (prefers-reduced-motion: reduce) {
+  .fx-btc { display: none !important; }
+  .fx-banner .fx-dim, .fx-banner .fx-board, .fx-say { animation: none !important; }
   .fx-prop, .fx-prop > img, .fx-prop::after, .fx-confetti, .bar.energy .fill.full { animation: none !important; }
   .fx-prop.path-bar-on-me::after { background-size: 100% 100%; }
   .fx-sheet { animation: none !important; background-position: 33.333% 33.333%; }

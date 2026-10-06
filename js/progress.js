@@ -136,6 +136,69 @@ export function fuse(save, id, rarityId, now = 0) {
   return { ok: true, inst, used, newDex };
 }
 
+// ---------- v6: Füttern, Verkaufen, Level-Ups ----------
+const rank = id => RARITIES.findIndex(r => r.id === id);
+const byUid = (save, uid) => save.box.find(i => i.uid === uid);
+const dropUid = (save, uid) => { save.box = save.box.filter(i => i.uid !== uid); };
+
+export const sellValue = rarityId => CONST.SELL_MULT * rarityOf(rarityId).sats;
+
+// Schwächstes passendes Duplikat: gleicher Rüther, Seltenheit ≤ Ziel, nicht im Team, nicht das Ziel.
+export function pickFood(save, targetUid) {
+  const t = byUid(save, targetUid);
+  if (!t) return null;
+  const food = save.box
+    .filter(i => i.uid !== t.uid && i.id === t.id && rank(i.rarity) <= rank(t.rarity) && !save.team.includes(i.uid))
+    .sort((a, b) => rank(a.rarity) - rank(b.rarity) || a.level - b.level);
+  return food[0]?.uid || null;
+}
+export function feed(save, targetUid, foodUid) {
+  const t = byUid(save, targetUid), f = byUid(save, foodUid);
+  if (!t || !f) return { ok: false, reason: 'unbekannt' };
+  if (t === f || t.id !== f.id || rank(f.rarity) > rank(t.rarity)) return { ok: false, reason: 'falsch' };
+  if (save.team.includes(f.uid)) return { ok: false, reason: 'team' };
+  if (t.level >= CONST.LEVEL_MAX) return { ok: false, reason: 'max' };
+  t.level = Math.min(CONST.LEVEL_MAX, t.level + CONST.FEED_LEVELS);
+  dropUid(save, f.uid);
+  return { ok: true, level: t.level };
+}
+
+// Team und das letzte Exemplar einer Seltenheit (Dex-Schutz) bleiben.
+export function sell(save, uid) {
+  const inst = byUid(save, uid);
+  if (!inst) return { ok: false, reason: 'unbekannt' };
+  if (save.team.includes(uid)) return { ok: false, reason: 'team' };
+  if (save.box.filter(i => i.id === inst.id && i.rarity === inst.rarity).length < 2) return { ok: false, reason: 'letztes' };
+  const sats = sellValue(inst.rarity);
+  dropUid(save, uid);
+  save.sats += sats;
+  return { ok: true, sats };
+}
+// Verkauft alles außer Team und dem besten (höchstes Level) Exemplar je Seltenheit; bei Gleichstand gilt das Teammitglied.
+export function sellDuplicates(save, id) {
+  const team = new Set(save.team);
+  const keep = new Set(save.team), seen = new Set();
+  const mine = save.box.filter(i => i.id === id).sort((a, b) => b.level - a.level || team.has(b.uid) - team.has(a.uid));
+  for (const i of mine) if (!seen.has(i.rarity)) { seen.add(i.rarity); keep.add(i.uid); }
+  const sold = mine.filter(i => !keep.has(i.uid));
+  const sats = sold.reduce((s, i) => s + sellValue(i.rarity), 0);
+  const soldUids = new Set(sold.map(i => i.uid));
+  save.box = save.box.filter(i => !soldUids.has(i.uid));
+  save.sats += sats;
+  return { count: sold.length, sats };
+}
+
+export function levelUpUids(save, uids, n = CONST.WIN_LEVEL_UP) {
+  const out = [];
+  for (const uid of new Set(uids)) {
+    const inst = byUid(save, uid);
+    if (!inst || inst.level >= CONST.LEVEL_MAX) continue;
+    inst.level = Math.min(CONST.LEVEL_MAX, inst.level + n);
+    out.push({ uid, level: inst.level });
+  }
+  return out;
+}
+
 // ---------- Spielstand v3 ----------
 export function emptySaveV3() {
   return {

@@ -1,4 +1,4 @@
-import { CONST, API_BASE, RUETHERS, RUETHER_BY_ID, BOSSES, ARENAS, ARENA_BY_ID, RARITY_BY_ID } from './data.js';
+import { CONST, API_BASE, RUETHERS, RUETHER_BY_ID, BOSSES, ARENAS, ARENA_BY_ID, RARITY_BY_ID, pickLine } from './data.js';
 import * as storage from './storage.js';
 import { createLocator, distance, offsetPoint } from './geo.js';
 import { updateSpawns } from './spawn.js';
@@ -10,7 +10,13 @@ import {
 } from './screens.js';
 import { createBattleScreen } from './battle-ui.js';
 import { makeFighter, makeBoss } from './battle.js';
-import { catchReward, arenaWin, arenaReward, arenaScale, powerUp, buyItem, lureActive, dexCount, DEX_TOTAL, addXp, fuse, migrate } from './progress.js';
+import {
+  catchReward, arenaWin, arenaReward, arenaScale, powerUp, buyItem, lureActive, dexCount, DEX_TOTAL, addXp, fuse, migrate,
+  pickFood, feed, sell, sellDuplicates, levelUpUids,
+} from './progress.js';
+import { makeWild } from './wild.js';
+import { reachText } from './format.js';
+import { createTicker } from './ticker.js';
 import { dayKey, ensureDailyQuests, trackQuest, claimQuest, claimableCount, applyStreak, checkAchievements, featuredRuether, isHappyHour } from './quests.js';
 import { spinReward, stopReady, useStop, fakeStops } from './stops.js';
 import { fetchStops } from './overpass.js';
@@ -22,6 +28,7 @@ import { createOnline } from './online.js';
 const $ = s => document.querySelector(s);
 window.addEventListener('error', () => { const p = document.querySelector('#splash p'); if (p) p.textContent = 'Fehler beim Laden. Bitte Seite neu laden.'; }, { once: true });
 const fmt = n => n.toLocaleString('de-DE');
+for (const el of document.querySelectorAll('[data-say]')) el.textContent = pickLine(...el.dataset.say.split(':'));
 let save = storage.load();
 let spawns = [], stops = [], pos = null, lastSpawnPos = null, lastStopPos = null;
 let debugWeakBoss = false, debugLegendary = false;
@@ -39,6 +46,7 @@ function show(id) {
   if (id === 'screen-leaderboard') { leaderboard.show({ save, state: online.lastState, available: online.available }); online.fetchState().then(() => { if (current === 'screen-leaderboard') leaderboard.show({ save, state: online.lastState, available: online.available }); }); }
   if (id === 'screen-profile') profile.show(save, { onlineId: save.profile?.token?.slice(0, 8) || '', available: online.available });
   if (id === 'screen-shop') shop.show(save);
+  if (id === 'screen-victory') showVictoryFace();
 }
 onTab(id => { sfx.play('click'); show(id); });
 document.querySelectorAll('.sats-chip').forEach(b => b.addEventListener('click', () => show('screen-shop')));
@@ -54,6 +62,13 @@ function teamInstances() {
   save.team = save.team.filter(uid => instById(uid));
   return save.team.map(instById);
 }
+const ticker = createTicker({ el: $('#btc-ticker'), getLeaderId: () => instById(save.team[0])?.id });
+// Level-Ups nach Siegen (levelUpUids-Ergebnis): ein Toast für alle, nach den Erfolgs-Toasts (sonst verdrängt, max. 3 sichtbar)
+function levelUpToast(ups) {
+  if (!ups.length) return;
+  toast(ups.map(({ uid, level }) => `${RUETHER_BY_ID[instById(uid).id].name} Lv. ${level}!`).join(' '), { kind: 'level' });
+  sfx.play('levelup');
+}
 function leaderInfo() {
   const l = instById(save.team[0]);
   return l ? { id: l.id, rarity: l.rarity, level: l.level } : null;
@@ -61,6 +76,7 @@ function leaderInfo() {
 function persist() {
   if (!storage.save(save)) banner('Spielstand kann nicht gespeichert werden.', 'save');
   updateHud();
+  ticker.refresh(); // Anführer kann gewechselt haben (Christian-Effekt)
   online.syncSoon();
 }
 function updateHud() {
@@ -157,9 +173,10 @@ const map = createMap({
   onSpawnTap(s) {
     if (!pos) return toast('Keine Ortung.');
     const d = distance(pos, s);
-    if (d >= CONST.CATCH_RANGE) return toast(`Zu weit weg: ${Math.round(d)} m`);
+    if (d >= CONST.CATCH_RANGE) return toast(reachText(d, CONST.CATCH_RANGE), { icon: 'map' });
     sfx.play('click');
-    catchScreen.start(s, RUETHER_BY_ID[s.ruetherId], { rng: Math.random, rarity: s.rarity, superCoins: save.items.supercoin || 0 });
+    catchScreen.start(s, RUETHER_BY_ID[s.ruetherId], { rng: Math.random, rarity: s.rarity, superCoins: save.items.supercoin || 0, canFight: teamInstances().length > 0,
+      fightHint: save.box.length ? 'Stell erst ein Team auf' : 'Fang erst einen per Münze' });
     show('screen-catch');
   },
   onArenaTap(a) {
@@ -180,7 +197,7 @@ const map = createMap({
   onStopTap(s) {
     if (!pos) return toast('Keine Ortung.');
     const d = distance(pos, s);
-    if (d >= CONST.STOP_RANGE) return toast(`Zu weit weg: ${Math.round(d)} m`);
+    if (d >= CONST.STOP_RANGE) return toast(reachText(d, CONST.STOP_RANGE), { icon: 'map' });
     if (!stopReady(save, s.id, Date.now())) return toast('Dieser Stop kühlt noch ab.');
     sfx.play('click');
     stopScreen.show(s);
@@ -224,6 +241,7 @@ const locator = createLocator({
   onPosition(p) {
     pos = p;
     map.setPlayer(p);
+    map.setReach(p);
     banner('', 'geo');
     if (!lastSpawnPos || distance(lastSpawnPos, p) > CONST.SPAWN_WALK) refreshSpawns();
     refreshStops();
@@ -239,19 +257,26 @@ const catchScreen = createCatchScreen({
     if (hit && label === 'Super!') { save.stats.superHits = (save.stats.superHits || 0) + 1; trackQuest(save, 'superHit'); persist(); }
   },
   onCaught({ spawn }) {
-    const r = catchReward(save, spawn.ruetherId, spawn.rarity, Date.now());
-    let sats = r.sats;
-    if (isHappyHour()) { const base = r.sats - (r.newDex ? CONST.DEX_BONUS : 0); const extra = Math.round(base * (CONST.HOUR_SATS_MULT - 1)); save.sats += extra; sats += extra; }
+    const r = registerCatch(spawn);
     gainXp(CONST.XP_CATCH[spawn.rarity] || CONST.XP_CATCH.normal);
-    trackQuest(save, 'catch');
-    if (spawn.rarity !== 'normal') trackQuest(save, 'catchRare');
-    if (spawn.rarity === 'legendaer') online.postEvent('catch', `hat einen legendären ${RUETHER_BY_ID[spawn.ruetherId].name} gefangen!`);
     afterChange();
-    return { sats, newDex: r.newDex };
+    return r;
   },
-  onDone({ spawn }) { spawns = spawns.filter(s => s.id !== spawn.id); map.setSpawns(spawns); show('screen-map'); showLevelUps(); },
+  onDone({ spawn }) { removeSpawn(spawn); show('screen-map'); showLevelUps(); },
   onCancel() { show('screen-map'); },
+  onFight({ spawn }) { startWild(spawn); },
 });
+// Neues Exemplar + Sats (Rüther-Stunde) + Quests; XP gibt der Aufrufer
+function registerCatch(spawn) {
+  const r = catchReward(save, spawn.ruetherId, spawn.rarity, Date.now());
+  let sats = r.sats;
+  if (isHappyHour()) { const base = r.sats - (r.newDex ? CONST.DEX_BONUS : 0); const extra = Math.round(base * (CONST.HOUR_SATS_MULT - 1)); save.sats += extra; sats += extra; }
+  trackQuest(save, 'catch');
+  if (spawn.rarity !== 'normal') trackQuest(save, 'catchRare');
+  if (spawn.rarity === 'legendaer') online.postEvent('catch', `hat einen legendären ${RUETHER_BY_ID[spawn.ruetherId].name} gefangen!`);
+  return { sats, newDex: r.newDex };
+}
+function removeSpawn(spawn) { spawns = spawns.filter(s => s.id !== spawn.id); map.setSpawns(spawns); }
 
 // ---------- Sammlung / Dex / Shop ----------
 const collection = createCollectionScreen({
@@ -271,6 +296,29 @@ const collection = createCollectionScreen({
     trackQuest(save, 'fusion');
     if (res.inst.rarity === 'episch' || res.inst.rarity === 'legendaer') online.postEvent('fusion', `hat per Fusion einen ${RARITY_BY_ID[res.inst.rarity].name.toLowerCase()}en ${RUETHER_BY_ID[id].name} erschaffen!`);
     afterChange();
+    return res;
+  },
+  onFeed(targetUid) {
+    const foodUid = pickFood(save, targetUid);
+    if (!foodUid) { toast('Kein passendes Duplikat zum Füttern.'); return { ok: false, reason: 'falsch', foodUid: null }; }
+    const res = feed(save, targetUid, foodUid);
+    if (res.ok) {
+      sfx.play('levelup'); haptic(30);
+      toast(`${RUETHER_BY_ID[instById(targetUid).id].name} Lv. ${res.level}!`, { kind: 'level' });
+      trackQuest(save, 'powerup');
+      afterChange();
+    } else toast(res.reason === 'max' ? 'Schon auf Max-Level.' : 'Das geht nicht.');
+    return { ...res, foodUid };
+  },
+  onSell(uid) {
+    const res = sell(save, uid);
+    if (res.ok) { sfx.play('coin'); toast(`Verkauft: +${fmt(res.sats)} Sats`, { kind: 'sats' }); afterChange(); }
+    else toast(res.reason === 'team' ? 'Teammitglieder verkaufst du nicht.' : res.reason === 'letztes' ? 'Das letzte Exemplar dieser Seltenheit bleibt.' : 'Das geht nicht.');
+    return res;
+  },
+  onSellDuplicates(id) {
+    const res = sellDuplicates(save, id);
+    if (res.count) { sfx.play('coin'); toast(`${res.count} ${res.count === 1 ? "Duplikat" : "Duplikate"} für ${fmt(res.sats)} Sats verkauft`, { kind: 'sats' }); afterChange(); }
     return res;
   },
   onDex() { dex.show(save); show('screen-dex'); },
@@ -355,15 +403,53 @@ const stopScreen = createStopScreen({
 });
 
 // ---------- Arena + Kampf ----------
-let currentArena = null;
+// fight = { arena } oder { spawn } (Wildkampf); uids = Team beim Kampfstart (activeIndex zeigt hier hinein)
+let fight = null;
+function teamFighters() {
+  const insts = teamInstances();
+  return { uids: insts.map(i => i.uid), team: insts.map(inst => makeFighter(RUETHER_BY_ID[inst.id], inst)) };
+}
 function startBattle(a) {
-  currentArena = a;
-  const team = teamInstances().map(inst => makeFighter(RUETHER_BY_ID[inst.id], inst));
+  const { uids, team } = teamFighters();
+  fight = { arena: a, uids };
   const level = save.arenaLevels[a.id] || 1;
   const enemy = makeBoss(BOSSES[a.boss], level);
   if (debugWeakBoss) enemy.btc = 20;
   show('screen-battle');
-  battleScreen.start({ team, enemy, rng: Math.random, arena: a, arenaLevel: level, reward: arenaReward(level), masteredAfter: level >= CONST.ARENA_LEVELS });
+  battleScreen.start({ team, enemy, rng: Math.random, mode: 'arena', arena: a, arenaLevel: level, reward: arenaReward(level), masteredAfter: level >= CONST.ARENA_LEVELS });
+}
+// Wildkampf (Spec §2): Sieg fängt, Niederlage/Zeit lässt ihn abhauen, Aufgeben behält den Spawn
+// Was endWild am Ende wirklich gutschreibt: Siegbonus + Fang-Sats (+ Happy Hour) + Dex-Bonus
+function wildReward(id, rarity) {
+  const base = RARITY_BY_ID[rarity].sats;
+  return CONST.WILD_WIN_SATS[rarity] + base + (isHappyHour() ? Math.round(base * (CONST.HOUR_SATS_MULT - 1)) : 0) + (save.dex[`${id}:${rarity}`] ? 0 : CONST.DEX_BONUS);
+}
+function startWild(spawn) {
+  const def = RUETHER_BY_ID[spawn.ruetherId];
+  const level = Math.min(CONST.LEVEL_MAX, Math.max(1, 1 + Math.floor(Math.random() * (save.trainerLevel || 1))));
+  const enemy = makeWild(def, { rarity: spawn.rarity, level });
+  if (debugWeakBoss) enemy.btc = 20;
+  const { uids, team } = teamFighters();
+  fight = { spawn, uids };
+  show('screen-battle');
+  battleScreen.start({ team, enemy, rng: Math.random, mode: 'wild', wild: { id: def.id, rarity: spawn.rarity, name: def.name }, reward: wildReward(def.id, spawn.rarity) });
+}
+function endWild({ spawn, uids }, { won, reason, activeIndex = 0 }) {
+  if (!won && reason === 'quit') { afterChange(); return show('screen-map'); } // Spezial-/Ausweich-/Combo-Fortschritt sichern
+  removeSpawn(spawn);
+  let ups = [], msg = '';
+  if (won) {
+    const r = registerCatch(spawn);
+    const bonus = CONST.WILD_WIN_SATS[spawn.rarity] || 0;
+    save.sats += bonus;
+    msg = `${RUETHER_BY_ID[spawn.ruetherId].name} gefangen: +${fmt(r.sats + bonus)} Sats${r.newDex ? ', neu im Dex!' : ''}`;
+    gainXp(CONST.XP_WILD_WIN);
+    ups = levelUpUids(save, [uids[activeIndex] ?? uids[0]]);
+  }
+  afterChange();
+  if (msg) toast(msg, { kind: 'sats' });
+  levelUpToast(ups);
+  show('screen-map');
 }
 const arenaScreen = createArenaScreen({ el: $('#screen-arena'), bosses: BOSSES, onBack() { show('screen-map'); }, onFight: startBattle });
 const battleScreen = createBattleScreen({
@@ -373,16 +459,22 @@ const battleScreen = createBattleScreen({
     if (e.type === 'dodge') { save.stats.dodges = (save.stats.dodges || 0) + 1; trackQuest(save, 'dodge'); }
     if (e.type === 'combo') { if (e.value > (save.stats.maxCombo || 0)) save.stats.maxCombo = e.value; if (e.value >= 8) trackQuest(save, 'combo8'); }
   },
-  onEnd({ won, retry }) {
-    if (retry) return startBattle(currentArena);
+  onEnd(res) {
+    const f = fight;
+    fight = null;
+    if (f.spawn) return endWild(f, res);
+    const { won, retry } = res, arena = f.arena;
+    if (retry) return startBattle(arena);
     if (won) {
-      const w = arenaWin(save, currentArena.id, save.team[0]);
+      const w = arenaWin(save, arena.id, save.team[0]);
       gainXp(CONST.XP_ARENA * w.level);
       trackQuest(save, 'arenaWin');
+      const ups = levelUpUids(save, f.uids);
       const leader = leaderInfo();
-      online.syncNow().then(() => online.claimArena(currentArena.id, w.level, leader)).then(() => updateHud());
-      if (w.mastered) online.postEvent('achievement', `hat ${currentArena.name} gemeistert!`);
+      online.syncNow().then(() => online.claimArena(arena.id, w.level, leader)).then(() => updateHud());
+      if (w.mastered) online.postEvent('achievement', `hat ${arena.name} gemeistert!`);
       afterChange();
+      levelUpToast(ups);
       if (ARENAS.every(a => save.arenaMastered[a.id]) && !save.victoryShown) { save.victoryShown = true; persist(); return show('screen-victory'); }
     } else {
       afterChange();
@@ -391,6 +483,16 @@ const battleScreen = createBattleScreen({
   },
 });
 createVictoryScreen({ el: $('#screen-victory'), onBack() { show('screen-map'); } });
+// Sieg-Screen: Gesicht des Team-Anführers mit Krone und einem Spruch (Spec §0.4)
+function showVictoryFace() {
+  const l = instById(save.team[0]) || save.box[0];
+  if (!l) return;
+  const face = $('.victory-face'), name = RUETHER_BY_ID[l.id].name;
+  face.src = `sprites/${l.id}.png`;
+  face.alt = name;
+  face.parentElement.className = `frame r-${l.rarity}`;
+  $('#screen-victory .say').textContent = `${name}: „${pickLine(l.id, 'appear')}“`;
+}
 
 // ---------- Onboarding ----------
 const onboarding = createOnboarding({
@@ -440,7 +542,7 @@ debug.querySelectorAll('[data-beam]').forEach(b => b.addEventListener('click', (
   const p = offsetPoint(a, 40, 0);
   locator.setFake(p); map.follow(p); refreshSpawns(); refreshStops(true); toast(`Gebeamt: ${a.name}`);
 }));
-$('#dbg-gps').addEventListener('click', () => { locator.clearFake(); if (!locator.current) { pos = null; lastSpawnPos = null; map.setSpawns(spawns = []); } toast('GPS wieder an'); });
+$('#dbg-gps').addEventListener('click', () => { locator.clearFake(); if (!locator.current) { pos = null; lastSpawnPos = null; map.setSpawns(spawns = []); map.setReach(null); } toast('GPS wieder an'); });
 $('#dbg-respawn').addEventListener('click', () => { spawns = []; refreshSpawns(); toast('Spawns neu'); });
 $('#dbg-stops').addEventListener('click', () => { if (!pos) return toast('Keine Ortung.'); stopSeq++; stops = fakeStops(pos, Math.random); renderStops(); toast('3 Fake-Stops'); });
 $('#dbg-catchall').addEventListener('click', () => { for (const r of RUETHERS) if (!save.box.some(i => i.id === r.id)) catchReward(save, r.id, 'normal', Date.now()); afterChange(); toast('Alle gefangen'); });
@@ -455,6 +557,7 @@ $('#dbg-close').addEventListener('click', () => debug.classList.add('hidden'));
 sfx.setEnabled(save.settings.sound !== false);
 setHapticsEnabled(save.settings.haptics !== false);
 updateHud();
+ticker.refresh();
 setTimeout(() => {
   $('#splash').classList.add('gone');
   setTimeout(() => $('#splash').remove(), 400);

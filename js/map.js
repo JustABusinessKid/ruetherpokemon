@@ -1,5 +1,8 @@
 /* global L */
 // Leaflet-Adapter mit Folgen-Modus, Seltenheits-Markern, Arena-Leveln, Dosenbier-Stops und Namensschild des globalen Besitzers.
+// v6: Reichweitenkreis um den Spieler, Spawn-Marker in Reichweite „near" (hüpfen), außerhalb „far" (blass).
+import { CONST } from './data.js';
+import { distance } from './geo.js';
 
 const HAGEN = [51.36, 7.47];
 const esc = s => String(s).replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
@@ -11,9 +14,9 @@ const PX = { O: '#1E2A22', W: '#C9CED1', L: '#F4E8C8', G: '#F2C94C', B: '#5A3A1E
 const swordSvg = `<svg class="sign" viewBox="-2 0 16 16" shape-rendering="crispEdges">${SWORD.flatMap((row, y) =>
   [...row].map((c, x) => (PX[c] ? `<rect x="${x}" y="${y}" width="1" height="1" fill="${PX[c]}"/>` : ''))).join('')}</svg>`;
 
-function spriteIcon(id, rarity = 'normal') {
+function spriteIcon(id, rarity = 'normal', reach = '') {
   const star = rarity === 'legendaer' ? '<img class="star" src="art/icon-star.png" alt="">' : '';
-  return L.divIcon({ className: `spawn-icon r-${rarity}`, html: `<img class="face" src="sprites/${id}.png" alt="">${star}`, iconSize: [48, 48], iconAnchor: [24, 24] });
+  return L.divIcon({ className: `spawn-icon r-${rarity} ${reach}`, html: `<img class="face" src="sprites/${id}.png" alt="">${star}`, iconSize: [48, 48], iconAnchor: [24, 24] });
 }
 function arenaIcon({ level = 1, mastered = false, ownerId = null, globalOwner = null } = {}) {
   const badge = `<span class="lvl">${mastered ? '<img src="art/icon-star.png" alt="">Max' : 'Lv.' + level}</span>`;
@@ -31,8 +34,11 @@ export function createMap({ el, arenas, onSpawnTap, onArenaTap, onStopTap, onFol
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
   const pulse = L.marker(HAGEN, { icon: L.divIcon({ className: 'player-pulse', iconSize: [48, 48], iconAnchor: [24, 24] }), interactive: false });
   const player = L.marker(HAGEN, { icon: L.divIcon({ className: 'player-dot px-circle', iconSize: [16, 16], iconAnchor: [8, 8] }), interactive: false });
+  const reachCircle = L.circle(HAGEN, { radius: CONST.CATCH_RANGE, className: 'reach-circle', weight: 2, dashArray: '6 6', fillOpacity: 0.06, interactive: false });
   const stopLayer = L.layerGroup().addTo(map);
   const spawnLayer = L.layerGroup().addTo(map);
+  let spawnMarkers = [], reachPos = null;
+  const reachOf = s => (!reachPos ? '' : distance(reachPos, s) < CONST.CATCH_RANGE ? 'near' : 'far');
   const arenaMarkers = {};
   for (const a of arenas) {
     arenaMarkers[a.id] = L.marker([a.lat, a.lon], { icon: arenaIcon() }).addTo(map).on('click', () => onArenaTap(a));
@@ -55,8 +61,16 @@ export function createMap({ el, arenas, onSpawnTap, onArenaTap, onStopTap, onFol
     },
     setSpawns(spawns) {
       spawnLayer.clearLayers();
-      for (const s of spawns) {
-        L.marker([s.lat, s.lon], { icon: spriteIcon(s.ruetherId, s.rarity), zIndexOffset: 1000 }).addTo(spawnLayer).on('click', () => onSpawnTap(s));
+      spawnMarkers = spawns.map(s => ({ s, m: L.marker([s.lat, s.lon], { icon: spriteIcon(s.ruetherId, s.rarity, reachOf(s)), zIndexOffset: 1000 }).addTo(spawnLayer).on('click', () => onSpawnTap(s)) }));
+    },
+    // pos = Spielerposition oder null (keine Ortung: Kreis weg, Marker neutral)
+    setReach(pos) {
+      reachPos = pos;
+      if (pos) reachCircle.setLatLng([pos.lat, pos.lon]).addTo(map); else reachCircle.remove();
+      for (const { s, m } of spawnMarkers) {
+        const el = m.getElement(), r = reachOf(s);
+        el?.classList.toggle('near', r === 'near');
+        el?.classList.toggle('far', r === 'far');
       }
     },
     // readyFn(stop) -> bool: false = in Abkühlung (grau)

@@ -1,21 +1,29 @@
-import { CONST, RARITY_BY_ID } from './data.js';
+import { CONST, RARITY_BY_ID, pickLine } from './data.js';
 import { ringBonus, landing, isHit, rollCatch, isFlick } from './catch-logic.js';
 import { catchChanceV3 } from './progress.js';
 import { sfx, haptic } from './audio.js';
-import { playSheet, confetti } from './fx.js';
+import { playSheet, confetti, say as bubble, btcRain, spinCoin } from './fx.js';
+import { isNarration } from './format.js';
 
-const FLY_MS = 700, ARC = 120, GROUND = 60, REWARD_MS = 1800;
+const FLY_MS = 700, ARC = 120, GROUND = 60, REWARD_MS = 2800, COIN = 112;
 const CONFETTI = ['#F2C94C', '#E0A52B', '#F4E8C8', '#F2C94C']; // Gold, Bernstein, Creme
 const ICO = n => `<img class="ico" src="art/icon-${n}.png" alt="">`;
 const rand = (a, b) => a + Math.random() * (b - a);
 const fmt = n => n.toLocaleString('de-DE');
+// Schwert als Pixelgrafik (wie die freien Arenen in js/map.js): O = Ink, W = Klinge, L = Licht, G = Messing, B = Griff
+const SWORD = ['....OO......', '...OWLO.....', '...OWLO.....', '...OWLO.....', '...OWLO.....', '...OWLO.....', '...OWLO.....', '...OWLO.....',
+  'OOOOOOOOOO..', 'OGGGGGGGGO..', 'OOOOOOOOOO..', '...OBBO.....', '...OBBO.....', '...OBBO.....', '...OGGO.....', '...OOOO.....'];
+const PX = { O: '#1E2A22', W: '#C9CED1', L: '#F4E8C8', G: '#F2C94C', B: '#5A3A1E' };
+const SWORD_SVG = `<svg class="sword" viewBox="-2 0 16 16" shape-rendering="crispEdges" aria-hidden="true">${SWORD.flatMap((row, y) =>
+  [...row].map((c, x) => (PX[c] ? `<rect x="${x}" y="${y}" width="1" height="1" fill="${PX[c]}"/>` : ''))).join('')}</svg>`;
 
 // el = section#screen-catch.
 // onDone({ spawn, caught }) genau einmal; onCancel() beim Zurück-Knopf .back (nur in idle);
 // onCaught({ spawn, usedSuperCoin }) -> { sats, newDex } synchron im Moment „Gefangen!";
 // onSuperCoinUsed() -> Restanzahl, beim Treffer mit aktiver Super-Münze (auch wenn der Rüther ausbricht);
-// onThrow({ hit, label }) nach jeder Trefferprüfung (label 'Super!' | 'Gut!' | '', bei Fehlwurf/Abwehr hit false).
-export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinUsed, onThrow }) {
+// onThrow({ hit, label }) nach jeder Trefferprüfung (label 'Super!' | 'Gut!' | '', bei Fehlwurf/Abwehr hit false);
+// onFight({ spawn }) beim Knopf „Kämpfen" (nur in idle, nur mit Team). Der Fang-Screen ist danach beendet, onDone kommt nicht.
+export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinUsed, onThrow, onFight }) {
   const stage = el.querySelector('.catch-stage');
   const target = el.querySelector('.target');
   const sprite = target.querySelector('.sprite');
@@ -30,9 +38,14 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
   const title = el.querySelector('.title');
   const desc = el.querySelector('.desc');
   const throwsEl = el.querySelector('.throws');
+  const fight = document.createElement('div');
+  fight.className = 'catch-fight';
+  fight.innerHTML = `<span class="fight-hint"></span><button class="fight-btn">${SWORD_SVG}Kämpfen</button>`;
+  stage.appendChild(fight);
+  const fightBtn = fight.querySelector('.fight-btn');
 
   let spawn = null, def = null, rng = Math.random, left = 0;
-  let rarity = 'normal', superCoins = 0, superActive = false;
+  let rarity = 'normal', superCoins = 0, superActive = false, canFight = false;
   let state = 'done'; // idle | drag | flying | seq | done
   let drag = null;
   let sparkle = null; // Funkel-Loop über der Super-Münze, folgt ihr über setCoin
@@ -54,11 +67,17 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
   // Das Funkeln springt mit setCoin sofort, die Münze gleitet/fällt per CSS: solange ausblenden, resetCoin zeigt es wieder
   const sparkleVisible = on => { if (sparkle) sparkle.el.style.visibility = on ? '' : 'hidden'; };
   function resetCoin() { coin.className = superActive ? 'coin super' : 'coin'; setCoin(0, 0); sparkleVisible(true); }
-  function spriteAnim(cls) { sprite.classList.remove('hop', 'suck', 'pop', 'flee'); if (cls) sprite.classList.add(cls); }
-  function say(text) {
+  function spriteAnim(cls) { sprite.classList.remove('hop', 'suck', 'pop'); if (cls) sprite.classList.add(cls); }
+  // Spruch als Sprechblase über dem Rüther; hängt in .target und läuft so mit ihm mit
+  const talk = (kind, ms = 2600, t = pickLine(def.id, kind)) => {
+    if (!t) return;
+    target.querySelectorAll('.fx-say').forEach(n => n.remove()); // nie zwei Blasen übereinander
+    bubble(target, t, { x: '22%', y: '-4%', ms });
+  };
+  function say(text, ms = 1200, cls = '') {
     clearTimeout(msgTimer); timers.delete(msgTimer);
-    msg.textContent = text; msg.classList.add('show');
-    msgTimer = after(1200, () => msg.classList.remove('show'));
+    msg.className = `catch-msg show ${cls}`.trim(); msg.textContent = text;
+    msgTimer = after(ms, () => msg.classList.remove('show'));
   }
   function renderThrows() { throwsEl.textContent = `Ausbrüche übrig: ${left}`; }
   function renderSuper() {
@@ -161,18 +180,24 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
   coin.addEventListener('pointercancel', release);
 
   // rest = Münzmitte in Ruhe (Client-Koordinaten); Flug als Parabel per rAF
+  // Im Flug ersetzt eine drehende Bitcoin-Münze (sheet-btc-spin) das Münzbild und folgt der Parabel.
   function fly(rest, start, land) {
     setState('flying');
     msg.textContent = '';
     coin.classList.add('fly');
     sfx.play('throw');
+    const spin = spinCoin(fx, { ...local(start), size: COIN });
     const t0 = performance.now();
     const step = now => {
       const t = Math.min(1, (now - t0) / FLY_MS);
       const px = start.x + (land.x - start.x) * t;
       const py = start.y + (land.y - start.y) * t - ARC * Math.sin(Math.PI * t);
       setCoin(px - rest.x, py - rest.y, 720 * t, 1 - 0.5 * t);
+      const q = local({ x: px, y: py });
+      spin.el.style.setProperty('--x', `${q.x}px`); spin.el.style.setProperty('--y', `${q.y}px`);
+      spin.el.style.setProperty('--size', `${Math.round(COIN * (1 - 0.5 * t))}px`);
       if (t < 1) { raf = requestAnimationFrame(step); return; }
+      spin.stop();
       coin.classList.remove('fly');
       setCoin(land.x - rest.x, land.y - rest.y, 0, 0.5);
       resolve(rest, land);
@@ -188,7 +213,7 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
       return;
     }
     if (target.classList.contains('angry')) { // abgewehrt: prallt zurück
-      coin.classList.add('return'); setCoin(0, 0, -360, 1); sparkleVisible(false); say('Abgewehrt!');
+      coin.classList.add('return'); setCoin(0, 0, -360, 1); sparkleVisible(false); say('Abgewehrt!'); talk('fight', 1800);
       onThrow?.({ hit: false, label: '' });
       after(400, idle);
       return;
@@ -196,11 +221,11 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
     hitSequence(rest, land);
   }
 
-  // ---- Burst: Einschlag + Münzregen, Legendär mit Gold-Konfetti und Schriftzug ----
+  // ---- Burst: Bitcoin-Einschlag + ₿-Regen, Legendär mit Gold-Konfetti und Schriftzug ----
   function burst() {
     const c = local(center(coin.getBoundingClientRect()));
-    playSheet(fx, 'impact', { x: c.x, y: c.y, size: 256 });
-    playSheet(fx, 'coins', { x: c.x, y: c.y - 56, size: 192, ms: 1600, delay: 150 });
+    playSheet(fx, 'btcburst', { x: c.x, y: c.y, size: 256 });
+    btcRain(fx, { n: 20 });
     if (rarity !== 'legendaer') return;
     const s = stage.getBoundingClientRect();
     place('legend', 'LEGENDÄR!', { x: s.left + s.width / 2, y: s.top + s.height * 0.14 }); // über dem Sprite, Belohnung kommt darunter
@@ -215,12 +240,15 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
     sfx.play('coin');
     onThrow?.({ hit: true, label });
     const sc = center(sprite.getBoundingClientRect());
+    const lp = local(land);
+    playSheet(fx, 'btcburst', { x: lp.x, y: lp.y, size: 160 });
     if (label) {
       const r = place('rating', label, { x: sc.x, y: sc.y - 100 });
       after(1000, () => r.remove());
     }
     sprite.style.setProperty('--sx', `${land.x - sc.x}px`);
     sprite.style.setProperty('--sy', `${land.y - sc.y}px`);
+    target.querySelectorAll('.fx-say').forEach(n => n.remove()); // die Blase schwebt nicht weiter, wenn er in der Münze steckt
     spriteAnim('suck');
     await wait(400);
 
@@ -250,7 +278,9 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
       sfx.play('catch'); haptic([20, 30, 60]);
       const r = onCaught?.({ spawn, usedSuperCoin });
       if (r) {
-        reward.innerHTML = `<div class="amount">${ICO('coin')}+${fmt(r.sats)} <small>Sats</small></div>${r.newDex ? `<div class="newdex">${ICO('star')}Neu im Rütherdex!</div>` : ''}`;
+        reward.innerHTML = `<div class="amount"><span class="spin-slot"></span>+${fmt(r.sats)} <small>Sats</small></div>${r.newDex ? `<div class="newdex">${ICO('star')}Neu im Rütherdex!</div>` : ''}<div class="line"><img class="face" src="sprites/${def.id}.png" alt=""><q></q></div>`;
+        reward.querySelector('q').textContent = pickLine(def.id, 'caught');
+        spinCoin(reward.querySelector('.spin-slot'), { x: '50%', y: '50%', size: 40 });
         reward.classList.remove('hidden');
       }
       await wait(REWARD_MS);
@@ -267,15 +297,23 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
     left -= 1; renderThrows();
     await wait(400);
     if (left <= 0) {
-      spriteAnim('flee');
-      say(`${def.name} ist abgehauen.`);
-      await wait(1000);
+      target.classList.add('flee'); // ganzes Ziel rennt weg, die Sprechblase in .target läuft mit
+      const line = pickLine(def.id, 'flee');
+      if (line && isNarration(line, def.name)) say(line, 2200, 'narr'); // „Viktor ist zur Börse gelaufen." erzählt der Streifen, keine Blase
+      else { say('Abgehauen!'); talk('flee', 2400, line); }
+      await wait(2200);
       finish(false);
       return;
     }
     await wait(600);
     idle(); // Effekte räumen sich selbst ab (fx.js), der Rauch darf auslaufen
   }
+
+  fightBtn.addEventListener('click', () => {
+    if (state !== 'idle' || !canFight) return;
+    clearAll(); setState('done');
+    onFight?.({ spawn });
+  });
 
   el.querySelector('.back').addEventListener('click', () => {
     if (state !== 'idle') return;
@@ -284,7 +322,7 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
   });
 
   return {
-    start(s, d, { rng: r = Math.random, rarity: ra = 'normal', superCoins: sc = 0 } = {}) {
+    start(s, d, { rng: r = Math.random, rarity: ra = 'normal', superCoins: sc = 0, canFight: cf = false, fightHint = 'Fang erst einen per Münze' } = {}) {
       clearAll();
       spawn = s; def = d; rng = r; left = CONST.BREAKOUTS; drag = null;
       rarity = RARITY_BY_ID[ra] ? ra : 'normal'; superCoins = sc; superActive = false;
@@ -297,9 +335,12 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
       reward.classList.add('hidden'); reward.innerHTML = '';
       name.textContent = d.name; title.textContent = d.title; desc.textContent = d.desc;
       renderThrows(); renderSuper();
+      canFight = cf; fightBtn.disabled = !cf; fight.classList.toggle('locked', !cf);
+      fight.querySelector('.fight-hint').textContent = fightHint;
       msg.classList.remove('show');
       fx.replaceChildren();
       idle();
+      talk('appear', 3200);
       scheduleHop();
       scheduleAngry();
     },

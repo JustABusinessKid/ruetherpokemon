@@ -169,3 +169,91 @@ test('v4: Fusion verbraucht die drei niedrigsten, Ergebnis nächste Seltenheit m
   s.box.push({ uid: 'x', id: 'micha', rarity: 'legendaer', level: 1 }, { uid: 'y', id: 'micha', rarity: 'legendaer', level: 1 }, { uid: 'z', id: 'micha', rarity: 'legendaer', level: 1 });
   assert.equal(canFuse(s, 'micha', 'legendaer'), false);
 });
+
+import { sellValue, pickFood, feed, sell, sellDuplicates, levelUpUids } from '../js/progress.js';
+
+const I = (uid, id, rarity, level = 1) => ({ uid, id, rarity, level, caughtAt: 0 });
+
+test('v6: sellValue = 2 × Fang-Sats', () => {
+  assert.deepEqual(['normal', 'selten', 'episch', 'legendaer'].map(sellValue), [20, 60, 160, 400]);
+});
+
+test('v6: pickFood nimmt das schwächste passende Duplikat', () => {
+  const s = emptySaveV3();
+  s.box.push(
+    I('t', 'christian', 'selten', 3),
+    I('a', 'christian', 'selten', 1),
+    I('b', 'christian', 'normal', 5),
+    I('c', 'christian', 'normal', 2),
+    I('d', 'christian', 'episch', 1), // höhere Seltenheit
+    I('e', 'viktor', 'normal', 1),    // anderer Rüther
+    I('f', 'christian', 'normal', 1), // im Team
+  );
+  s.team = ['t', 'f'];
+  assert.equal(pickFood(s, 't'), 'c');
+  s.box = s.box.filter(i => i.uid !== 'c' && i.uid !== 'b');
+  assert.equal(pickFood(s, 't'), 'a');
+  assert.equal(pickFood(s, 'e'), null);
+  assert.equal(pickFood(s, 'nope'), null);
+});
+
+test('v6: feed gibt +2 Level, Kappe 20, Schutzregeln', () => {
+  const s = emptySaveV3();
+  s.box.push(I('t', 'christian', 'selten', 3), I('a', 'christian', 'normal'), I('b', 'christian', 'episch'),
+    I('c', 'viktor', 'normal'), I('f', 'christian', 'normal'), I('g', 'christian', 'normal'));
+  s.team = ['t', 'f'];
+  assert.deepEqual(feed(s, 't', 'a'), { ok: true, level: 5 });
+  assert.equal(s.box.some(i => i.uid === 'a'), false);
+  assert.equal(feed(s, 't', 'nope').reason, 'unbekannt');
+  assert.equal(feed(s, 'nope', 'g').reason, 'unbekannt');
+  assert.equal(feed(s, 't', 'f').reason, 'team');
+  assert.equal(feed(s, 't', 'b').reason, 'falsch'); // höhere Seltenheit
+  assert.equal(feed(s, 't', 'c').reason, 'falsch'); // anderer Rüther
+  assert.equal(feed(s, 't', 't').reason, 'falsch');
+  s.box.find(i => i.uid === 't').level = 19;
+  assert.deepEqual(feed(s, 't', 'g'), { ok: true, level: 20 });
+  s.box.push(I('h', 'christian', 'normal'));
+  assert.equal(feed(s, 't', 'h').reason, 'max');
+  assert.equal(s.box.some(i => i.uid === 'h'), true);
+});
+
+test('v6: sell schützt Team und letztes Exemplar einer Seltenheit', () => {
+  const s = emptySaveV3();
+  s.box.push(I('a', 'christian', 'normal'), I('b', 'christian', 'normal'), I('c', 'christian', 'episch'), I('d', 'christian', 'normal'));
+  s.team = ['d'];
+  assert.deepEqual(sell(s, 'a'), { ok: true, sats: 20 });
+  assert.equal(s.sats, 20);
+  assert.deepEqual(s.box.map(i => i.uid), ['b', 'c', 'd']);
+  assert.equal(sell(s, 'd').reason, 'team');
+  assert.equal(sell(s, 'c').reason, 'letztes');
+  assert.equal(sell(s, 'nope').reason, 'unbekannt');
+  assert.deepEqual(sell(s, 'b'), { ok: true, sats: 20 }); // d (Team) bleibt als Normal übrig
+  assert.equal(sell(s, 'd').ok, false);
+  assert.equal(s.sats, 40);
+});
+
+test('v6: sellDuplicates behält Team und bestes je Seltenheit', () => {
+  const s = emptySaveV3();
+  s.box.push(
+    I('n1', 'christian', 'normal', 2), I('n2', 'christian', 'normal', 7), I('n3', 'christian', 'normal', 1),
+    I('n4', 'christian', 'normal', 1), I('s1', 'christian', 'selten', 1), I('s2', 'christian', 'selten', 4),
+    I('e1', 'christian', 'episch', 1), I('v1', 'viktor', 'normal', 1), I('v2', 'viktor', 'normal', 1),
+  );
+  s.team = ['n4', 'v1'];
+  s.sats = 5;
+  assert.deepEqual(sellDuplicates(s, 'christian'), { count: 3, sats: 100 }); // n1, n3 (je 20), s1 (60)
+  assert.deepEqual(s.box.map(i => i.uid), ['n2', 'n4', 's2', 'e1', 'v1', 'v2']);
+  assert.equal(s.sats, 105);
+  assert.deepEqual(sellDuplicates(s, 'christian'), { count: 0, sats: 0 });
+  // Gleichstand: das Teammitglied gilt als bestes, das andere geht weg
+  assert.deepEqual(sellDuplicates(s, 'viktor'), { count: 1, sats: 20 });
+  assert.deepEqual(s.box.filter(i => i.id === 'viktor').map(i => i.uid), ['v1']);
+});
+
+test('v6: levelUpUids +1, Kappe 20, nur geänderte', () => {
+  const s = emptySaveV3();
+  s.box.push(I('a', 'christian', 'normal', 3), I('b', 'viktor', 'normal', 20), I('c', 'micha', 'normal', 19));
+  assert.deepEqual(levelUpUids(s, ['a', 'b', 'nope', undefined, 'a']), [{ uid: 'a', level: 4 }]);
+  assert.deepEqual(levelUpUids(s, ['c'], 5), [{ uid: 'c', level: 20 }]);
+  assert.deepEqual(levelUpUids(s, []), []);
+});

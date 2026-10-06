@@ -37,6 +37,7 @@ test('Spezial: ohne Energie verweigert, mit 100 Energie 40 Schaden', () => {
   ev = tick(s, 16, { special: 0 });
   const sp = find(ev, 'special');
   assert.equal(sp.attack.name, 'Plus 70 Prozent');
+  assert.equal(sp.fighter, s.team[0]); // Angreifer fürs Banner, auch wenn im selben Schritt ein KO-Wechsel folgt
   assert.equal(sp.damage, 40);
   assert.equal(s.enemy.btc, 220);
   assert.equal(s.team[0].energy, 0);

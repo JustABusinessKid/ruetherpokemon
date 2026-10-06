@@ -17,6 +17,7 @@
 #screen-battle[data-arena="worringen"] { --arena-bg: url(../art/bg-worringen.png); }
 #screen-battle[data-arena="huettenberg"] { --arena-bg: url(../art/bg-huettenberg.png); }
 #screen-battle[data-arena="pcsale"] { --arena-bg: url(../art/bg-pcsale.png); }
+#screen-battle[data-arena="wild"] { --arena-bg: url(../art/bg-catch.png); } /* Wildkampf: Fang-Kulisse */
 
 /* Warn-Blinken vor Boss-Angriffen: gelb = schnell, rot = Lade-Attacke */
 #screen-battle .flash { position: absolute; inset: 0; z-index: 5; pointer-events: none; opacity: 0; }
@@ -38,7 +39,12 @@
 #screen-battle .fname.rage::before { content: 'WUT'; display: inline-block; margin-right: 6px; padding: 0 4px; font: 800 12px/15px var(--font-body); vertical-align: 2px; color: var(--paper); background: var(--red); border: 2px solid var(--ink); }
 #screen-battle .bar { margin: 3px 0; }
 /* unter 16 px Nunito statt Pixelify (dort lesen sich 420/440 BTC wie 480/440 GTC) */
-#screen-battle .btc { font: 800 12px/1.3 var(--font-body); font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+#screen-battle .btc { display: flex; align-items: center; gap: 3px; min-width: 0; overflow: hidden; white-space: nowrap; font: 800 12px/1.3 var(--font-body); font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+#screen-battle .btc .sep { margin: 0 2px; }
+/* Mining-Leiste (früher „Energie"): Icon, Label, Balken, Wert */
+#screen-battle .fighter.me .mining { display: flex; align-items: center; gap: 4px; font: 800 12px/1 var(--font-body); color: var(--ink-soft); }
+#screen-battle .fighter.me .mining .bar { flex: 1; min-width: 0; }
+#screen-battle .fighter.me .mining b { min-width: 22px; text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
 #screen-battle .status { min-height: 14px; font: 800 12px/14px var(--font-body); color: var(--red); text-transform: uppercase; }
 
 /* Aufgeben und Timer */
@@ -104,6 +110,18 @@
 #screen-battle .stage.rage .enemy-sprite { filter: sepia(1) saturate(5) hue-rotate(-40deg) brightness(.95); }
 /* Treffer-Blitz: 2 Frames reines Weiß (JS nimmt .hit nach 70 ms wieder ab), schlägt Gift- und Wut-Tönung */
 #screen-battle .stage .enemy-sprite.hit { filter: brightness(0) invert(1); }
+/* Echte Gesichter (Wildkampf, Intro, Overlay) im Pixel-Rahmen in Seltenheitsfarbe */
+#screen-battle .face { --rc: var(--r-normal); background: var(--paper-2); border: 6px solid var(--rc); outline: 3px solid var(--ink); box-shadow: 8px 8px 0 3px rgba(30, 42, 34, .55); image-rendering: pixelated; }
+#screen-battle .face.r-selten { --rc: var(--r-selten); }
+#screen-battle .face.r-episch { --rc: var(--r-episch); }
+#screen-battle .face.r-legendaer { --rc: var(--r-legendaer); }
+#screen-battle .enemy-sprite.face { width: min(176px, 52%); max-height: none; }
+/* Rempler des wilden Rüthers: springt nach vorn auf den Spieler zu */
+#screen-battle .enemy-sprite.lunge { animation: bt-lunge .45s steps(4); }
+@keyframes bt-lunge { 45% { translate: -36px 56px; scale: 1.15; rotate: -8deg; } }
+/* Plus 70 Prozent: Mondnacht blendet hinter dem Boss ein (liegt in .bg) */
+#screen-battle .stage .bg .moon { position: absolute; inset: 0; background: url(../art/bg-moon.png) center / cover no-repeat; image-rendering: pixelated; animation: bt-moon 2.6s steps(6) both; }
+@keyframes bt-moon { 0% { opacity: 0; } 18%, 82% { opacity: 1; } 100% { opacity: 0; } }
 
 /* Combo-Zähler über dem Boss, ab ×10 blinkend mit Sternen */
 #screen-battle .combo { position: absolute; left: 50%; top: 8px; z-index: 3; translate: -50% 0; font: 700 34px/1 var(--font-pixel); color: var(--gold); text-shadow: var(--bt-outline); pointer-events: none; }
@@ -117,8 +135,16 @@
 #screen-battle .combo.hot::after { right: -30px; animation-delay: .2s; }
 @keyframes bt-twinkle { 50% { opacity: 0; } }
 
-/* Familientreffen: fx-family (Pfad helpers) liegt in .helpers, die ganze Ebene hüpft bei jedem Schlag */
+/* Familientreffen: die echten Sprites von Christian und Micha rennen neben den eigenen Rüther, die Ebene hüpft bei jedem Schlag */
 #screen-battle .helpers { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+#screen-battle .helpers .helper {
+  position: absolute; left: calc(var(--fx-me-x) + 6% + var(--i, 0) * 84px); top: calc(var(--fx-me-y) - 48px);
+  width: 72px; height: 72px; image-rendering: pixelated;
+  background: var(--paper-2); border: 3px solid var(--paper); outline: 2px solid var(--ink); box-shadow: 4px 4px 0 2px var(--ink);
+  animation: bt-run-in .6s steps(6) both; animation-delay: calc(var(--i, 0) * 150ms);
+}
+@keyframes bt-run-in { 0% { translate: -260px 0; } 50% { translate: -60px -10px; } 70% { translate: -30px 0; } }
+#screen-battle .helpers.arrive { z-index: 4; } /* im Freeze des Familientreffens über dem Banner-Dimmer (.fx 3) */
 #screen-battle .helpers.hop { animation: bt-hop .3s steps(3); }
 @keyframes bt-hop { 50% { translate: 0 -12px; } }
 
@@ -152,7 +178,21 @@
 }
 @keyframes bt-mms { 80% { opacity: 1; } to { translate: var(--dx) var(--dy); opacity: 0; } }
 /* Sprechblase (bubble-at-me): Text im Blasenkörper von art/fx-speech.png */
-#screen-battle .fx-prop .bubble-text { top: 9%; bottom: 30%; left: 12%; right: 12%; line-height: 1.2; }
+#screen-battle .fx-prop .bubble-text { top: 9%; bottom: 30%; left: 12%; right: 12%; font-size: 15px; line-height: 1.2; }
+/* Familientreffen gegen dich: Christian und Micha rennen von rechts herein, kloppen, rennen wieder raus */
+#screen-battle .fx .rush img {
+  position: absolute; left: 110%; top: calc(var(--fx-me-y) - 52px); width: 64px; height: 64px; image-rendering: pixelated;
+  background: var(--paper-2); border: 3px solid var(--paper); outline: 2px solid var(--ink); box-shadow: 3px 3px 0 2px var(--ink);
+  animation: bt-rush 1.6s steps(16) both; animation-delay: calc(var(--i, 0) * 120ms);
+}
+@keyframes bt-rush {
+  0% { left: 110%; }
+  42% { left: calc(var(--fx-me-x) + 6% + var(--i, 0) * 60px); translate: 0 0; }
+  50% { translate: -10px -12px; }
+  58% { translate: 0 0; }
+  80% { left: calc(var(--fx-me-x) + 6% + var(--i, 0) * 60px); opacity: 1; }
+  100% { left: 110%; opacity: 0; }
+}
 /* Firmware-Update (bar-on-me): Beschriftung über dem Requisit, den Balken zeichnet theme.css */
 #screen-battle .fx-prop .fw-label { top: auto; right: auto; bottom: 100%; left: 50%; translate: -50% 0; padding: 2px 6px; white-space: nowrap; font: 800 12px/1.15 var(--font-body); color: var(--paper); background: var(--ink); }
 
@@ -205,6 +245,14 @@
 @keyframes bt-vs { 0% { scale: 3; opacity: 0; } 60% { scale: .85; opacity: 1; } 100% { scale: 1; opacity: 1; } }
 #screen-battle .intro-names { font: 700 14px/1.2 var(--font-pixel); text-align: center; color: var(--paper); text-shadow: 2px 2px 0 var(--ink); animation: bt-fade-in .4s steps(2) .5s both; }
 #screen-battle .intro-boss-name { grid-column: 3; }
+#screen-battle .intro-boss.face { width: 112px; height: 112px; border-width: 5px; }
+/* Spruch im Intro (appear): Papier-Sprechzettel */
+#screen-battle .intro-line {
+  max-width: 320px; margin: 4px 0 0; padding: 6px 12px; text-align: center;
+  font: 800 14px/1.3 var(--font-body); color: var(--ink);
+  background: var(--paper); border: 3px solid var(--ink); box-shadow: 4px 4px 0 var(--ink);
+  animation: bt-fade-in .4s steps(2) .7s both;
+}
 #screen-battle .countdown { min-height: 80px; margin-top: 10px; font: 700 64px/80px var(--font-pixel); color: var(--paper); text-shadow: var(--bt-outline-lg); }
 #screen-battle .countdown.pop { animation: bt-pop .45s steps(4); }
 @keyframes bt-pop { 0% { scale: 2.4; opacity: 0; } 50% { scale: .9; opacity: 1; } 100% { scale: 1; } }
@@ -222,6 +270,7 @@
   animation: bt-fade-in .4s steps(4);
 }
 #screen-battle .overlay .confetti { position: absolute; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; }
+#screen-battle .overlay > :not(.confetti) { position: relative; z-index: 2; } /* ₿-Regen und Konfetti fallen hinter Text und Knöpfen */
 #screen-battle .overlay .boss { width: 128px; height: 128px; image-rendering: pixelated; }
 #screen-battle .overlay .boss.fall { animation: bt-fall 1.2s steps(8) forwards; }
 @keyframes bt-fall { 70% { rotate: 90deg; translate: 32px 32px; opacity: .6; } 100% { rotate: 90deg; translate: 32px 56px; opacity: 0; } }
@@ -239,6 +288,9 @@
 @keyframes bt-sats-in { 0% { scale: .3; opacity: 0; } 100% { scale: 1; opacity: 1; } }
 #screen-battle .overlay .arena-note { margin: 0; min-height: 18px; font: 700 15px/1.2 var(--font-pixel); color: var(--green); animation: bt-fade-in .5s steps(2) 1.4s both; }
 #screen-battle .overlay.lost .boss { filter: grayscale(.6); }
+#screen-battle .overlay .boss.face { width: 112px; height: 112px; border-width: 5px; }
+#screen-battle .overlay.wild:not(.lost) .boss.face { animation: bt-trophy .7s steps(5) .2s both; }
+#screen-battle .overlay.wild .arena-note { font: 800 15px/1.3 var(--font-body); color: var(--ink-soft); }
 #screen-battle .overlay.lost .title { margin: 6px 0; padding: 4px 14px; font-size: 34px; letter-spacing: 3px; text-transform: uppercase; color: var(--red); border: 4px solid var(--red); rotate: -8deg; animation: bt-stamp .35s steps(3) .2s both; }
 @keyframes bt-stamp { from { scale: 2.2; opacity: 0; } }
 #screen-battle .overlay-buttons { position: relative; z-index: 2; display: flex; gap: 10px; margin-top: 10px; }
@@ -249,6 +301,8 @@
   #screen-battle .enemy-sprite { animation: none; }
   #screen-battle .stage[class*="quake"], #screen-battle .stage.rage::after, #screen-battle .timer.low,
   #screen-battle .specials button.ready, #screen-battle .combo.hot, #screen-battle .combo.hot::before, #screen-battle .combo.hot::after,
-  #screen-battle .enemy-sprite.rage-shake, #screen-battle .helpers.hop { animation: none !important; }
+  #screen-battle .enemy-sprite.rage-shake, #screen-battle .helpers.hop, #screen-battle .enemy-sprite.lunge,
+  #screen-battle .helpers .helper, #screen-battle .stage .bg .moon { animation: none !important; }
+  #screen-battle .fx .rush img { animation: none !important; left: calc(var(--fx-me-x) + 6% + var(--i, 0) * 60px); }
   #screen-battle .flash.yellow, #screen-battle .flash.red { animation: none; opacity: .25; }
 }

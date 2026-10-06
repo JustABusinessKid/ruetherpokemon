@@ -54,7 +54,7 @@ function stunEnemy(s, ms, ev) {
 function applySpecial(s, me, atk, ev) {
   const e = s.enemy;
   const dealt = atk.damage > 0 ? hurt(e, atk.damage * me.power) : 0;
-  ev.push({ type: 'special', attack: atk, damage: dealt });
+  ev.push({ type: 'special', attack: atk, damage: dealt, fighter: me });
   if (atk.poison) { poison(e, atk.poison, s.time); ev.push({ type: 'poisoned', target: 'enemy', ms: atk.poison.ms }); }
   if (atk.stun) stunEnemy(s, atk.stun, ev);
   if (atk.weaken) { e.status.weakenedUntil = s.time + atk.weaken; ev.push({ type: 'weaken', ms: atk.weaken }); }

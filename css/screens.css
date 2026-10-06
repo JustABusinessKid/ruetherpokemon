@@ -1,60 +1,85 @@
 /* Sammlung, Fusion, Rütherdex, Shop, Arena-Info (Spec §3). Keyframes heißen sc-* (Namen sind global). */
 
-/* ---------- Sammlung ---------- */
+/* ---------- Sammlung: eine Karte pro Rüther ---------- */
 #screen-collection > .hint, #screen-shop > .hint { margin: 12px 16px; }
-.box { flex: 1; overflow: auto; padding: 0 16px 16px; }
-.box h3 { margin: 16px 0 12px; font: 700 18px/1.2 var(--font-pixel); color: var(--paper); text-shadow: 2px 2px 0 var(--ink); }
-.box .card { position: relative; display: flex; gap: 12px; align-items: center; margin-bottom: 16px; padding: 16px 12px 12px; }
-.card.in-team { box-shadow: 0 0 0 3px var(--amber), 0 0 0 5px var(--ink), var(--shadow); }
-.card .ribbon { position: absolute; top: -8px; left: 12px; z-index: 1; }
-.card .order { position: absolute; top: -8px; right: 12px; z-index: 1; padding: 0 6px; font: 800 12px/18px var(--font-body); font-variant-numeric: tabular-nums; color: var(--ink); background: var(--amber); border: 2px solid var(--ink); box-shadow: var(--shadow-sm); }
-.card .frame { flex: none; }
-.card .frame img { width: 72px; height: 72px; }
-.card .meta { flex: 1; min-width: 0; }
-.card .cname { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; font: 700 18px/1.2 var(--font-pixel); }
-.card .sub { margin: 4px 0 8px; }
-.card .actions { display: flex; gap: 8px; }
-.card .actions button { flex: 1; min-width: 0; min-height: 44px; padding: 4px 6px; gap: 2px; font-size: 14px; white-space: nowrap; }
-.card .actions .ico { width: 20px; height: 20px; }
-/* Power-Up: Rahmen blinkt gold, Pixel-Sterne steigen im Rahmen auf (--x/--d setzt JS), Levelzahl springt */
-.card.level-up .frame { animation: sc-level 1.2s steps(1, end); }
-.card .lvl-pop { color: var(--green); animation: sc-lvl-pop 1.2s steps(4, end) forwards; }
-.card .lvl-star { position: absolute; left: var(--x, 30px); bottom: 4px; width: 16px; height: 16px; pointer-events: none; animation: sc-lvl-rise .8s steps(6, end) var(--d, 0s) both; }
+.box { flex: 1; overflow: auto; padding: 8px 16px 16px; }
+.rcard { margin-bottom: 16px; padding: 12px; }
+.rcard .rhead { display: flex; gap: 12px; align-items: center; }
+.rcard .frame.big { flex: none; }
+.rcard .frame.big img { width: 96px; height: 96px; }
+.rcard .meta { flex: 1; min-width: 0; }
+.rcard .cname { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; font: 700 22px/1.15 var(--font-pixel); }
+.rcard .counts { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 4px; }
+.rcard .cnt { padding: 0 6px; font: 800 12px/18px var(--font-body); font-variant-numeric: tabular-nums; color: var(--ink); background: var(--r-normal); border: 2px solid var(--ink); }
+.rcard .cnt.r-selten { background: var(--r-selten); }
+.rcard .cnt.r-episch { background: #7A30B0; color: var(--paper); }
+.rcard .cnt.r-legendaer { background: var(--r-legendaer); }
+.rcard .sub { display: flex; align-items: center; flex-wrap: wrap; gap: 0 2px; }
+/* Fusions-Fortschritt „2/3 für Selten": Zettel mit Balken in der Zielfarbe */
+.rcard .fuse-prog { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.rcard .fuse-prog:empty { display: none; }
+.rcard .fp { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 8px; font: 800 13px/1.2 var(--font-body); }
+.rcard .fp .fill { background-color: var(--r-selten); }
+.rcard .fp.r-episch .fill { background-color: var(--r-episch); }
+.rcard .fp.r-legendaer .fill { background-color: var(--r-legendaer); }
+.rcard .ractions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.rcard .ractions button { flex: 1 1 140px; min-width: 0; min-height: 44px; padding: 4px 8px; font-size: 15px; }
+.rcard .ractions .fuse-btn { flex-basis: 100%; gap: 6px; box-shadow: inset 8px 0 0 var(--r-selten), var(--shadow); }
+.rcard .fuse-btn.r-episch { box-shadow: inset 8px 0 0 var(--r-episch), var(--shadow); }
+.rcard .fuse-btn.r-legendaer { box-shadow: inset 8px 0 0 var(--r-legendaer), var(--shadow); }
+.rcard .fuse-btn .ico { width: 20px; height: 20px; }
+
+/* Ausgeklappt: Exemplare als Zeilen, Knöpfe im 2×2-Raster */
+.rcard .insts { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 3px dashed var(--ink-soft); }
+.inst { position: relative; display: grid; grid-template-columns: auto 1fr; gap: 8px 10px; align-items: center; padding: 8px; background: var(--paper-2); border: 2px solid var(--ink); }
+.inst.in-team { box-shadow: 0 0 0 3px var(--amber), 0 0 0 5px var(--ink); }
+.inst .frame img { width: 56px; height: 56px; }
+.inst .imeta { min-width: 0; }
+.inst .iname { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; }
+.inst .order { padding: 0 6px; font: 800 12px/18px var(--font-body); color: var(--ink); background: var(--amber); border: 2px solid var(--ink); }
+.inst .sub { display: flex; align-items: center; flex-wrap: wrap; gap: 0 2px; margin-top: 4px; }
+.inst .iactions { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.inst .iactions button { min-width: 0; min-height: 44px; padding: 4px 6px; gap: 2px; font-size: 14px; white-space: nowrap; }
+.inst .iactions .ico { width: 20px; height: 20px; }
+/* Power-Up / Füttern: Rahmen blinkt gold, Pixel-Sterne steigen auf (--x/--d setzt JS), Levelzahl springt */
+.inst.level-up .frame { animation: sc-level 1.2s steps(1, end); }
+.inst .lvl-pop { font: 700 16px/1 var(--font-pixel); color: var(--green); animation: sc-lvl-pop 1.2s steps(4, end) forwards; }
+.inst .lvl-star { position: absolute; left: var(--x, 30px); top: 48px; width: 16px; height: 16px; pointer-events: none; animation: sc-lvl-rise .8s steps(6, end) var(--d, 0s) both; }
 @keyframes sc-level { 0%, 30%, 60% { box-shadow: 0 0 0 2px var(--ink), 0 0 0 6px var(--gold); } 15%, 45%, 75%, 100% { box-shadow: 0 0 0 2px var(--ink), 4px 4px 0 2px var(--wood-2); } }
 @keyframes sc-lvl-pop { 0% { transform: scale(.4); opacity: 0; } 30% { transform: scale(1.3); opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
 @keyframes sc-lvl-rise { 0% { transform: translateY(0) scale(.5); opacity: 0; } 25% { transform: translateY(-12px) scale(1); opacity: 1; } 100% { transform: translateY(-64px); opacity: 0; } }
 
-/* Fusion-Knöpfe: Papier mit Seltenheitsband links */
-.fuse-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
-.fuse-btn { justify-content: flex-start; padding-left: 20px; font-size: 15px; text-align: left; box-shadow: inset 8px 0 0 var(--r-selten), var(--shadow); }
-.fuse-btn.r-episch { box-shadow: inset 8px 0 0 var(--r-episch), var(--shadow); }
-.fuse-btn.r-legendaer { box-shadow: inset 8px 0 0 var(--r-legendaer), var(--shadow); }
-
-/* Fusion-Animation: liegt über der Kopfzeile; .fz-late erst klickbar, wenn sichtbar (visibility springt mit der ersten Deckungsstufe) */
+/* Fusion: die drei echten Gesichter fliegen ab 0 ms sichtbar zusammen (0,6 s), Blitz 120 ms beim Verschmelzen,
+   Ergebnis ab 0,64 s, Text und Knopf ab 0,8 s. .fz-late ist bis dahin unsichtbar und nicht klickbar. */
 .fusion-anim {
   position: absolute; inset: 0; z-index: 1100; overflow: hidden;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
   padding: 16px 16px calc(var(--tabbar-h) + 16px + env(safe-area-inset-bottom));
   background-color: var(--night); background-image: var(--dither-night); background-size: 8px 8px;
 }
-.fusion-anim .fz-stage { position: relative; width: 280px; height: 240px; }
-.fusion-anim .fz-src { position: absolute; left: 50%; top: 50%; width: 72px; height: 72px; margin: -36px 0 0 -36px; background: var(--ink); border: 3px solid var(--rc, var(--r-normal)); box-shadow: 0 0 0 2px var(--ink); transform: translate(var(--x), var(--y)); animation: sc-fz-fly .6s steps(6, end) .1s forwards; }
-.fusion-anim .fz-result { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(.2); opacity: 0; }
-.fusion-anim .fz-result.show { animation: sc-fz-pop .4s steps(4, end) forwards; }
-.fusion-anim .fz-result .frame img { width: 128px; height: 128px; }
-.fusion-anim .fz-late { opacity: 0; transform: translateY(8px); visibility: hidden; transition: opacity .3s steps(3, end), transform .3s steps(3, end), visibility 0s .1s; }
-.fusion-anim .fz-late.show { opacity: 1; transform: none; visibility: visible; }
+.fusion-anim .fz-head { padding: 4px 12px; font: 700 20px/1.2 var(--font-pixel); color: var(--ink); background: var(--paper); border: 3px solid var(--ink); box-shadow: var(--shadow); }
+.fusion-anim .fz-stage { position: relative; width: 300px; height: 240px; }
+.fusion-anim .fz-src { position: absolute; left: 50%; top: 50%; margin: -44px 0 0 -44px; transform: translate(var(--x), var(--y)); animation: sc-fz-fly .6s steps(8, end) var(--d, 0s) both; }
+.fusion-anim .fz-src img { width: 88px; height: 88px; }
+.fusion-anim .fz-flash { position: absolute; left: 50%; top: 50%; width: 176px; height: 176px; margin: -88px 0 0 -88px; background: var(--paper); clip-path: var(--px-disc); opacity: 0; pointer-events: none; animation: sc-fz-flash .12s steps(1, end) .58s; }
+.fusion-anim .fz-result { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); animation: sc-fz-pop .32s steps(4, end) .64s both; }
+.fusion-anim .fz-result .frame img { width: 144px; height: 144px; }
+.fusion-anim .fz-late { animation: sc-fz-late .3s steps(3, end) .8s both; }
 .fusion-anim .fz-title { font: 700 40px/1 var(--font-pixel); color: var(--paper); text-shadow: 4px 4px 0 var(--ink); }
 .fusion-anim .fz-title.r-selten { color: var(--r-selten); }
 .fusion-anim .fz-title.r-episch { color: var(--r-episch); }
 .fusion-anim .fz-title.r-legendaer { color: var(--r-legendaer); }
 .fusion-anim .fz-sub { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0 4px; padding: 0 8px; font-size: 15px; color: var(--paper-2); text-align: center; }
-.fusion-anim .fz-next { min-width: 160px; margin-top: 8px; font-size: 18px; transition-delay: .3s, .3s, .4s; }
-.fusion-anim .fz-flash { position: absolute; inset: 0; background: var(--paper); opacity: 0; pointer-events: none; }
-.fusion-anim .fz-flash.go { animation: sc-fz-flash .5s steps(1, end) forwards; }
-@keyframes sc-fz-fly { to { transform: translate(0, 0) scale(.25) rotate(180deg); opacity: 0; } }
-@keyframes sc-fz-flash { 0% { opacity: 0; } 10% { opacity: 1; } 30% { opacity: .5; } 50%, 100% { opacity: 0; } }
-@keyframes sc-fz-pop { from { transform: translate(-50%, -50%) scale(.2); opacity: 0; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
+.fusion-anim .fz-next { min-width: 160px; margin-top: 4px; font-size: 18px; }
+@keyframes sc-fz-fly {
+  0% { transform: translate(var(--x), var(--y)); }
+  25% { transform: translate(calc(var(--x) * 1.08), calc(var(--y) * 1.08 - 16px)) rotate(-6deg); }
+  85% { transform: translate(calc(var(--x) * .12), calc(var(--y) * .12)) scale(.8) rotate(6deg); opacity: 1; }
+  100% { transform: translate(0, 0) scale(.6); opacity: 0; }
+}
+@keyframes sc-fz-flash { from { opacity: .9; } to { opacity: 0; } }
+@keyframes sc-fz-pop { from { transform: translate(-50%, -50%) scale(.3); opacity: 0; } 60% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
+@keyframes sc-fz-late { from { opacity: 0; transform: translateY(8px); visibility: hidden; } to { opacity: 1; transform: none; visibility: visible; } }
 
 /* ---------- Rütherdex: Papierbogen mit Raster ---------- */
 .dex-scroll { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
@@ -105,9 +130,7 @@
 
 /* ---------- Weniger Bewegung: Fusion, Level-Up-Sterne, Kauf-Blitz, Atmen aus ---------- */
 @media (prefers-reduced-motion: reduce) {
-  .card.level-up .frame, .card .lvl-pop, .card .lvl-star, .shop-item.bought, .arena-poster .sprite,
-  .fusion-anim .fz-src, .fusion-anim .fz-flash.go { animation: none !important; }
-  .card .lvl-star, .fusion-anim .fz-src { display: none; }
-  .fusion-anim .fz-result.show { animation: none !important; opacity: 1; transform: translate(-50%, -50%); }
-  .fusion-anim .fz-late { transition: none; }
+  .inst.level-up .frame, .inst .lvl-pop, .inst .lvl-star, .shop-item.bought, .arena-poster .sprite,
+  .fusion-anim .fz-src, .fusion-anim .fz-flash, .fusion-anim .fz-result, .fusion-anim .fz-late { animation: none !important; }
+  .inst .lvl-star, .fusion-anim .fz-src { display: none; }
 }

@@ -19,7 +19,7 @@
 .catch-stage[data-rarity="legendaer"] .rarity-badge .ico { animation: catch-blink .8s steps(1) infinite; }
 
 /* Rüther: .target läuft in 4-px-Schritten hin und her, der Sprite darin hüpft/wehrt sich/wird eingesaugt. */
-.target { position: absolute; left: 50%; bottom: min(352px, calc(100% - 230px - env(safe-area-inset-top))); /* Oberkante bleibt unter dem Badge */ width: 160px; height: 160px; margin-left: -80px; animation: catch-roam 4s steps(20) infinite; }
+.target { position: absolute; left: 50%; bottom: min(316px, calc(100% - 230px - env(safe-area-inset-top))); /* Oberkante bleibt unter dem Badge, darüber Platz für die Sprechblase */ width: 160px; height: 160px; margin-left: -80px; animation: catch-roam 4s steps(20) infinite; }
 /* Aura ab selten: drei harte Ringe mit gestufter Deckung, pulsiert in zwei Stufen */
 .target .aura { position: absolute; inset: -7px; opacity: 0; pointer-events: none;
   box-shadow: 0 0 0 6px color-mix(in srgb, var(--rc) 75%, transparent), 0 0 0 12px color-mix(in srgb, var(--rc) 45%, transparent), 0 0 0 18px color-mix(in srgb, var(--rc) 20%, transparent); }
@@ -41,7 +41,10 @@
 .sprite.hop { animation: catch-hop .5s steps(4); }
 .sprite.suck { animation: catch-suck .4s steps(6) forwards; }
 .sprite.pop { animation: catch-pop .4s steps(4) both; }
-.sprite.flee { animation: catch-flee .8s steps(12) forwards; }
+/* Abhauen: das ganze Ziel rennt los, die Sprechblase darin läuft mit; catch-flee (translate) kommt zum angehaltenen Hin-und-her (transform) dazu */
+#screen-catch[data-state] .target.flee { animation: catch-roam 4s steps(20) infinite paused, catch-flee .8s steps(12) forwards; }
+/* Sprechblase (fx.js say) hängt in .target und läuft mit; die Breite richtet sich nach der Bühne statt nach dem 160-px-Ziel */
+.target .fx-say { max-width: 200px; font-size: 14px; }
 #screen-catch[data-state="seq"] .target { animation-play-state: paused; }
 #screen-catch[data-state="seq"] .ring,
 #screen-catch[data-state="seq"] .target .aura { opacity: 0; }
@@ -55,6 +58,7 @@
 .catch-msg { position: absolute; left: 0; right: 0; bottom: 178px; z-index: 4; width: max-content; max-width: calc(100% - 32px); margin: 0 auto; padding: 4px 12px; font: 700 30px/1.1 var(--font-pixel); color: var(--ink); background: var(--paper); border: 3px solid var(--ink); box-shadow: var(--shadow); opacity: 0; pointer-events: none; }
 .catch-msg:empty { visibility: hidden; }
 .catch-msg.show { opacity: 1; animation: catch-msg .24s steps(3); }
+.catch-msg.narr { font: 800 18px/1.3 var(--font-body); } /* Erzähltext beim Abhauen: länger, daher Fließtext */
 
 /* Belohnung als angehefteter Papierzettel */
 .catch-stage .reward { position: absolute; left: 50%; top: 46%; z-index: 5; min-width: 200px; padding: 14px 18px 12px; border: 3px solid var(--ink); background: var(--paper); color: var(--ink); box-shadow: 6px 6px 0 var(--wood-2); pointer-events: none; transform: translateX(-50%) rotate(-2deg); animation: catch-reward .4s steps(4) both; }
@@ -64,6 +68,11 @@
 .catch-stage .reward .ico { width: 32px; height: 32px; image-rendering: pixelated; }
 .catch-stage .reward .newdex { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 8px; padding-top: 6px; border-top: 2px dashed var(--ink-soft); font: 800 15px/1.2 var(--font-body); color: var(--green); }
 .catch-stage .reward .newdex .ico { width: 20px; height: 20px; }
+.catch-stage .reward .spin-slot { position: relative; flex: none; width: 40px; height: 40px; }
+/* Fang-Spruch mit echtem Gesicht */
+.catch-stage .reward .line { display: flex; align-items: center; gap: 8px; max-width: 260px; margin-top: 8px; padding-top: 8px; border-top: 2px dashed var(--ink-soft); font: 800 14px/1.25 var(--font-body); text-align: left; }
+.catch-stage .reward .face { flex: none; width: 40px; height: 40px; border: 3px solid var(--rc); outline: 2px solid var(--ink); background: var(--paper-2); image-rendering: pixelated; }
+.catch-stage .reward q { quotes: '„' '“'; }
 
 /* Münze art/coin-big.png: Position über --x/--y, Drehung --r, Größe --s; die Keyframes bauen auf denselben Variablen auf.
    Auf .catch-stage gescoped, weil auch der Kampf .coin nutzt. */
@@ -77,6 +86,15 @@
 .catch-stage .coin.wobble { animation: catch-wobble .6s steps(6); }
 .catch-stage .coin.glow { animation: catch-glow .4s steps(1) infinite; }
 .catch-stage .coin.burst { animation: catch-burst .35s steps(5) forwards; }
+.catch-stage .coin.fly { opacity: 0; } /* im Flug zeigt spinCoin (fx.js) die drehende Bitcoin-Münze */
+
+/* Kämpfen: Pixel-Knopf mit Schwert rechts neben der Münze; ohne Team gesperrt mit Hinweiszettel darüber */
+.catch-fight { position: absolute; right: 12px; bottom: 64px; z-index: 3; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.catch-fight .fight-btn { gap: 6px; min-height: 44px; padding: 4px 10px; background: var(--red); color: var(--paper); font-size: 16px; box-shadow: inset 0 -3px 0 rgba(30, 42, 34, .35), 3px 3px 0 var(--wood-2); }
+.catch-fight .sword { width: 20px; height: 26px; flex: none; }
+.catch-fight .fight-hint { display: none; max-width: 120px; padding: 3px 6px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); box-shadow: 2px 2px 0 var(--wood-2); font: 800 12px/1.2 var(--font-body); text-align: center; }
+.catch-fight.locked .fight-hint { display: block; }
+#screen-catch:not([data-state="idle"]) .catch-fight { opacity: .4; pointer-events: none; }
 
 /* Super-Münzen-Schalter unter der Münze, nur bei Vorrat sichtbar (.hidden) */
 .catch-stage .supercoin { position: absolute; left: 0; right: 0; bottom: 6px; width: max-content; margin: 0 auto; /* ohne transform zentriert: theme.css drückt per transform */ z-index: 3; display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 4px 12px; border: 3px solid var(--ink); border-radius: 0; background: var(--paper); color: var(--ink); box-shadow: 3px 3px 0 var(--wood-2); font: 700 14px/1 var(--font-pixel); white-space: nowrap; }
@@ -102,7 +120,7 @@
 @keyframes catch-blink { 50% { opacity: 0; } }
 @keyframes catch-suck { 30% { filter: brightness(2); } to { transform: translate(var(--sx, 0px), var(--sy, 0px)) scale(0); opacity: 0; filter: brightness(3); } }
 @keyframes catch-pop { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-@keyframes catch-flee { 0% { transform: translateX(0); } 25% { transform: translate(25vw, -24px); } 50% { transform: translate(55vw, 0); } 75% { transform: translate(85vw, -24px); } 100% { transform: translateX(130vw); } }
+@keyframes catch-flee { 0% { translate: 0 0; } 25% { translate: 25vw -24px; } 50% { translate: 55vw 0; } 75% { translate: 85vw -24px; } 100% { translate: 130vw 0; } }
 @keyframes catch-drop { from { transform: translate(calc(-50% + var(--x)), calc(var(--y) - 60px)) scale(var(--s)); } to { transform: translate(calc(-50% + var(--x)), var(--y)) scale(var(--s)); } }
 @keyframes catch-wobble { 0%, 100% { transform: translate(calc(-50% + var(--x)), var(--y)) rotate(0) scale(var(--s)); } 25% { transform: translate(calc(-50% + var(--x)), var(--y)) rotate(-20deg) scale(var(--s)); } 75% { transform: translate(calc(-50% + var(--x)), var(--y)) rotate(20deg) scale(var(--s)); } }
 @keyframes catch-glow { 0%, 100% { filter: brightness(1.15) drop-shadow(3px 0 0 var(--rc)) drop-shadow(-3px 0 0 var(--rc)) drop-shadow(0 3px 0 var(--rc)) drop-shadow(0 -3px 0 var(--rc)); } 50% { filter: brightness(1.7) drop-shadow(3px 0 0 var(--paper)) drop-shadow(-3px 0 0 var(--paper)) drop-shadow(0 3px 0 var(--paper)) drop-shadow(0 -3px 0 var(--paper)); } }
@@ -117,5 +135,6 @@
 /* Weniger Bewegung: keine Loops (Laufen, Aura, Blinken, Super-Puls); der Ring bleibt, er ist Spielmechanik. */
 @media (prefers-reduced-motion: reduce) {
   .target, .target .aura, .catch-stage .coin.super, .catch-stage .coin.glow, .catch-stage[data-rarity="legendaer"] .rarity-badge .ico { animation: none !important; } /* !important: .target.r-* .aura ist spezifischer */
+  #screen-catch[data-state] .target.flee { animation: catch-flee .8s steps(12) forwards !important; } /* Abhauen bleibt, ist kein Loop */
   .catch-stage .coin.super { filter: drop-shadow(3px 0 0 var(--gold)) drop-shadow(-3px 0 0 var(--gold)) drop-shadow(0 3px 0 var(--gold)) drop-shadow(0 -3px 0 var(--gold)); }
 }

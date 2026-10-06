@@ -1,6 +1,8 @@
 import { CONST, RUETHERS, RUETHER_BY_ID, RARITIES, RARITY_BY_ID, SHOP, QUESTS, ACHIEVEMENTS, ARENAS } from './data.js';
-import { fighterStats, levelCost, DEX_TOTAL, dexCount, arenaReward, canFuse, nextRarity, levelProgress } from './progress.js';
+import { fighterStats, levelCost, DEX_TOTAL, dexCount, arenaReward, canFuse, nextRarity, levelProgress, pickFood, sell, sellDuplicates } from './progress.js';
 import { esc, popup, ico, kitName } from './ui.js';
+import { hashrateText } from './format.js';
+import { playSheet, btcRain } from './fx.js';
 
 const fmt = n => n.toLocaleString('de-DE');
 const rarityRank = id => RARITIES.findIndex(r => r.id === id);
@@ -31,87 +33,143 @@ const emptyState = (icon, text, sub = '') =>
   `<div class="empty">${ico(icon, 'ico-xl empty-ico')}<p>${esc(text)}</p>${sub ? `<p class="sub">${esc(sub)}</p>` : ''}</div>`;
 
 // ---------- Sammlung ----------
-// onTeamChange(teamUids); onPowerUp(uid) -> { ok, reason, level }; onFuse(id, rarityId) -> { ok, inst, used, newDex }; onDex(); onBack()
-export function createCollectionScreen({ el, onTeamChange, onPowerUp, onFuse, onDex, onBack }) {
+// Eine Karte pro Rüther (Spec §3): echtes Gesicht des besten Exemplars groß, Zähler je Seltenheit, Fusions-Fortschritt,
+// Knöpfe Fusion / Duplikate verkaufen (n) / Alle n anzeigen; ausgeklappt die Exemplare mit Team, Power-Up, Füttern, Verkaufen.
+// onTeamChange(teamUids); onPowerUp(uid) -> { ok, reason, level }; onFuse(id, rarityId) -> { ok, inst, used, newDex };
+// onFeed(targetUid) -> { ok, reason, level, foodUid }; onSell(uid) -> { ok, reason, sats };
+// onSellDuplicates(id) -> { count, sats } (Bestätigung hier per popup vor dem Aufruf); onDex(); onBack()
+export function createCollectionScreen({ el, onTeamChange, onPowerUp, onFuse, onFeed, onSell, onSellDuplicates, onDex, onBack }) {
   const box = el.querySelector('.box');
   el.querySelector('.back')?.addEventListener('click', () => onBack?.());
   el.querySelector('.dex-btn').addEventListener('click', onDex);
   let save = null;
+  const open = new Set(); // ausgeklappte Rüther-ids
+  const dry = (fn, ...a) => fn(structuredClone(save), ...a); // Regeln aus progress.js probeweise, ohne den Spielstand zu ändern
+  const statLine = inst => {
+    const st = fighterStats(RUETHER_BY_ID[inst.id], inst);
+    return `${fmt(st.btc)} BTC · ${ico('hashrate', 'ico-in')}${hashrateText(st.power)}`;
+  };
 
-  function card(inst) {
-    const def = RUETHER_BY_ID[inst.id], r = RARITY_BY_ID[inst.rarity], st = fighterStats(def, inst);
-    const idx = save.team.indexOf(inst.uid), cost = levelCost(inst.level);
+  function ruetherCard(def, mine) {
+    const best = mine[0], isOpen = open.has(def.id);
+    const counts = RARITIES.map(r => ({ r, n: mine.filter(i => i.rarity === r.id).length })).filter(c => c.n);
+    const dupes = dry(sellDuplicates, def.id);
     const div = document.createElement('div');
-    div.className = `card panel thin r-${inst.rarity}` + (idx >= 0 ? ' in-team' : '');
-    div.dataset.uid = inst.uid;
+    div.className = `rcard panel thin r-${best.rarity}`;
+    div.dataset.id = def.id;
     div.innerHTML = `
-      <span class="ribbon r-${inst.rarity}">${r.name}</span>
-      ${idx >= 0 ? `<div class="order">Team ${idx + 1}</div>` : ''}
-      <div class="frame r-${inst.rarity}"><img src="sprites/${inst.id}.png" alt=""><span class="shine"></span></div>
-      <div class="meta">
-        <div class="cname">${def.name} <span class="badge-pixel">Lv. ${inst.level}</span></div>
-        <div class="sub">${st.btc} BTC · Power ×${st.power.toFixed(2)}</div>
-        <div class="actions">
-          <button class="team-btn" ${idx < 0 && save.team.length >= CONST.TEAM_SIZE ? 'disabled' : ''}>${idx >= 0 ? 'Aus dem Team' : 'Ins Team'}</button>
-          <button class="power-btn primary" ${cost == null || save.sats < cost ? 'disabled' : ''}>${cost == null ? 'Max. Level' : `${ico('lightning')}${fmt(cost)}${ico('coin')}`}</button>
+      <div class="rhead">
+        <div class="frame big r-${best.rarity}"><img src="sprites/${def.id}.png" alt="${esc(def.name)}"><span class="shine"></span></div>
+        <div class="meta">
+          <div class="cname">${esc(def.name)} <span class="badge-pixel">Lv. ${best.level}</span></div>
+          <div class="counts">${counts.map(({ r, n }) => `<span class="cnt r-${r.id}">${r.name} ×${n}</span>`).join('')}</div>
+          <div class="sub">${statLine(best)}</div>
         </div>
-      </div>`;
-    div.querySelector('.team-btn').addEventListener('click', () => toggleTeam(inst.uid));
-    div.querySelector('.power-btn').addEventListener('click', () => {
-      const res = onPowerUp(inst.uid);
-      if (!res.ok) return;
-      render();
-      const c = box.querySelector(`[data-uid="${inst.uid}"]`);
-      if (c) { // Spec §2: Sprite leuchtet, Sterne steigen auf, Levelzahl springt; nach 1,2 s alles wieder weg
-        c.classList.add('level-up');
-        c.querySelector('.cname').insertAdjacentHTML('beforeend', `<span class="lvl-pop">Lv. ${res.level}!</span>`);
-        c.querySelector('.frame').insertAdjacentHTML('beforeend', Array.from({ length: 7 }, (_, i) =>
-          `<img class="lvl-star" src="art/icon-star.png" alt="" style="--x:${8 + Math.round(Math.random() * 50)}px;--d:${(i * 0.06).toFixed(2)}s">`).join(''));
-        setTimeout(() => { c.classList.remove('level-up'); c.querySelectorAll('.lvl-pop, .lvl-star').forEach(n => n.remove()); }, 1200);
+      </div>
+      <div class="fuse-prog"></div>
+      <div class="ractions">
+        ${dupes.count ? `<button class="dup-btn">Duplikate verkaufen (${dupes.count})</button>` : ''}
+        <button class="all-btn">${isOpen ? 'Zuklappen' : mine.length > 1 ? `Alle ${mine.length} anzeigen` : 'Anzeigen'}</button>
+      </div>
+      ${isOpen ? '<div class="insts"></div>' : ''}`;
+    // Fusion: ab 3 gleichen ein Knopf, darunter Fortschritt „2/3 für Selten"
+    const prog = div.querySelector('.fuse-prog'), actions = div.querySelector('.ractions');
+    for (const { r, n } of counts) {
+      const nxt = RARITY_BY_ID[nextRarity(r.id)];
+      if (!nxt) continue;
+      if (canFuse(save, def.id, r.id)) {
+        const b = document.createElement('button');
+        b.className = `fuse-btn primary r-${nxt.id}`;
+        b.innerHTML = `${ico('star')}Fusion: ${CONST.FUSION_COUNT}× ${r.name} → ${nxt.name}`;
+        b.addEventListener('click', () => { const res = onFuse(def.id, r.id); if (res?.ok) playFusion(res); });
+        actions.prepend(b);
+      } else {
+        prog.insertAdjacentHTML('beforeend', `<div class="fp r-${nxt.id}"><span>${n}/${CONST.FUSION_COUNT} für ${nxt.name}</span><div class="bar"><div class="fill" style="width:${Math.round((n / CONST.FUSION_COUNT) * 100)}%"></div></div></div>`);
       }
+    }
+    div.querySelector('.dup-btn')?.addEventListener('click', async () => {
+      const i = await popup({
+        title: 'Duplikate verkaufen?',
+        html: `<p>${dupes.count}× ${esc(def.name)} für <b>${fmt(dupes.sats)}</b>${ico('coin', 'ico-in')} verkaufen?</p><p class="sub">Team und das beste Exemplar je Seltenheit bleiben.</p>`,
+        buttons: [{ label: 'Abbrechen' }, { label: 'Verkaufen', primary: true }],
+      });
+      if (i !== 1) return;
+      onSellDuplicates(def.id);
+      render();
     });
+    div.querySelector('.all-btn').addEventListener('click', () => {
+      if (isOpen) open.delete(def.id); else open.add(def.id);
+      render();
+    });
+    if (isOpen) for (const inst of mine) div.querySelector('.insts').appendChild(instRow(inst));
     return div;
   }
-  // Je Seltenheit mit ≥ 3 Exemplaren (unter Legendär) ein Fusionsknopf
-  function fuseRow(def) {
+
+  function instRow(inst) {
+    const r = RARITY_BY_ID[inst.rarity], idx = save.team.indexOf(inst.uid), cost = levelCost(inst.level);
+    const max = inst.level >= CONST.LEVEL_MAX, food = max ? null : pickFood(save, inst.uid), sale = dry(sell, inst.uid);
     const row = document.createElement('div');
-    row.className = 'fuse-row';
-    for (const r of RARITIES) {
-      if (!canFuse(save, def.id, r.id)) continue;
-      const nxt = RARITY_BY_ID[nextRarity(r.id)];
-      const b = document.createElement('button');
-      b.className = `fuse-btn r-${nxt.id}`;
-      b.innerHTML = `${ico('star')}Fusion: ${CONST.FUSION_COUNT}× ${r.name} → ${nxt.name}`;
-      b.addEventListener('click', () => { const res = onFuse(def.id, r.id); if (res?.ok) playFusion(res); });
-      row.appendChild(b);
-    }
-    return row.children.length ? row : null;
+    row.className = `inst r-${inst.rarity}` + (idx >= 0 ? ' in-team' : '');
+    row.dataset.uid = inst.uid;
+    row.innerHTML = `
+      <div class="frame r-${inst.rarity}"><img src="sprites/${inst.id}.png" alt=""><span class="shine"></span></div>
+      <div class="imeta">
+        <div class="iname"><span class="ribbon r-${inst.rarity}">${r.name}</span><span class="badge-pixel">Lv. ${inst.level}</span>${idx >= 0 ? `<span class="order">Team ${idx + 1}</span>` : ''}</div>
+        <div class="sub">${statLine(inst)}</div>
+      </div>
+      <div class="iactions">
+        <button class="team-btn" ${idx < 0 && save.team.length >= CONST.TEAM_SIZE ? 'disabled' : ''}>${idx >= 0 ? 'Aus dem Team' : 'Ins Team'}</button>
+        <button class="power-btn primary" ${cost == null || save.sats < cost ? 'disabled' : ''}>${cost == null ? 'Max. Level' : `${ico('lightning')}${fmt(cost)}${ico('coin')}`}</button>
+        <button class="feed-btn" ${food ? '' : 'disabled'}>${food ? `Füttern +${CONST.FEED_LEVELS} Lv.` : max ? 'Max. Level' : 'Kein Futter'}</button>
+        <button class="sell-btn" ${sale.ok ? '' : 'disabled'}>${sale.ok ? `Verkaufen ${fmt(sale.sats)}${ico('coin')}` : sale.reason === 'team' ? 'Im Team' : `Letztes ${r.name}`}</button>
+      </div>`;
+    row.querySelector('.team-btn').addEventListener('click', () => toggleTeam(inst.uid));
+    row.querySelector('.power-btn').addEventListener('click', () => { const res = onPowerUp(inst.uid); if (res?.ok) levelUp(inst.uid, res.level); });
+    row.querySelector('.feed-btn').addEventListener('click', () => { const res = onFeed(inst.uid); if (res?.ok) levelUp(inst.uid, res.level); });
+    row.querySelector('.sell-btn').addEventListener('click', async () => {
+      if (inst.rarity !== 'normal') { // Seltene nicht aus Versehen verscherbeln
+        const i = await popup({ title: `${r.name}en verkaufen?`, html: `<p>${esc(RUETHER_BY_ID[inst.id].name)} Lv. ${inst.level} für <b>${fmt(sale.sats)}</b>${ico('coin', 'ico-in')} verkaufen?</p>`, buttons: [{ label: 'Abbrechen' }, { label: 'Verkaufen', danger: true }] });
+        if (i !== 1) return;
+      }
+      if (onSell(inst.uid)?.ok) render();
+    });
+    return row;
   }
-  // Drei Sprites fliegen zur Mitte, Blitz, neues Exemplar mit Rahmen und Konfetti
+  // Spec §2 (v4): Rahmen leuchtet, Sterne steigen auf, Levelzahl springt; nach 1,2 s alles wieder weg
+  function levelUp(uid, level) {
+    render();
+    const c = box.querySelector(`.inst[data-uid="${uid}"]`);
+    if (!c) return;
+    c.classList.add('level-up');
+    c.querySelector('.iname').insertAdjacentHTML('beforeend', `<span class="lvl-pop">Lv. ${level}!</span>`);
+    c.insertAdjacentHTML('beforeend', Array.from({ length: 7 }, (_, i) =>
+      `<img class="lvl-star" src="art/icon-star.png" alt="" style="--x:${8 + Math.round(Math.random() * 56)}px;--d:${(i * 0.06).toFixed(2)}s">`).join(''));
+    setTimeout(() => { c.classList.remove('level-up'); c.querySelectorAll('.lvl-pop, .lvl-star').forEach(n => n.remove()); }, 1200);
+  }
+  // Die drei echten Gesichter fliegen sofort sichtbar zusammen, kurzer Blitz beim Verschmelzen, Ergebnis im Seltenheitsrahmen mit ₿-Regen.
+  // Ablauf steht in css/screens.css (Verzögerungen dort), hier nur ₿-Regen und Einschlag beim Verschmelzen.
   function playFusion({ inst, used, newDex }) {
-    const r = RARITY_BY_ID[inst.rarity];
-    const pos = [[-96, -36], [96, -36], [0, 84]];
-    const colors = ['var(--gold)', 'var(--teal)', 'var(--red)', 'var(--paper)', 'var(--amber)', 'var(--r-episch)'];
+    const r = RARITY_BY_ID[inst.rarity], from = RARITY_BY_ID[used[0]?.rarity] || RARITY_BY_ID.normal;
+    const pos = [[-92, -52], [92, -52], [0, 64]];
     const ov = document.createElement('div');
     ov.className = 'fusion-anim';
     ov.innerHTML = `
+      <div class="fz-head">${CONST.FUSION_COUNT}× ${esc(from.name)} → ${esc(r.name)}</div>
       <div class="fz-stage">
-        ${used.map((u, i) => `<img class="fz-src" src="${spriteOf(u.id)}" alt="" style="--x:${pos[i % 3][0]}px;--y:${pos[i % 3][1]}px;--rc:var(--r-${u.rarity})">`).join('')}
+        ${used.map((u, i) => `<div class="fz-src frame r-${u.rarity}" style="--x:${pos[i % 3][0]}px;--y:${pos[i % 3][1]}px;--d:${i * 60}ms"><img src="${spriteOf(u.id)}" alt=""></div>`).join('')}
+        <div class="fz-flash"></div>
         <div class="fz-result"><div class="frame r-${inst.rarity}"><img src="${spriteOf(inst.id)}" alt=""><span class="shine"></span></div></div>
       </div>
       <div class="fz-title fz-late r-${inst.rarity}">${esc(r.name)}!</div>
       <div class="fz-sub fz-late">${esc(RUETHER_BY_ID[inst.id].name)} · Lv. ${inst.level}${newDex ? ` · Neuer Dex-Eintrag +${fmt(CONST.DEX_BONUS)}${ico('coin', 'ico-in')}` : ''}</div>
-      <button class="fz-next fz-late primary">Weiter</button>
-      <div class="fz-flash"></div>`;
+      <button class="fz-next fz-late primary">Weiter</button>`;
     el.appendChild(ov);
     ov.querySelector('.fz-next').addEventListener('click', () => { ov.remove(); render(); });
-    setTimeout(() => ov.querySelector('.fz-flash').classList.add('go'), 520);
     setTimeout(() => {
-      ov.querySelector('.fz-result').classList.add('show');
-      ov.querySelectorAll('.fz-late').forEach(n => n.classList.add('show'));
-      ov.insertAdjacentHTML('beforeend', Array.from({ length: 20 }, (_, i) =>
-        `<span class="fx-confetti" style="--x:${Math.round(Math.random() * 96)}%;--dx:${Math.round(Math.random() * 64 - 32)}px;--size:${i % 3 ? 8 : 12}px;--ms:${1600 + Math.round(Math.random() * 600)}ms;background:${colors[i % colors.length]};animation-delay:${(Math.random() * 0.5).toFixed(2)}s"></span>`).join(''));
-    }, 680);
+      if (!ov.isConnected) return;
+      playSheet(ov.querySelector('.fz-stage'), 'btcburst', { size: 256 });
+      btcRain(ov, { n: 24 });
+    }, matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 640);
   }
   function render() {
     el.querySelector('.fusion-anim')?.remove();
@@ -120,13 +178,7 @@ export function createCollectionScreen({ el, onTeamChange, onPowerUp, onFuse, on
     for (const def of RUETHERS) {
       const mine = save.box.filter(i => i.id === def.id)
         .sort((a, b) => rarityRank(b.rarity) - rarityRank(a.rarity) || b.level - a.level);
-      if (!mine.length) continue;
-      const h = document.createElement('h3');
-      h.textContent = `${def.name} (${mine.length})`;
-      box.appendChild(h);
-      const fr = fuseRow(def);
-      if (fr) box.appendChild(fr);
-      for (const inst of mine) box.appendChild(card(inst));
+      if (mine.length) box.appendChild(ruetherCard(def, mine));
     }
   }
   function toggleTeam(uid) {

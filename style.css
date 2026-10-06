@@ -80,6 +80,11 @@ p { margin: 0; }
 .spawn-icon.r-legendaer img.face { border-color: var(--r-legendaer); animation: map-bob .6s steps(1, end) infinite; }
 .spawn-icon .star { position: absolute; top: -12px; right: -12px; width: 24px; height: 24px; animation: map-twinkle .8s steps(1, end) infinite; }
 @keyframes map-bob { 50% { transform: translateY(-4px); } }
+/* v6 Reichweite (Spec §1): Kreis Teal gestrichelt; in Reichweite 2-Stufen-Hop, außerhalb blass */
+.leaflet-container path.reach-circle { stroke: var(--teal); fill: var(--teal); }
+.spawn-icon.near img.face { animation: map-hop .5s steps(1, end) infinite; }
+.leaflet-marker-icon.spawn-icon.far { opacity: .55; }
+@keyframes map-hop { 50% { transform: translateY(-8px); } }
 @keyframes map-twinkle { 50% { transform: scale(.6); } }
 
 /* Arena: Holzschild mit Icon, Level-Plakette, Namensschild des globalen Besitzers */
@@ -125,12 +130,18 @@ p { margin: 0; }
 /* ---------- Sieg über alle Arenen ---------- */
 #screen-victory { align-items: center; justify-content: center; padding: 24px 16px; text-align: center; background-color: var(--night); background-image: var(--dither-night); background-size: 8px 8px; }
 .victory { display: flex; flex-direction: column; align-items: center; gap: 16px; max-width: 343px; }
-.victory .crown { width: 128px; height: 128px; animation: map-bob 1s steps(1, end) infinite; }
+/* Gesicht des Team-Anführers mit Pixel-Krone (Spec §0.4) */
+.victory-king { position: relative; padding-top: 40px; animation: map-bob 1s steps(1, end) infinite; }
+.victory-king .crown { position: absolute; top: 0; left: 50%; z-index: 1; width: 72px; height: 48px; margin-left: -36px; filter: drop-shadow(3px 0 0 var(--ink)) drop-shadow(-3px 0 0 var(--ink)) drop-shadow(0 -3px 0 var(--ink)) drop-shadow(0 3px 0 var(--ink)); }
+.victory-king .frame { width: 144px; height: 144px; }
+.victory-king .frame img { width: 100%; height: 100%; }
+.victory .say { max-width: 280px; padding: 8px 12px; font: 700 15px/1.35 var(--font-body); color: var(--ink); background: var(--paper); border: 3px solid var(--ink); box-shadow: var(--shadow); }
+.victory .say:empty { display: none; }
 .victory h2 { margin: 0; font: 700 28px/1.15 var(--font-pixel); color: var(--gold); text-shadow: 3px 3px 0 var(--ink); }
 .victory p { color: var(--paper-2); }
 
 /* ---------- Weniger Bewegung: keine Schmuck-Schleifen ---------- */
 @media (prefers-reduced-motion: reduce) {
-  .frame .shine, .frame.r-legendaer, .spawn-icon img.face, .spawn-icon .star, .player-pulse::before, .victory .crown { animation: none !important; }
+  .frame .shine, .frame.r-legendaer, .spawn-icon img.face, .spawn-icon .star, .player-pulse::before, .victory-king { animation: none !important; }
   .frame.r-episch .shine, .frame.r-legendaer .shine { opacity: 1; }
 }

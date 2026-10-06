@@ -23,7 +23,7 @@ also auf einen statischen Host (z.B. GitHub Pages) legen. Live unter
 - Shop: Lockmodul (5 Minuten doppelte Spawns), Super-Münzen. Sats gibt es für Fänge, neue Dex-Einträge, Quests, Stops und Arenasiege.
 - Trainer-Level: Fänge, Stops, Fusionen und Arenasiege geben XP. Jeder Aufstieg bringt Sats.
 - Quests: jeden Tag drei neue, Fortschritt zählt automatisch, „Einlösen" gibt Sats und XP. Wer täglich wiederkommt, bekommt einen wachsenden Tagesbonus (🔥 Serie).
-- Dosenbier-Stops 🍺: echte Kioske, Kneipen und Supermärkte aus OpenStreetMap im Umkreis von 600 m. Näher als 40 m rangehen, Glücksrad drehen: 20 bis 60 Sats, manchmal eine Super-Münze. Danach 5 Minuten Abkühlung (grauer Marker).
+- Dosenbier-Stops 🍺: echte Kioske, Kneipen und Supermärkte aus OpenStreetMap im Umkreis von 600 m. Näher als 80 m rangehen, Glücksrad drehen: 20 bis 60 Sats, manchmal eine Super-Münze. Danach 5 Minuten Abkühlung (grauer Marker).
 - Kampf: VS-Intro, dann auf den Boss tippen. Spezial-Buttons unten, wenn die Energie reicht. Blinkt es, wischen = ausweichen. Unter 50 % wird der Boss wütend und schneller. 90 Sekunden Zeit, ✕ oben links = aufgeben.
 - Arenen haben fünf Level, der Boss wird pro Level stärker und die Belohnung größer. Level 5 besiegt = gemeistert (👑). Alle drei gemeistert = Krone.
 - Rangliste: Top 20 nach Trophäen, wer gerade online ist, und ein Feed mit legendären Fängen, Fusionen und gemeisterten Arenen.
