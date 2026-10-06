@@ -486,5 +486,97 @@
   "height": 96,
   "note": "",
   "attempt": 1
+ },
+ {
+  "id": "sheet-btc-spin",
+  "file": "sheet-btc-spin.png",
+  "kind": "sheet",
+  "role": "fx-sheet",
+  "frames": 16,
+  "cols": 4,
+  "rows": 4,
+  "frame": 128,
+  "width": 512,
+  "height": 512,
+  "loop": true,
+  "fps": 12,
+  "note": "loop frames 1-15 (frame 16 is the front face again, nearly identical to frame 1); front 1, edge 5, back 8, edge 12. Back face shows a circuit pattern instead of the B. Cells re-centered per frame (model grid drifted up to ~10 px)",
+  "attempt": 1
+ },
+ {
+  "id": "sheet-btc-burst",
+  "file": "sheet-btc-burst.png",
+  "kind": "sheet",
+  "role": "fx-sheet",
+  "frames": 16,
+  "cols": 4,
+  "rows": 4,
+  "frame": 128,
+  "width": 512,
+  "height": 512,
+  "loop": false,
+  "fps": 16,
+  "note": "play once: 1-4 symbol grows, 5-6 glow, 7-10 explosion with coins, 11-15 fade, 16 empty. Cells re-centered per frame",
+  "attempt": 1
+ },
+ {
+  "id": "fx-btc-rocket",
+  "file": "fx-btc-rocket.png",
+  "kind": "sprite",
+  "role": "special-fx",
+  "width": 192,
+  "height": 192,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "fx-candles",
+  "file": "fx-candles.png",
+  "kind": "sprite",
+  "role": "special-fx",
+  "width": 256,
+  "height": 256,
+  "note": "attempt 2 (gpt_image_2); attempt 1 (nano_banana_2) had 8 bars on a baseline, not rising monotonically. Attempt 2 drew 7 candles, leftmost removed in post -> 6",
+  "attempt": 2
+ },
+ {
+  "id": "bg-moon",
+  "file": "bg-moon.png",
+  "kind": "background",
+  "role": "arena-bg",
+  "width": 1280,
+  "height": 720,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "icon-hashrate",
+  "file": "icon-hashrate.png",
+  "kind": "ui",
+  "role": "icon",
+  "width": 64,
+  "height": 64,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "icon-mining",
+  "file": "icon-mining.png",
+  "kind": "ui",
+  "role": "icon",
+  "width": 64,
+  "height": 64,
+  "note": "",
+  "attempt": 1
+ },
+ {
+  "id": "icon-btc",
+  "file": "icon-btc.png",
+  "kind": "ui",
+  "role": "icon",
+  "width": 64,
+  "height": 64,
+  "note": "",
+  "attempt": 1
  }
 ]
