@@ -137,14 +137,90 @@ test('v7: Bitcoin-Heizung: Gift, Betäubung und Heilung laufen über 35 s', () =
   assert.deepEqual(fx.slice(0, 3), ['overheat', 'fan', 'found']);
 });
 
-test('v7: Hitler: Betäubung und Bunker-Heilung laufen über 35 s', () => {
+test('v7: Hitler: Wolfsschanze, Betäubung und Bunker-Heilung laufen über 35 s', () => {
   const s = createBattle({ team: [strong('christian'), strong('micha'), strong('viktor')], enemy: makeBoss(BOSSES.hitler, 1), rng: () => 0.5 });
   s.enemy.btc = s.enemy.maxBtc = 100_000;
   const ev = fight(s, 35_000);
   assert.ok(s.time > 20_000);
   assert.ok(has(ev, 'stun', 'me'));
   assert.ok(has(ev, 'heal', 'enemy'));
-  assert.ok(ev.some(e => e.type === 'enemyAttack' && e.attack.fx === 'pencil'));
+  assert.ok(ev.some(e => e.type === 'enemyAttack' && e.kind === 'fast' && e.attack.fx === 'krupp'));
+  const fx = ev.filter(e => e.type === 'enemyAttack' && e.kind === 'charged').map(e => e.attack.fx);
+  assert.deepEqual(fx.slice(0, 3), ['wolfsschanze', 'ray', 'bunker']);
+  assert.ok(has(ev, 'enemySummoned'));
+  assert.equal(ev.filter(e => e.type === 'enemySummon').length, 20);
+});
+
+// ---------- Engine: Gegner-Helfer (Wolfsschanzen-Beschwörung) ----------
+const run = (s, ms) => { const ev = []; for (let t = 0; t < ms; t += 50) ev.push(...tick(s, 50)); return ev; };
+// Hitler ohne eigene weitere Angriffe; die Beschwörung feuert im ersten Schritt (t = 50)
+function summonBattle(team, dodged = false) {
+  const s = createBattle({ team, enemy: makeBoss(BOSSES.hitler, 1), rng: () => 0.5 });
+  const e = s.enemy;
+  e.nextFastAt = e.chargedEvery = Infinity;
+  e.warning = { kind: 'charged', attack: e.charged[0], firesAt: 0, dodged };
+  return s;
+}
+const helperHits = ev => ev.filter(e => e.type === 'enemySummon');
+
+test('v7: Goebbels und Himmler schlagen 10 s lang je einmal pro Sekunde, dann nicht mehr', () => {
+  const s = summonBattle([strong('christian')]);
+  assert.deepEqual(s.enemySummons, []);
+  const me = s.team[0], start = me.btc;
+  let ev = tick(s, 50);
+  assert.deepEqual(ev.find(e => e.type === 'enemySummoned'), { type: 'enemySummoned', ids: ['goebbels', 'himmler'], names: ['Goebbels', 'Himmler'], ms: 10_000 });
+  assert.equal(s.enemySummons.length, 2);
+  assert.deepEqual(s.summons, []); // Spieler-Helfer bleiben getrennt
+  ev = run(s, 10_000); // Schläge bei 1050 … 10050
+  const hits = helperHits(ev);
+  assert.equal(hits.length, 20);
+  assert.deepEqual(hits.slice(0, 2), [
+    { type: 'enemySummon', id: 'goebbels', name: 'Goebbels', damage: 3 },
+    { type: 'enemySummon', id: 'himmler', name: 'Himmler', damage: 3 },
+  ]);
+  assert.equal(me.btc, start - 60);
+  assert.equal(s.enemySummons.length, 0);
+  ev = run(s, 3000);
+  assert.equal(helperHits(ev).length, 0);
+  assert.equal(me.btc, start - 60);
+});
+
+test('v7: Ausweichen verhindert die Wolfsschanzen-Beschwörung nicht', () => {
+  const s = summonBattle([strong('christian')], true);
+  const ev = tick(s, 50);
+  assert.ok(ev.some(e => e.type === 'enemyAttack' && e.dodged));
+  assert.ok(has(ev, 'enemySummoned'));
+  assert.equal(s.enemySummons.length, 2);
+});
+
+test('v7: Gegner-Helfer: nach K.o. trifft der nächste Schlag den nächsten Rüther', () => {
+  const s = summonBattle([strong('christian'), strong('micha')]);
+  const [first, second] = s.team;
+  first.btc = 4;
+  tick(s, 50);
+  let ev = run(s, 1000); // bei 1050: Goebbels 3, Himmler nur noch 1
+  assert.deepEqual(helperHits(ev).map(e => e.damage), [3, 1]);
+  assert.equal(ev.find(e => e.type === 'faint').fighter, first);
+  assert.equal(s.team[s.active], second);
+  const before = second.btc;
+  ev = run(s, 1000); // bei 2050
+  assert.deepEqual(helperHits(ev).map(e => e.damage), [3, 3]);
+  assert.equal(second.btc, before - 6);
+});
+
+test('v7: Gegner-Helfer: nach einem Sieg kein Schaden und keine Events mehr', () => {
+  const s = summonBattle([strong('christian')]);
+  const me = s.team[0];
+  tick(s, 50);
+  run(s, 950); // t = 1000, nächster Helfer-Schlag bei 1050
+  const before = me.btc;
+  s.enemy.btc = 3;
+  let ev = tick(s, 50, { taps: 1 });
+  assert.ok(has(ev, 'win'));
+  assert.equal(helperHits(ev).length, 0);
+  ev = run(s, 3000);
+  assert.deepEqual(ev, []);
+  assert.equal(me.btc, before);
 });
 
 test('v7: starke Rüther besiegen Hitler mit Spezialattacken', () => {

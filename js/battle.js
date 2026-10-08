@@ -31,7 +31,7 @@ export function makeBoss(def, arenaLevel = 1) {
 export function createBattle({ team, enemy, rng = Math.random, duration = CONST.BATTLE_DURATION }) {
   return {
     team: structuredClone(team), active: 0, enemy: structuredClone(enemy),
-    time: 0, duration, summons: [], tapCooldown: 0, over: false, won: null, reason: null, rng,
+    time: 0, duration, summons: [], enemySummons: [], tapCooldown: 0, over: false, won: null, reason: null, rng,
   };
 }
 
@@ -78,6 +78,10 @@ function resolveEnemyAttack(s, me, ev) {
     if (atk.stun) { me.status.stunUntil = s.time + atk.stun; ev.push({ type: 'stun', target: 'me', ms: atk.stun }); }
   }
   if (atk.heal) ev.push({ type: 'heal', target: 'enemy', amount: heal(e, atk.heal) });
+  if (atk.summon) { // Gegner-Helfer, Ausweichen hilft nicht
+    s.enemySummons = atk.summon.map(x => ({ id: x.id, name: x.name, damage: x.damage, nextAt: s.time + CONST.SUMMON_INTERVAL, until: s.time + atk.summonMs }));
+    ev.push({ type: 'enemySummoned', ids: atk.summon.map(x => x.id), names: atk.summon.map(x => x.name), ms: atk.summonMs });
+  }
   e.warning = null;
   if (w.kind === 'fast') {
     e.nextFastAt = s.time + e.fastEvery;
@@ -115,14 +119,15 @@ function enemyStep(s, me, ev) {
   if (e.warning && s.time >= e.warning.firesAt) resolveEnemyAttack(s, me, ev);
 }
 
-function summonStep(s, ev) {
-  for (const su of s.summons) {
+// Helfer schlagen alle SUMMON_INTERVAL auf target, abgelaufene fliegen raus
+function helperStep(s, list, target, type, ev) {
+  for (const su of list) {
     while (su.nextAt <= s.time && su.nextAt <= su.until) {
-      ev.push({ type: 'summon', id: su.id, name: su.name, damage: hurt(s.enemy, su.damage * (su.power || 1)) });
+      ev.push({ type, id: su.id, name: su.name, damage: hurt(target, su.damage * (su.power || 1)) });
       su.nextAt += CONST.SUMMON_INTERVAL;
     }
   }
-  s.summons = s.summons.filter(su => su.nextAt <= su.until);
+  return list.filter(su => su.nextAt <= su.until);
 }
 
 function poisonStep(s, f, who, ev, dt) {
@@ -179,9 +184,12 @@ export function tick(s, dt, input = {}) {
     }
   }
 
-  summonStep(s, ev);
+  s.summons = helperStep(s, s.summons, s.enemy, 'summon', ev);
   rageStep(s, ev);
-  if (alive(s.enemy)) enemyStep(s, me, ev);
+  if (alive(s.enemy)) {
+    enemyStep(s, me, ev);
+    s.enemySummons = helperStep(s, s.enemySummons, me, 'enemySummon', ev); // enemySummonStep
+  }
   poisonStep(s, me, 'me', ev, dt);
   poisonStep(s, s.enemy, 'enemy', ev, dt);
 

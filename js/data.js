@@ -252,9 +252,9 @@ export const BOSSES = {
   // v7: Shop-Beschwörung der Haunebu, keine Arena (Kampf-Modus 'haunebu')
   hitler: {
     id: 'hitler', name: 'Adolf Hitler', btc: 600,
-    fast: { name: 'Brüllrede', damage: 16, every: 2300, warn: 600, fx: 'rant' },
+    fast: { name: 'Krupp-Rede', damage: 16, every: 2300, warn: 600, fx: 'krupp', flavour: ['Wenn du meine Arbeit für richtig hältst …', 'Hart wie Kruppstahl!'] },
     charged: [
-      { name: 'Teppichbeißer', damage: 40, warn: 1200, fx: 'pencil' },
+      { name: 'Wolfsschanzen-Beschwörung', damage: 0, warn: 1200, summon: [{ id: 'goebbels', name: 'Goebbels', damage: 3 }, { id: 'himmler', name: 'Himmler', damage: 3 }], summonMs: 10_000, fx: 'wolfsschanze' }, // Gegner-Helfer (Spec v7 §2b)
       { name: 'Flugscheiben-Strahl', damage: 20, warn: 1200, stun: 1500, fx: 'ray' },
       { name: 'Ab in den Bunker', damage: 0, warn: 1200, heal: 60, fx: 'bunker' },
     ],

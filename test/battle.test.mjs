@@ -126,6 +126,7 @@ test('Familientreffen: 20 Schläge je 4 in 10 s, nur einmal', () => {
   assert.equal(ev.filter(e => e.type === 'summon').length, 20);
   assert.equal(s.enemy.btc, 180);
   assert.equal(s.summons.length, 0);
+  assert.deepEqual(s.enemySummons, []); // Gegner-Helfer bleiben unberührt
   s.team[0].energy = 100;
   ev = tick(s, 50, { special: 0 });
   assert.ok(has(ev, 'specialDenied'));

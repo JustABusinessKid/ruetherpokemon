@@ -3,7 +3,7 @@
    spielt die Grafiken aus art/ ab. Hier: Bühne, HUD, Intro, Overlay und kampfeigene Kleinanimationen (Präfix bt-).
    Bewegung in ganzen Pixeln bzw. mit steps(); keine weichen Schatten, keine Verläufe außer Dither und Segmenten.
    Einmal-Animationen nutzen translate/rotate/scale einzeln, damit sie sich nicht gegenseitig überschreiben.
-   Ebenen: .bg 0 · Boss 1 · .rage::after/.helpers 2 · .fx/.combo 3 · .flash 5 · .switch 6 · .intro 8 · .quit 9 · .overlay 10 */
+   Ebenen: .bg 0 · Boss 1 · .rage::after/.helpers/.enemy-helpers 2 · .fx/.combo 3 · .flash 5 · .switch 6 · .intro 8 · .quit 9 · .overlay 10 */
 
 #screen-battle {
   --bt-outline: 2px 0 0 var(--ink), -2px 0 0 var(--ink), 0 2px 0 var(--ink), 0 -2px 0 var(--ink), 3px 3px 0 var(--ink);
@@ -162,9 +162,20 @@
   animation: bt-run-in .6s steps(6) both; animation-delay: calc(var(--i, 0) * 150ms);
 }
 @keyframes bt-run-in { 0% { translate: -260px 0; } 50% { translate: -60px -10px; } 70% { translate: -30px 0; } }
-#screen-battle .helpers.arrive { z-index: 4; } /* im Freeze des Familientreffens über dem Banner-Dimmer (.fx 3) */
-#screen-battle .helpers.hop { animation: bt-hop .3s steps(3); }
+#screen-battle .helpers.arrive, #screen-battle .enemy-helpers.arrive { z-index: 4; } /* im Freeze der Beschwörung über dem Banner-Dimmer (.fx 3) */
+#screen-battle .helpers.hop, #screen-battle .enemy-helpers.hop { animation: bt-hop .3s steps(3); }
 @keyframes bt-hop { 50% { translate: 0 -12px; } }
+/* Wolfsschanzen-Beschwörung (Hitler, v7b), Spiegelbild zum Familientreffen: Goebbels links, Himmler rechts neben dem Boss,
+   art/boss-<id>.png kleiner als er; rennen in Pixel-Schritten von der Bühnenkante herein und atmen dann wie der Boss */
+#screen-battle .enemy-helpers { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+#screen-battle .enemy-helpers .helper {
+  --side: calc(var(--i, 0) * 2 - 1); /* -1 links, 1 rechts */
+  position: absolute; left: calc(var(--fx-enemy-x) + var(--side) * 34%); top: calc(var(--fx-enemy-y) + 18%);
+  width: 112px; height: 112px; margin: -56px 0 0 -56px; image-rendering: pixelated;
+  animation: bt-run-in-side .7s steps(7) both, bt-breathe 1.2s steps(1) infinite;
+  animation-delay: calc(var(--i, 0) * 150ms), calc(.7s + var(--i, 0) * 150ms);
+}
+@keyframes bt-run-in-side { 0% { translate: calc(var(--side) * 240px) 0; } 30% { translate: calc(var(--side) * 150px) -10px; } 60% { translate: calc(var(--side) * 60px) 0; } 80% { translate: calc(var(--side) * 20px) -8px; } 100% { translate: 0 0; } }
 
 /* Einmal-Animationen auf Sprites (Klasse nimmt JS nach Ablauf wieder ab) */
 #screen-battle .sprite.shake { animation: bt-shake .3s steps(1); }
@@ -219,6 +230,24 @@
   80% { left: calc(var(--fx-me-x) + 6% + var(--i, 0) * 60px); opacity: 1; }
   100% { left: 110%; opacity: 0; }
 }
+/* Krupp-Rede (Hitler, v7b): schlichtes Holz-Rednerpult fährt in Stufen von unten vor ihn, steht und sinkt wieder weg;
+   die Wutblase „!!" ploppt rechts über seinem Kopf und zittert */
+#screen-battle .fx-prop.path-lectern-up { animation-name: bt-lectern-up; animation-timing-function: steps(5, end); top: calc(var(--fx-enemy-y) + 24%); }
+@keyframes bt-lectern-up {
+  0% { top: calc(100% + var(--size, 160px) / 2); }
+  25%, 80% { top: calc(var(--fx-enemy-y) + 24%); opacity: 1; }
+  100% { top: calc(var(--fx-enemy-y) + 32%); opacity: 0; }
+}
+#screen-battle .fx-prop.path-rant-pop { animation-name: bt-rant-pop; animation-timing-function: steps(2, end); left: calc(var(--fx-enemy-x) + 22%); top: calc(var(--fx-enemy-y) - 26%); }
+@keyframes bt-rant-pop { 0% { scale: .3; opacity: 0; } 15% { scale: 1.2; opacity: 1; } 25%, 45%, 65% { scale: 1; rotate: -10deg; } 35%, 55%, 75% { rotate: 10deg; } 85% { rotate: 0deg; opacity: 1; } 100% { opacity: 0; } }
+/* Sprechblase der Rede: unten rechts statt mitten auf ihm und neben Einschlag und Schadenszahl bei mir;
+   Bild gespiegelt, damit der Zipfel nach links oben zu ihm zeigt */
+#screen-battle .fx-prop.krupp-speech { left: 72%; top: calc(var(--fx-me-y) - 8%); }
+#screen-battle .fx-prop.krupp-speech > img { scale: -1 -1; }
+#screen-battle .fx-prop.krupp-speech .bubble-text { top: 30%; bottom: 9%; }
+/* Familientreffen läuft: Blase über die Helferreihe (Helfer-Oberkante me-y − 48 px, 12 px Hüpfer), damit Christians und
+   Michas echte Gesichter frei bleiben; ganz an den rechten Rand, damit sie auf kleinen Bühnen nicht auf seinem Gesicht sitzt */
+#screen-battle .helpers:not(.hidden) ~ .fx .fx-prop.krupp-speech { left: calc(100% - var(--size, 160px) / 2 - 4px); top: calc(var(--fx-me-y) - 60px - var(--size, 160px) / 2); }
 /* Firmware-Update (bar-on-me): Beschriftung über dem Requisit, den Balken zeichnet theme.css */
 #screen-battle .fx-prop .fw-label { top: auto; right: auto; bottom: 100%; left: 50%; translate: -50% 0; padding: 2px 6px; white-space: nowrap; font: 800 12px/1.15 var(--font-body); color: var(--paper); background: var(--ink); }
 
@@ -330,7 +359,7 @@
   #screen-battle .stage[class*="quake"], #screen-battle .stage.rage::after, #screen-battle .timer.low,
   #screen-battle .specials button.ready, #screen-battle .combo.hot, #screen-battle .combo.hot::before, #screen-battle .combo.hot::after,
   #screen-battle .enemy-sprite.rage-shake, #screen-battle .helpers.hop, #screen-battle .enemy-sprite.lunge,
-  #screen-battle .helpers .helper, #screen-battle .stage .bg .moon,
+  #screen-battle .helpers .helper, #screen-battle .enemy-helpers.hop, #screen-battle .enemy-helpers .helper, #screen-battle .stage .bg .moon,
   #screen-battle .stage.overheat .bg, #screen-battle .stage.blow .bg, #screen-battle .enemy-sprite.hide, #screen-battle .overlay .boss.ufo { animation: none !important; }
   #screen-battle .stage.blow::before { display: none; }
   #screen-battle .enemy-sprite.hide { opacity: 0; } /* Bunker: einfach kurz weg */

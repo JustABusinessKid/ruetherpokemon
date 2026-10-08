@@ -11,6 +11,7 @@ import { hashrateText, isNarration } from './format.js';
 // createBattleScreen({ el, onEnd, onEvent }) -> { start({ team, enemy, rng, mode, arena, arenaLevel, reward, masteredAfter, wild }), stop() }
 // mode 'arena' | 'wild' | 'haunebu'; wild = { id, rarity, name } (Gegner = wilder Rüther mit echtem Gesicht, kein „Nochmal").
 // 'haunebu' (v7): Beschwörung aus dem Shop gegen Hitler, ohne arena; Sieg = Flugscheibe erbeutet, kein „Nochmal".
+// Gegner-Helfer (v7b, Wolfsschanzen-Beschwörung): state.enemySummons → .enemy-helpers neben dem Boss (art/boss-<id>.png).
 // onEnd({ won, retry, reason, activeIndex }) genau einmal pro Kampf: Overlay-Button oder Aufgeben (reason 'quit').
 // onEvent(e) für jedes Engine-Event, zusätzlich { type: 'combo', value } bei jeder Combo-Erhöhung.
 
@@ -52,11 +53,14 @@ const LINE_MIN = 8000, LINE_SPREAD = 4000; // Gegner-Sprüche alle 8–12 s Spie
 // Betäubung des eigenen Rüthers je Gegner-Attacke (fx) als Text; alles andere zeigt den Firmware-Balken der PS3
 const STUN_TEXT = { wild: 'sprachlos', fan: 'benebelt', ray: 'im Strahl' };
 const BUNKER_MS = 1500; // = bt-bunker in css/battle.css
+const KRUPP_MS = 1500; // Krupp-Rede kommt alle 2,3 s (Wut 1,8 s): Pult, Wutblase und Sprechblase sind nach ~1,6 s weg
+const WOLF_MS = 1600; // Wolfsschanzen-Beschwörung: Banner + Freeze, Goebbels und Himmler rennen derweil über dem Dimmer herein
 const bubbleText = s => { const t = document.createElement('span'); t.className = 'bubble-text'; t.textContent = s; return t.outerHTML; };
 
 export function createBattleScreen({ el, onEnd, onEvent }) {
   const $ = s => el.querySelector(s);
   const flash = $('.flash'), stage = $('.stage'), bgEl = $('.stage .bg'), fx = $('.fx'), helpers = $('.helpers'), comboEl = $('.combo');
+  const enemyHelpers = $('.enemy-helpers');
   const enemySprite = $('.enemy-sprite'), timerEl = $('.timer');
   const enemyPanel = $('.fighter.enemy'), mePanel = $('.fighter.me');
   const frame = mePanel.querySelector('.frame'), meSprite = frame.querySelector('.sprite'), energyFill = mePanel.querySelector('.energy .fill');
@@ -88,6 +92,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
   let input = freshInput(), dodgeDir = 'left', koPending = false, batchDelay = 0;
   let combo = 0, lastHitAt = -Infinity, stunTextAt = -Infinity;
   let pauseUntil = 0, heldBtc = null, nextLineAt = Infinity, sayRef = null, bossFx = '';
+  let rede = []; // laufende Krupp-Rede (Pult, Wutblase, Sprechblase): die nächste Rede baut sie ab
   let ctx = {}; // { mode, arena, arenaLevel, reward, masteredAfter, wild }
   const timers = new Set();
   const pending = new Map(); // node -> { cls: timerId }: Neustart derselben Animation löscht den alten Entfern-Timer
@@ -274,13 +279,24 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
       later(() => sheet('btcburst', 'enemy', { size: 208 }), slow(450));
       return slow(450);
     },
-    // Adolf Hitler (Haunebu, Untergang-Meme): Wutanfall, Bleistift auf den Tisch, Flugscheiben-Strahl, ab in den Bunker
-    rant() { anim(enemySprite, 'shake', 300); return toMe('rant', slow(600), 128); },
-    pencil() { // hoher Bogen, knallt hart auf: Staub und „KLACK!" zusätzlich zum Einschlag
-      const ms = slow(1100), hit = Math.round(ms * 0.8);
-      prop('pencil', 'lob-to-me', { ms, size: 128 });
-      later(() => { sheet('smoke', 'me', { size: 176 }); text('KLACK!', 'me', 'big'); }, hit);
-      return hit;
+    // Adolf Hitler (Haunebu, lächerlicher Verlierer): Krupp-Rede, Wolfsschanzen-Beschwörung, Flugscheiben-Strahl, ab in den Bunker
+    krupp(atk) { // Rednerpult steigt vor ihm hoch, er bebt, „!!", Sprechblase mit einem flavour-Text auf mich
+      rede.forEach(p => p.stop());
+      anim(enemySprite, 'shake', 300);
+      later(() => anim(enemySprite, 'shake', 300), 300);
+      const lines = [].concat(atk.flavour || []);
+      const line = lines[Math.floor(Math.random() * lines.length)] || pickLine(state.enemy.id, 'fight') || '';
+      // Sprechblase mit fx.js-delay statt later(): ihr stop() bricht auch das verzögerte Einhängen ab (nächste Rede, stop())
+      const speech = prop('speech', 'bubble-at-me', { ms: KRUPP_MS - 250, delay: 250, size: 160, html: bubbleText(line) });
+      speech.el.classList.add('krupp-speech'); // unten rechts, Zipfel zeigt auf ihn (css/battle.css)
+      rede = [prop('lectern', 'lectern-up', { ms: KRUPP_MS, size: 144 }), prop('rant', 'rant-pop', { ms: 700, size: 72 }), speech];
+      return 450;
+    },
+    wolfsschanze(atk) { // Holzbanner, Spielzeit steht; Goebbels und Himmler kommen mit dem enemySummoned-Event
+      pauseUntil = Math.max(pauseUntil, performance.now() + WOLF_MS);
+      sayRef?.stop();
+      banner(fx, { title: `${atk.name}!`, sub: 'Goebbels! Himmler! Sofort zu mir!', portrait: bossArt(state.enemy.id), ms: WOLF_MS });
+      return 0;
     },
     ray(atk, me) { // Flugscheibe schwebt über mir ein, der Strahl zieht mein echtes Gesicht (Reiter) hoch
       const ms = slow(1400);
@@ -369,8 +385,10 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
           if (at === 'me' && e.amount > 0) btcRain(fx, { n: 12, size: 32 });
         }, batchDelay);
         break;
-      case 'summoned': showHelpers(e.ids || []); break;
+      case 'summoned': showHelpers(helpers, e.ids || [], sprite, FREEZE.family); break;
       case 'summon': anim(helpers, 'hop', 300); num(`-${e.damage}`, 'enemy'); break;
+      case 'enemySummoned': showHelpers(enemyHelpers, e.ids || [], bossArt, WOLF_MS); break;
+      case 'enemySummon': anim(enemyHelpers, 'hop', 300); if (e.damage > 0) dmgNum(e.damage, 'me'); break; // beide schlagen im selben Tick: nach KO kein „-0"
       case 'rage': // Wutphase: roter Pixel-Rahmen bleibt bis Kampfende, Boss rot getönt und wackelt, „WUT!", Plakette am Namen (render)
         stage.classList.add('rage');
         anim(enemySprite, 'rage-shake', 1000);
@@ -403,16 +421,18 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
   }
 
   // Familientreffen: die echten Sprites von Christian und Micha rennen neben den eigenen Rüther (wie v3);
-  // .helpers hüpft bei jedem Schlag (summon) und verschwindet mit dem Ende der Beschwörung (render)
-  function showHelpers(ids) {
-    helpers.innerHTML = '';
-    helpers.classList.remove('hidden');
-    anim(helpers, 'arrive', FREEZE.family); // während des Freezes über dem Banner-Dimmer, das Hereinrennen ist der Lacher
+  // Wolfsschanzen-Beschwörung: Goebbels und Himmler (art/boss-<id>.png) rennen von links und rechts neben Hitler.
+  // Die Ebene hüpft bei jedem Schlag (summon/enemySummon) und verschwindet mit dem Ende der Beschwörung (render)
+  function showHelpers(box, ids, src, freeze) {
+    box.innerHTML = '';
+    box.classList.remove('hidden');
+    anim(box, 'arrive', freeze); // während des Freezes über dem Banner-Dimmer, das Hereinrennen ist der Lacher
     ids.forEach((id, i) => {
-      const img = Object.assign(document.createElement('img'), { className: 'helper', src: sprite(id), alt: '' });
+      const img = Object.assign(document.createElement('img'), { className: 'helper', src: src(id), alt: '' });
+      img.addEventListener('error', () => { if (!img.src.endsWith(BOSS_FALLBACK)) img.src = BOSS_FALLBACK; });
       img.dataset.id = id;
       img.style.setProperty('--i', i);
-      helpers.appendChild(img);
+      box.appendChild(img);
     });
   }
 
@@ -494,6 +514,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     enemySprite.classList.toggle('poisoned', !!e.status.poison);
     meSprite.classList.toggle('poisoned', !!me.status.poison);
     helpers.classList.toggle('hidden', !state.summons.length);
+    enemyHelpers.classList.toggle('hidden', !state.enemySummons?.length);
     if (combo && t - lastHitAt > COMBO_HIDE) resetCombo();
     const stunnedMe = me.status.stunUntil > t;
     specials.querySelectorAll('.special').forEach((b, i) => {
@@ -510,8 +531,8 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
   // Feste Zeitschritte mit Aufholen: auch bei gedrosseltem rAF (Hintergrund-Tab,
   // sparsamer Browser) folgt die Spielzeit der echten Zeit. Tipps werden auf die
   // Schritte verteilt, Spezial/Ausweichen/Wechsel gelten im ersten Schritt.
-  // Freeze (pauseUntil, echte Zeit): Spielzeit steht, Eingaben verfallen, nur rendern. Nach einem special-Event
-  // wird der Rest des Aufholens verworfen, damit die Sequenz nicht in eingeholter Spielzeit verpufft.
+  // Freeze (pauseUntil, echte Zeit): Spielzeit steht, Eingaben verfallen, nur rendern. Startet ein Freeze (Spezial,
+  // Wolfsschanze), wird der Rest des Aufholens verworfen, damit die Sequenz nicht in eingeholter Spielzeit verpufft.
   const STEP = 1000 / 60, MAX_CATCHUP = 1500;
   function loop(ts) {
     if (!running) return;
@@ -535,7 +556,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
       if (events.some(e => e.type === 'fast' || e.type === 'stunnedTap')) taps -= 1;
       for (const e of events) handle(e);
       first = false;
-      if (events.some(e => e.type === 'special')) break;
+      if (paused()) break;
     }
     batchDelay = 0; koPending = false;
     if (!state.over && !paused() && state.time >= nextLineAt) speak();
@@ -682,6 +703,8 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     timers.clear(); pending.clear();
     window.removeEventListener('keydown', onKey);
     fx.innerHTML = ''; bgEl.innerHTML = ''; helpers.innerHTML = ''; helpers.className = 'helpers hidden';
+    enemyHelpers.innerHTML = ''; enemyHelpers.className = 'enemy-helpers hidden';
+    rede.forEach(p => p.stop()); rede = [];
     flash.className = 'flash'; stage.classList.remove('rage', 'quake-s', 'quake-m', 'quake-l', 'overheat', 'blow');
     enemySprite.className = 'enemy-sprite sprite'; meSprite.className = 'sprite';
     specials.classList.remove('shake-x'); enemyPanel.classList.remove('glow'); mePanel.classList.remove('glow');

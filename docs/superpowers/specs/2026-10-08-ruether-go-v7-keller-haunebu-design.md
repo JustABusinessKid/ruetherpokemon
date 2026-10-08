@@ -53,7 +53,7 @@ Die Daten sind schon in `js/data.js` eingetragen und dürfen nicht verändert we
   - Boss-Grafik `art/boss-hitler.png`: eine lächerlich kleine, tobende Karikatur mit schwarzem Seitenscheitel, Zweifingerbart und schlichter olivbrauner Jacke **ohne jedes Abzeichen**, die Fäuste im Wutanfall. Lehnt das Bildmodell ab, baut der Asset-Agent eine Pixel-Karikatur selbst in Python/PIL, im Stil der Bosse und ebenfalls ohne Symbole.
   - Hitlers Sprüche kommen aus `LINES.hitler`: `appear` im Intro, `fight` während des Kampfs, `defeat` im Sieg-Overlay.
 - **Boss-Attacken** (`BOSS_FX`). Sebi will Hitlers eigene, lächerliche Markenzeichen ohne Rüther-Bezug:
-  - **`rant` und `pencil` sind in diesem Lauf PLATZHALTER.** Sebi hat beide Angriffe nach dem Start neu festgelegt. Sie werden in einer eigenen Folgerunde (v7b) komplett ersetzt: „Krupp-Rede“ und „Wolfsschanzen-Beschwörung“ mit Goebbels und Himmler als Gegner-Helfern, dafür kommt eine Engine-Erweiterung. Bis dahin reicht ein einfacher funktionierender Handler mit Fallback-Requisit. **Prüfer melden zu rant/pencil nichts, Fix-Agenten bauen dort nichts.** Gesucht sind nur echte Abstürze.
+  - **`rant` und `pencil` sind ersetzt, siehe §2b** (Krupp-Rede, Wolfsschanzen-Beschwörung).
   - `ray`: Strahl der Flugscheibe. Das Requisit `fx-haunebu.png` schwebt oben ein, darunter ein Strahl `fx-tractor-beam.png` auf mich. Die Betäubung kommt aus der Engine.
   - `bunker`: Hitler verschwindet kurz (Klasse `.hide` am Gegner-Sprite) und kommt geheilt zurück.
 - **Sieg:**
@@ -66,6 +66,70 @@ Die Daten sind schon in `js/data.js` eingetragen und dürfen nicht verändert we
   - Die Sats bleiben weg und es gibt kein „Nochmal“, die Beschwörung kostet neu.
   - Auch beim Aufgeben werden Stats gespeichert (`afterChange`).
 - **Stats:** `save.stats.haunebuWins`.
+
+## §2b Hitlers Markenzeichen: Krupp-Rede und Wolfsschanzen-Beschwörung (v7b)
+
+Sebi hat Hitlers zwei Angriffe neu festgelegt. Sie ersetzen die Platzhalter `rant` und `pencil` aus §2, die Daten stehen schon in `BOSSES.hitler`. Flugscheiben-Strahl und Ab in den Bunker bleiben, wie sie sind.
+
+- **`krupp` „Krupp-Rede“** (schneller Angriff, alle 2,3 s, 16 Schaden):
+  - Ein schlichtes Holz-Rednerpult mit Mikrofon (`fx-lectern.png`, ohne Symbole) steigt vor Hitler hoch.
+  - Hitler bebt kurz. Eine kleine rote Wutblase `fx-rant` („!!“) erscheint über ihm.
+  - Eine Sprechblase (`fx-speech`, Pfad `bubble-at-me`, `bubbleText`) mit einem der `flavour`-Texte fliegt auf mich. `flavour` ist ein Array: „Wenn du meine Arbeit für richtig hältst …“ oder „Hart wie Kruppstahl!“, zufällig gewählt.
+  - Dauer höchstens ~1,6 s, weil der Angriff oft kommt. Requisiten dürfen sich nicht stapeln, die alte Rede wird beim Start einer neuen abgebaut.
+- **`wolfsschanze` „Wolfsschanzen-Beschwörung“** (Spezial, als erster Spezial nach ~10 s):
+  - Holzbanner (`banner()` aus fx.js) mit dem Titel „Wolfsschanzen-Beschwörung!“, dem Untertitel „Goebbels! Himmler! Sofort zu mir!“ und Hitlers Bild (`art/boss-hitler.png`) als Porträt.
+  - Danach rennen Goebbels und Himmler neben Hitler ins Bild und bleiben 10 s. Das ist das Spiegelbild zu Hildegards Familientreffen: Die Helfer stehen neben dem Gegner (oben), nicht neben mir. Bei jedem Schlag hüpft der Helfer und an mir erscheint die Schadenszahl.
+- **Engine (`js/battle.js`)**: Gegner-Helfer sind getrennt von den Spieler-Helfern (`state.summons` bleibt unverändert).
+  - `createBattle` bekommt `enemySummons: []`.
+  - In `resolveEnemyAttack` gilt: Hat `atk.summon`, dann `s.enemySummons = atk.summon.map(x => ({ id, name, damage: x.damage, nextAt: s.time + SUMMON_INTERVAL, until: s.time + atk.summonMs }))` und das Event `{ type: 'enemySummoned', ids, names, ms }`. Ausweichen verhindert die Beschwörung nicht.
+  - Ein neuer Schritt `enemySummonStep` läuft nur, solange der Gegner lebt, und zwar nach `enemyStep`, vor dem Gift. Er schadet dem aktiven Rüther je Helfer alle `SUMMON_INTERVAL` mit `damage` und sendet `{ type: 'enemySummon', id, name, damage }`.
+  - KO und Wechsel laufen über die vorhandene Logik. Spätere Schläge treffen den nächsten aktiven Rüther.
+  - Abgelaufene Helfer fliegen aus der Liste.
+- **UI (`js/battle-ui.js`, `css/battle.css`, Markup im Kampf-Screen in `index.html`)**:
+  - Ein Container `.enemy-helpers` neben dem Gegner-Sprite zeigt `art/boss-<id>.png` (kleiner als der Boss). Die Helfer laufen mit Pixel-Animation herein.
+  - `render()` blendet den Container aus, wenn `state.enemySummons` leer ist. `stop()` setzt alles zurück.
+  - Die alten Handler `rant`/`pencil` werden entfernt.
+- **Grafiken:**
+  - `boss-goebbels.png` und `boss-himmler.png` entstehen als **Pixel-Karikaturen direkt in PIL**, im Stil von `art/boss-hitler.png` und `art/boss-hitler.py` (64er-Raster ×4, 256×256, transparent, dunkelgrüne Kontur). Die Bildmodelle haben schon Hitler als „nsfw“ abgelehnt, also nicht versuchen und keine Filter umgehen.
+    - Goebbels: hager, großer Kopf, abstehende Ohren, glatt zurückgekämmtes schwarzes Haar, brüllt in ein Megafon, schlichter grauer Mantel.
+    - Himmler: kleine runde Brille, fliehendes Kinn, Bärtchen, kurzer Seitenscheitel, nervös, mit Klemmbrett, schlichter dunkelgrauer Mantel.
+    - Beide lächerlich und ohne jedes Abzeichen, keine Uniform-Insignien, keine Runen, keine Mützenembleme. Keine Behinderung verspotten.
+  - `fx-lectern.png` per Higgsfield (`nano_banana_2`, Stil-Satz): schlichtes Holz-Rednerpult mit Mikrofon, ohne Symbole oder Wappen.
+  - `fx-pencil.png` fällt weg, mitsamt Eintrag in manifest/README.
+- **Tests:** Engine-Test für Gegner-Helfer:
+  - Sie schaden 10 s lang einmal pro Sekunde je Helfer.
+  - Nach Ablauf schaden sie nicht mehr.
+  - Bei einem KO trifft der nächste Schlag den nächsten Rüther.
+  - Nach einem Sieg kommt kein Schaden mehr.
+  - Die Spieler-Helfer (Familientreffen) laufen unverändert.
+
+  Der vorhandene Hitler-Test in `test/v7.test.mjs` wird auf die neuen fx-Namen umgestellt.
+
+## §2c Gegner-Sprüche immer lesbar (v7c)
+
+Sebi: „der Dialog bei Hitler usw ist total verdeckt, erkennt man nicht“.
+
+**Ursache:** Die Spruchblase (`fx.say` in `.fx`, `SAY_AT` = etwas links über dem Gegner) liegt mitten in der Effektzone. Dort laufen ständig Tipp-Schadenszahlen (`TXT.enemy` liegt fast auf derselben Höhe), Treffer-Funken, Boss-Dampf, die „!!“-Blase, Gegner-Helfer und die Holzbanner (Spezial-Freeze, oben, z 9 > Blase z 8) durch.
+
+**Lösung:** Eine eigene Sprechblase für den Gegner **außerhalb der Bühne**. Sie hängt unter der Gegner-Leiste, wie bei Pokémon.
+
+- **Markup:** `<div class="enemy-say hidden"><img class="say-face" alt=""><p class="say-text"></p></div>` als direktes Kind von `#screen-battle`, nach `.battle-top`. Nicht in `.battle-top` packen, sonst bildet dieser einen Stapelkontext und der Aufgeben-Knopf rutscht unter das Intro.
+- **Lage:** `position:absolute`, `left: 12px`, `right: 12px`, `top` = Unterkante von `.battle-top` minus 4 px. Den Wert setzt `battle-ui.js` beim Zeigen über `offsetHeight`. Die Blase hat einen Pixel-Zipfel, der nach oben-links zur Gegner-Leiste zeigt.
+- **Ebene:** `z-index: 7`, also über `.stage` mit allen Effekten (`.flash` 5) und über `.switch` (6), unter Intro 8, Aufgeben 9 und Overlay 10.
+- **Aussehen:** Pixel-Kneipe: Papier `var(--paper)`, 3 px Tinte-Rand, harter Pixel-Schatten, kein weicher Schatten. Links das Porträt, 36 px:
+  - beim Boss `art/boss-<id>.png`,
+  - beim wilden Rüther **das echte Gesicht** `sprites/<id>.png` im Seltenheitsrahmen.
+
+  Rechts der Text in Nunito 800, 14 px, höchstens 3 Zeilen. Auftritt als kurzes steps-Pop, bei `prefers-reduced-motion` ohne Animation.
+- **Was hineinkommt:**
+  1. Alle Gegner-Sprüche aus `speak()` (Boss und wild).
+  2. Der Ausruf des wilden Rüthers bei seiner Lade-Attacke.
+  3. Neu: Bei jeder **Spezial-Attacke eines Bosses** steht beim `warn`-Event „`<Attackenname>`!“ in der Blase, in der Klasse `shout` (roter Text). So sieht man, was kommt, zum Beispiel „Wolfsschanzen-Beschwörung!“, „Flugscheiben-Strahl!“ oder „Plus 70 Grad!“. Schnelle Attacken bekommen keinen Ausruf, das wäre zu oft.
+- **Dauer:** 3000 ms, ein neuer Text ersetzt den alten sofort. `stop()` und das Ergebnis-Overlay blenden die Blase aus. Timer laufen über die vorhandenen `later()`-Helfer, damit `stop()` sie abräumt.
+- **Combo:** Solange die Blase sichtbar ist, rutscht die Combo-Anzeige unter sie (Klasse am Screen, z. B. `.talking`), damit nichts überdeckt ist.
+- **Aufräumen:** Die bisherigen `say(fx, …)`-Aufrufe für Gegner fallen weg. Wird `say()`/`.fx-say` danach nirgends mehr genutzt, kommen Funktion und CSS weg.
+- **Krupp-Rede und Viktors Sprechblasen-Requisit** (`path-bubble-at-me`) liegen in `.fx` über Schadenszahlen und Funken (`z-index` ≥ 8 innerhalb von `.fx`), damit auch deren Text lesbar ist.
+- **Muss passen auf 375×667 und 390×844:** Die Gegner-HP-Leiste bleibt frei, und die Blase verdeckt nie die Spezial-Knöpfe.
 
 ## §3 Flugscheibe: zu einer Arena beamen
 

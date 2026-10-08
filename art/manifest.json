@@ -664,14 +664,36 @@
   "attempt": 1
  },
  {
-  "id": "fx-pencil",
-  "file": "fx-pencil.png",
+  "id": "boss-goebbels",
+  "file": "boss-goebbels.png",
+  "kind": "sprite",
+  "role": "boss-helper",
+  "width": 256,
+  "height": 256,
+  "model": "PIL (art/boss-goebbels.py)",
+  "note": "hand-built PIL pixel art like boss-hitler (64x64 grid, NEAREST x4), image models not tried (they refused boss-hitler). Gaunt lackey with oversized head, sticking-out ears and slicked-back black hair, shouting into a yellow megaphone, plain grey coat. No insignia, no symbols. Rebuild: python art/boss-goebbels.py art/boss-goebbels.png",
+  "attempt": 1
+ },
+ {
+  "id": "boss-himmler",
+  "file": "boss-himmler.png",
+  "kind": "sprite",
+  "role": "boss-helper",
+  "width": 256,
+  "height": 256,
+  "model": "PIL (art/boss-himmler.py)",
+  "note": "hand-built PIL pixel art like boss-hitler (64x64 grid, NEAREST x4), image models not tried (they refused boss-hitler). Nervous sweating lackey with small round glasses, weak chin, small mustache and short side part, clutching a clipboard, plain dark grey coat. No insignia, no symbols. Rebuild: python art/boss-himmler.py art/boss-himmler.png",
+  "attempt": 1
+ },
+ {
+  "id": "fx-lectern",
+  "file": "fx-lectern.png",
   "kind": "sprite",
   "role": "boss-fx",
   "width": 256,
   "height": 256,
   "model": "nano_banana_2",
-  "prompt": "game sprite of a single yellow wooden pencil lying diagonally, the sharpened graphite tip pointing to the lower right, a pink eraser in a metal ferrule at the upper left end, lots of empty margin around it, single character/object, full body visible, centered, chunky 16-bit pixel art with a crisp 32-px grid feel, no anti-aliasing, clean 1-px dark bottle-green outlines, slightly rounded sturdy shapes; environment in warm cream, brick red and bottle green with amber highlights, characters and bosses in saturated contrasting colors that pop against it, pickups and attack effects marked with electric gold and bright teal glow; cozy German small-town pub-evening mood, warm late-afternoon light, flat ambient shading; high contrast between game elements and backgrounds, clean readable silhouettes, consistent flat frontal perspective across all assets, on a solid uniform bright magenta (#FF00FF) background, no shadows cast on the background, no ground plane, nothing cropped at the edges, no text, no letters, no labels, no scenery, no extra objects",
+  "prompt": "game sprite of a plain simple wooden speaker's lectern podium seen from the front, warm brown wood with a slanted top and a sturdy square base, a single black microphone on a thin bendy gooseneck stand rising from the top, completely plain undecorated front panel, lots of empty margin around it, single character/object, full body visible, centered, chunky 16-bit pixel art with a crisp 32-px grid feel, no anti-aliasing, clean 1-px dark bottle-green outlines, slightly rounded sturdy shapes; environment in warm cream, brick red and bottle green with amber highlights, characters and bosses in saturated contrasting colors that pop against it, pickups and attack effects marked with electric gold and bright teal glow; cozy German small-town pub-evening mood, warm late-afternoon light, flat ambient shading; high contrast between game elements and backgrounds, clean readable silhouettes, consistent flat frontal perspective across all assets, on a solid uniform bright magenta (#FF00FF) background, no shadows cast on the background, no ground plane, nothing cropped at the edges, no text, no letters, no labels, no scenery, no extra objects, no symbols, no emblems, no coat of arms, no flags, no insignia anywhere",
   "note": "",
   "attempt": 1
  },
