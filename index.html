@@ -21,6 +21,7 @@
 <link rel="stylesheet" href="css/battle.css">
 <link rel="stylesheet" href="css/screens.css">
 <link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/flight.css">
 </head>
 <body>
 
@@ -84,6 +85,7 @@
     <span id="hud-dex" class="pill">Dex 0/20</span>
     <img id="badge" class="badge ico ico-lg hidden" src="art/icon-trophy.png" alt="Herrscher aller Rüthers" title="Herrscher aller Rüthers">
     <button class="sats-chip" data-open="shop"><img class="ico" src="art/icon-coin.png" alt="">0</button>
+    <button id="beam-chip" class="beam-chip hidden" title="Haunebu-Flug: Zeit bis zum Rückflug"><img class="ico" src="art/icon-haunebu.png" alt="">Haunebu <span class="beam-left">10:00</span></button>
     <div id="btc-ticker" class="ticker hidden"></div>
   </header>
   <div id="banner" class="banner hidden"></div>
@@ -92,6 +94,7 @@
   <div id="featured-banner" class="banner featured hidden"><img alt=""><span>Heute: Viktor doppelt so oft</span></div>
   <div class="map-wrap">
     <div id="map"></div>
+    <button id="btn-haunebu" class="haunebu-fab hidden" title="Flugscheibe" aria-label="Flugscheibe"><img class="ico ico-lg" src="art/icon-haunebu.png" alt=""></button>
     <button id="btn-locate" class="locate following" title="Karte folgt dir" aria-label="Karte folgt dir"><img class="ico ico-lg" src="art/icon-map.png" alt=""></button>
     <div id="online-dot" class="online-dot offline" title="Offline"></div>
   </div>
@@ -100,6 +103,7 @@
     <button data-beam="worringen">Beamen: Worringen</button>
     <button data-beam="huettenberg">Beamen: Hüttenbergstraße</button>
     <button data-beam="pcsale">Beamen: PC Sale</button>
+    <button data-beam="keller">Beamen: Keller</button>
     <button id="dbg-gps">GPS wieder an</button>
     <button id="dbg-respawn">Spawns neu würfeln</button>
     <button id="dbg-stops">Fake-Stops</button>
@@ -108,6 +112,7 @@
     <button id="dbg-xp">+500 XP</button>
     <button id="dbg-legendary">Nächster Spawn legendär: aus</button>
     <button id="dbg-weakboss">Boss fast tot: aus</button>
+    <button id="dbg-haunebu">Flugscheibe schenken</button>
     <button id="dbg-reset">Spielstand löschen</button>
     <button id="dbg-close">Schließen</button>
   </div>
@@ -218,7 +223,7 @@
       <button class="import">Spielstand einfügen</button>
       <button class="reset danger">Spielstand löschen</button>
     </div>
-    <p class="hint version">Rüther GO v6</p>
+    <p class="hint version">Rüther GO v7</p>
   </div>
 </section>
 
@@ -239,6 +244,7 @@
       <p class="status"></p>
     </div>
     <button class="fight primary">Kämpfen</button>
+    <button class="beam hidden"></button>
   </div>
 </section>
 
@@ -308,7 +314,7 @@
       <div class="frame r-legendaer"><img class="victory-face" src="sprites/christian.png" alt=""><span class="shine"></span></div>
     </div>
     <h2>Du bist der Herrscher aller Rüthers.</h2>
-    <p>Alle drei Arenen gemeistert.</p>
+    <p>Alle Arenen gemeistert.</p>
     <p class="say"></p>
     <button class="back primary">Zurück zur Karte</button>
   </div>

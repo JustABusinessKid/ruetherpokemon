@@ -87,6 +87,11 @@ export const CONST = {
   FEED_LEVELS: 2,          // Füttern: ein Duplikat desselben Rüthers gibt +2 Level
   SELL_MULT: 2,            // Verkaufen: 2 × Fang-Sats der Seltenheit
   CINEMATIC_MS: 1500,      // Standard-Freeze einer Spezial-Sequenz
+  // v7: Haunebu-Reichsflugscheibe
+  HAUNEBU_BEAM_COST: 300,  // ein Flug zu einer Arena
+  HAUNEBU_BEAM_MS: 600_000, // so lange stehst du dort (10 Minuten), dann fliegt sie dich zurück
+  HAUNEBU_WIN_SATS: 500,   // Sieg gegen Hitler: Flugscheibe + 500 Sats
+  XP_HAUNEBU: 500,
 };
 
 export const API_BASE = 'https://ruether-go.higgsfield.app';
@@ -135,6 +140,8 @@ export const ACHIEVEMENTS = [
   { id: 'trainer5', name: 'Trainer Lv. 5', desc: 'Erreiche Trainer-Level 5', icon: '⭐' },
   { id: 'trainer10', name: 'Trainer Lv. 10', desc: 'Erreiche Trainer-Level 10', icon: '🌟' },
   { id: 'fusion1', name: 'Alchemist', desc: 'Mache deine erste Fusion', icon: '⚗️' },
+  { id: 'keller', name: 'Kellerkind', desc: 'Besiege die Bitcoin-Heizung im Keller', icon: '🔥' },
+  { id: 'haunebu', name: 'Reichsflugscheibe', desc: 'Besiege Adolf Hitler und erbeute die Haunebu', icon: '🛸' },
 ];
 
 export const RARITIES = [
@@ -148,12 +155,16 @@ export const RARITY_BY_ID = Object.fromEntries(RARITIES.map(r => [r.id, r]));
 export const SHOP = [
   { id: 'lockmodul', name: 'Lockmodul', icon: '🧲', cost: 300, desc: '5 Minuten lang doppelt so viele Rüthers, alle 20 Sekunden neue.' },
   { id: 'supercoin', name: 'Super-Münze', icon: '🪙', cost: 40, desc: 'Ein Wurf mit +20 % Fangchance. Wird beim Treffer verbraucht.' },
+  // v7: Kauf startet sofort den Kampf gegen Hitler (kein Inventar). Sieg = save.flugscheibe, danach nicht mehr kaufbar.
+  { id: 'haunebu', name: 'Haunebu-Reichsflugscheibe', icon: '🛸', cost: 1000, desc: 'Beschwört die Flugscheibe. Adolf Hitler steigt aus und will sie behalten. Besieg ihn, dann fliegt sie dich für 300 Sats 10 Minuten zu jeder Arena.' },
 ];
 
 export const ARENAS = [
   { id: 'worringen', name: 'Rütherschanze Worringen', address: 'Langeler Weg 23, 50769 Köln', lat: 51.0631420, lon: 6.8722528, boss: 'satoshi' },
   { id: 'huettenberg', name: 'Hüttenbergstraße', address: 'Hüttenbergstraße 55, 58091 Hagen', lat: 51.3440710, lon: 7.4877959, boss: 'schanze' },
   { id: 'pcsale', name: 'PC Sale', address: 'Augustastraße 1, 58089 Hagen', lat: 51.3589214, lon: 7.4631893, boss: 'ps3' },
+  // v7: Keller unter der Rütherschanze, 25 m südlich / 15 m östlich versetzt, damit die Marker nicht übereinander liegen
+  { id: 'keller', name: 'Keller der Rütherschanze', address: 'Langeler Weg 23, 50769 Köln (Keller)', lat: 51.0629174, lon: 6.8724671, boss: 'heizung' },
 ];
 
 // spawn: 'anywhere' oder die id der Arena, um die der Rüther auftaucht.
@@ -228,6 +239,26 @@ export const BOSSES = {
       { name: 'Private Key verloren', damage: 0, warn: 1200, heal: 40, fx: 'key' },
     ],
   },
+  // v7: Arena im Keller der Rütherschanze
+  heizung: {
+    id: 'heizung', name: 'Bitcoin-Heizung', btc: 500,
+    fast: { name: 'Dosenbier-Aufguss', damage: 14, every: 2200, warn: 600, fx: 'heat' },
+    charged: [
+      { name: 'Plus 70 Grad', damage: 30, warn: 1200, poison: { perSec: 4, ms: 6000 }, fx: 'overheat' },
+      { name: 'Umluft mit Viktor-Aroma', damage: 10, warn: 1200, stun: 1800, fx: 'fan' },
+      { name: 'Hildegard zahlt den Strom', damage: 0, warn: 1200, heal: 50, fx: 'found' },
+    ],
+  },
+  // v7: Shop-Beschwörung der Haunebu, keine Arena (Kampf-Modus 'haunebu')
+  hitler: {
+    id: 'hitler', name: 'Adolf Hitler', btc: 600,
+    fast: { name: 'Brüllrede', damage: 16, every: 2300, warn: 600, fx: 'rant' },
+    charged: [
+      { name: 'Teppichbeißer', damage: 40, warn: 1200, fx: 'pencil' },
+      { name: 'Flugscheiben-Strahl', damage: 20, warn: 1200, stun: 1500, fx: 'ray' },
+      { name: 'Ab in den Bunker', damage: 0, warn: 1200, heal: 60, fx: 'bunker' },
+    ],
+  },
 };
 
 export const RUETHER_BY_ID = Object.fromEntries(RUETHERS.map(r => [r.id, r]));
@@ -269,6 +300,16 @@ export const LINES = {
   satoshi: { appear: ['Wer ich bin? Unwichtig.', 'Ich hab Bitcoin erfunden. Und du?'], fight: ['Halving.', 'Not your keys, not your coins.'] },
   schanze: { appear: ['Die Schanze gehört mir.', 'Mein Kopf ist mehr wert als deiner.'], fight: ['Kurssturz!', 'Mining läuft.'] },
   ps3: { appear: ['*lautes Lüfterrauschen*', 'Bitte Firmware aktualisieren.'], fight: ['Yellow Light of Death!', 'Disc-Fehler.'] },
+  heizung: {
+    appear: ['*brummt mit 3000 Watt*', 'Im Keller hat es 38 Grad. Gemütlich.', 'Ich heize das ganze Haus. Mit Bitcoin.'],
+    fight: ['Abwärme ist auch Rendite.', 'Aufguss mit Dosenbier!', 'Plus 70 Grad, wie bei Christian.', 'Die Stromrechnung geht an Hildegard.', 'Wer friert, hat zu wenig Hashrate.'],
+  },
+  // Untergang-Meme: Hitler als tobender Verlierer. Keine Parolen, keine Symbole (siehe Spec v7 §0).
+  hitler: {
+    appear: ['Alle, die keine Bitcoin haben, verlassen sofort den Raum.', 'Die Flugscheibe gehört mir!', 'Wer hat die Flugscheibe ohne mich gestartet?!'],
+    fight: ['Das war ein BEFEHL!', 'Wieso steigt bei Christian alles um 70 Prozent?!', 'Wer hat den Private Key verloren?!', 'Die Flugscheibe hätte längst fliegen müssen!', 'Ich will sofort einen Kurs von 100.000!'],
+    defeat: ['Nehmt die Scheibe. Ich wollte eh nie fliegen.', 'Und die Wunderwaffe springt auch nicht an.'],
+  },
 };
 export const pickLine = (id, kind, rng = Math.random) => {
   const list = LINES[id]?.[kind];

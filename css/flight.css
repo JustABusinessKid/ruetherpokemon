@@ -1,0 +1,103 @@
+/* v7 Haunebu-Flug (js/flight.js, Spec §4) und Keller-Marker (js/map.js). Keyframes heißen fl-*.
+   Pixel-Look: nur steps()-Animationen, harte Kanten, keine weichen Verläufe. Keine Symbole an der Scheibe (Spec §0.2). */
+
+/* ---------- Overlay: über Screens und Tab-Leiste, unter den Toasts (2500); schluckt alle Eingaben ---------- */
+.flight {
+  position: fixed; inset: 0; z-index: 2400; overflow: hidden;
+  pointer-events: auto; touch-action: none;
+  --tx: 50%; --ty: 66%; /* Zielpunkt des Strahls, die Scheibe schwebt 140 px darüber */
+  --in: 600ms; --out: 400ms;
+}
+.flight.summon { background-color: var(--night); background-image: var(--dither-night); background-size: 8px 8px; animation: fl-fade .3s steps(3, end) both; }
+.fl-stage { position: absolute; inset: 0; z-index: 5; } /* über dem Dimmer des Holzbanners (4), unter dem Brett (9) */
+.flight.quake .fl-stage { animation: fl-quake .45s steps(1, end); }
+@keyframes fl-fade { from { opacity: 0; } }
+@keyframes fl-quake { 0% { translate: -6px 3px; } 20% { translate: 6px -3px; } 40% { translate: -4px -3px; } 60% { translate: 4px 3px; } 80% { translate: -2px 0; } 100% { translate: 0 0; } }
+
+/* Sterne: harte box-shadows (flight.js) auf einem 3-px-Punkt */
+.fl-stars { position: absolute; left: 0; top: 0; width: 3px; height: 3px; animation: fl-twinkle 1.2s steps(1, end) infinite; }
+@keyframes fl-twinkle { 50% { opacity: .45; } }
+
+/* ---------- Scheibe: Bild art/fx-haunebu.png, ohne Bild Pixel-Glocke aus drei Blöcken ---------- */
+.fl-disc {
+  position: absolute; left: var(--tx); top: calc(var(--ty) - 140px);
+  width: 168px; height: 168px; margin: -84px 0 0 -84px;
+  transition: left .4s steps(4, end), top .4s steps(4, end);
+}
+.fl-body { position: absolute; inset: 0; animation: fl-wobble .8s steps(1, end) infinite; }
+.fl-body > img { display: block; width: 100%; height: 100%; }
+.fl-body.noimg > img { display: none; }
+.fl-px { display: none; position: absolute; inset: 0; }
+.fl-body.noimg .fl-px { display: block; }
+.fl-px i { position: absolute; border: 3px solid var(--ink); }
+.fl-px i:nth-child(1) { left: 37%; right: 37%; top: 22%; height: 15%; background: #C9CED1; } /* Kuppel */
+.fl-px i:nth-child(2) { left: 24%; right: 24%; top: 35%; height: 17%; background: #9AA0A6 repeating-linear-gradient(90deg, transparent 0 9px, var(--teal) 9px 17px) 50% 50% / 100% 8px no-repeat; } /* Glocke mit Bullaugen */
+.fl-px i:nth-child(3) { left: 5%; right: 5%; top: 50%; height: 11%; background: #6E7479 repeating-linear-gradient(90deg, transparent 0 8px, var(--ink) 8px 11px) 0 50% / 100% 3px no-repeat; } /* Rand mit Nieten */
+/* Unterseite: Pixel-Lichter laufen um (über der Lampenreihe des Bilds bzw. unter dem CSS-Rand) */
+.fl-lights { position: absolute; left: 30%; right: 30%; top: 85%; height: 6px; background: repeating-linear-gradient(90deg, var(--teal) 0 6px, transparent 6px 16px); animation: fl-lights .48s steps(4, end) infinite; }
+.fl-body.noimg .fl-lights { left: 22%; right: 22%; top: 62%; }
+@keyframes fl-wobble { 0% { rotate: -3deg; } 50% { rotate: 3deg; } }
+@keyframes fl-lights { to { background-position: 16px 0; } }
+
+.flight.summon .fl-disc { animation: fl-sink 1s steps(10, end) both; }
+.flight.pickup .fl-disc { animation: fl-fly-in var(--in) steps(8, end) both; }
+.flight.away .fl-disc { animation: fl-away var(--out) steps(6, end) both; }
+.flight.fly .fl-body { animation: fl-rock .5s steps(1, end) infinite; }
+@keyframes fl-sink { from { translate: 0 -100vh; } 80% { translate: 0 8px; } }
+@keyframes fl-fly-in { from { translate: -70vw -60vh; } }
+@keyframes fl-away { to { translate: 40vw -100vh; } }
+@keyframes fl-rock { 0% { rotate: -7deg; translate: 0 -3px; } 50% { rotate: 7deg; translate: 0 3px; } }
+
+/* Schild „Kurs: <Arena>" unter der Scheibe, nur im Flug */
+.fl-sign {
+  display: none; position: absolute; left: 50%; top: 96%; translate: -50% 0;
+  max-width: calc(100vw - 32px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 4px 10px; font: 700 16px/1.2 var(--font-pixel); color: var(--gold); text-shadow: 2px 2px 0 var(--wood-2);
+  background-color: var(--wood); background-image: var(--grain);
+  border: 3px solid var(--ink); box-shadow: inset 0 0 0 2px var(--wood-2), 4px 4px 0 var(--ink);
+}
+.flight.fly .fl-sign { display: block; }
+
+/* ---------- Traktorstrahl: Bild art/fx-tractor-beam.png, ohne Bild teal Trapez in Streifen; fährt in Stufen aus, flackert ---------- */
+.fl-beam {
+  display: none; position: absolute; left: var(--tx); top: calc(var(--ty) - 112px);
+  width: 124px; height: 124px; margin-left: -62px; opacity: .85;
+  animation: fl-beam-on .3s steps(3, end) both, fl-flicker .24s steps(1, end) .3s infinite;
+}
+.flight.beam .fl-beam { display: block; }
+.fl-beam img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
+.fl-beam.noimg img { display: none; }
+.fl-beam.noimg { clip-path: polygon(36% 0, 64% 0, 100% 100%, 0 100%); background: repeating-linear-gradient(180deg, var(--teal) 0 8px, rgba(63, 193, 176, .45) 8px 16px); }
+@keyframes fl-beam-on { from { height: 0; } }
+@keyframes fl-flicker { 50% { opacity: .55; } }
+
+/* ---------- Flug: Geschwindigkeitsstreifen, weißer Blitz ---------- */
+.fl-streaks { display: none; position: absolute; inset: 0; }
+.flight.fly .fl-streaks { display: block; }
+.fl-streaks i { position: absolute; left: 100%; height: 4px; background: var(--paper); box-shadow: 0 4px 0 rgba(30, 42, 34, .35); animation: fl-streak var(--d, 400ms) steps(6, end) var(--o, 0ms) infinite; }
+@keyframes fl-streak { to { translate: calc(-100vw - 100%) 0; } }
+.fl-flash { position: absolute; inset: 0; z-index: 10; background: #FFF; opacity: 0; pointer-events: none; }
+.flight.flash .fl-flash { animation: fl-flash .3s steps(3, end); }
+@keyframes fl-flash { from { opacity: 1; } }
+
+/* ---------- Weniger Bewegung: nur eine Blende (flight.js kürzt auf ≤ 600 ms) ---------- */
+.flight.reduced { background-color: var(--night); animation: fl-blende .55s steps(3, end) both; }
+.flight.reduced * { animation: none !important; transition: none !important; }
+@keyframes fl-blende { 0%, 100% { opacity: 0; } 30%, 70% { opacity: 1; } }
+
+/* ---------- Spieler-Marker im Flug (map.liftPlayer) ----------
+   Leaflet setzt den Marker per Inline-transform: am Element nur translate/opacity (vertauschbar mit dem Versatz),
+   das Schrumpfen läuft auf ::before (Pixel-Scheibe), sonst würde der Leaflet-Versatz mitskaliert. */
+.leaflet-marker-icon.player-dot.lift { animation: fl-lift .6s steps(6, end) forwards; }
+.leaflet-marker-icon.player-dot.lift::before { animation: fl-shrink .6s steps(6, end) forwards; }
+.leaflet-marker-icon.player-dot.land { animation: fl-land .5s steps(5, end) both; }
+.leaflet-marker-icon.player-dot.land::before { animation: fl-shrink .5s steps(5, end) reverse both; }
+.leaflet-marker-icon.player-pulse.lift { visibility: hidden; }
+@keyframes fl-lift { 80% { opacity: 1; } to { translate: 0 -110px; opacity: 0; } }
+@keyframes fl-land { from { translate: 0 -110px; opacity: 0; } 20% { opacity: 1; } }
+@keyframes fl-shrink { to { scale: .3; } }
+
+/* ---------- Keller-Arena: Nacht-Schild + rote Treppen-Plakette oben links (map.js arenaIcon) ---------- */
+.arena-icon.arena-keller { background-color: var(--night); }
+.arena-icon .keller-badge { position: absolute; top: -10px; left: -10px; display: flex; width: 22px; height: 22px; padding: 3px; background: var(--red); border: 2px solid var(--ink); }
+.arena-icon .keller-badge .stairs { width: 100%; height: 100%; }

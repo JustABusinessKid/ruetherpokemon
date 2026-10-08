@@ -2,14 +2,14 @@
 export const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 // ---------- Kit-Icons (art/icon-<name>.png) ----------
-export const KIT = ['coin', 'star', 'trophy', 'lightning', 'quest', 'gear', 'beer', 'profile', 'bag', 'map', 'shop', 'lock'];
+export const KIT = ['coin', 'star', 'trophy', 'lightning', 'quest', 'gear', 'beer', 'profile', 'bag', 'map', 'shop', 'lock', 'haunebu'];
 // Alte Emoji-Aufrufe (app.js, data.js) → Kit-Name. Schlüssel ohne Variationszeichen U+FE0F.
 const EMOJI = {
   '💰': 'coin', '🪙': 'coin', '🎯': 'coin', '🧲': 'beer', '🍺': 'beer', '⏰': 'lightning', '⚡': 'lightning', '💥': 'lightning',
   '🔥': 'star', '⬆': 'star', '⭐': 'star', '🌟': 'star', '✨': 'star', '⚗': 'star', '🔵': 'star', '🟣': 'star', '🟡': 'star',
   '🏆': 'trophy', '👑': 'trophy', '⚔': 'trophy', '🏅': 'trophy', '📋': 'quest', '📗': 'quest', '📕': 'quest', '📣': 'quest',
   '🎁': 'bag', '🎒': 'bag', '🧺': 'bag', '🏹': 'bag', '👤': 'profile', '👨‍👩‍👧‍👦': 'profile', '🗺': 'map', '📍': 'map',
-  '🛒': 'shop', '🔒': 'lock', '⚙': 'gear',
+  '🛒': 'shop', '🔒': 'lock', '⚙': 'gear', '🛸': 'haunebu',
 };
 export const kitName = s => (KIT.includes(s) ? s : EMOJI[String(s || '').replace(/️/g, '')] || '');
 export const ico = (name, cls = '') => `<img class="ico${cls ? ` ${cls}` : ''}" src="art/icon-${name}.png" alt="">`;
@@ -71,6 +71,7 @@ export function toast(text, { icon = '', kind = 'info' } = {}) {
 // ---------- Popups ----------
 // Warteschlange: das nächste erscheint, wenn das vorige geschlossen ist.
 // html kommt unverändert in die Karte (Nutzerdaten in value/textarea dürfen nicht umgeschrieben werden): Icons per ico().
+// Promise liefert den Index des Knopfs unten oder den data-choice-Wert eines Knopfs im html.
 const queue = [];
 let open = false;
 export function popup({ title, html = '', buttons = [{ label: 'OK', primary: true }] }) {
@@ -92,6 +93,7 @@ function next() {
     btn.addEventListener('click', () => { item.resolve(i); next(); });
     bb.appendChild(btn);
   });
+  card.querySelectorAll('.popup-body [data-choice]').forEach(b => b.addEventListener('click', () => { item.resolve(b.dataset.choice); next(); }));
   el.setAttribute('role', 'dialog');
   el.setAttribute('aria-modal', 'true');
   el.classList.remove('hidden');

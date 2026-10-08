@@ -461,6 +461,60 @@ button:focus-visible, .btn:focus-visible { outline: 3px solid var(--teal); outli
   100% { left: var(--fx-me-x); top: var(--fx-me-y); transform: rotate(var(--spin, -180deg)) scale(1.15); opacity: 0; }
 }
 
+/* =====================================================================
+   v7: Bitcoin-Heizung und Hitler (Haunebu)
+   ===================================================================== */
+
+/* Lüfter dreht sich vor dem Boss: 45°-Schritte wie ein Pixel-Rotor */
+.fx-prop.path-spin-at-enemy { animation-name: path-spin-at-enemy; top: calc(var(--fx-enemy-y) + 6%); }
+@keyframes path-spin-at-enemy {
+  0% { transform: scale(.4) rotate(0); opacity: 0; animation-timing-function: steps(2, end); }
+  10% { transform: scale(1) rotate(45deg); opacity: 1; animation-timing-function: steps(22, end); }
+  90% { transform: scale(1) rotate(1035deg); opacity: 1; animation-timing-function: steps(2, end); }
+  100% { transform: scale(.9) rotate(1080deg); opacity: 0; }
+}
+
+/* Bleistift im hohen Bogen vom Boss auf mich: x läuft gleichmäßig, y steigt bis zum oberen Rand und fällt (echte Parabel),
+   knallt bei 80 % hart auf (Stauchung) und bleibt kurz liegen */
+.fx-prop.path-lob-to-me { animation-name: path-lob-x, path-lob-y; left: var(--fx-me-x); top: var(--fx-me-y); }
+@keyframes path-lob-x { 0% { left: var(--fx-enemy-x); } 80%, 100% { left: var(--fx-me-x); } }
+@keyframes path-lob-y {
+  0% { top: var(--fx-enemy-y); transform: rotate(0) scale(.7); opacity: 1; animation-timing-function: ease-out; }
+  40% { top: 4%; transform: rotate(-360deg) scale(1); animation-timing-function: ease-in; }
+  80% { top: var(--fx-me-y); transform: rotate(-720deg) scale(1.1); animation-timing-function: steps(1, end); }
+  84% { transform: rotate(-720deg) scale(1.35, .65); }
+  92% { transform: rotate(-715deg) scale(1); opacity: 1; }
+  100% { top: var(--fx-me-y); transform: rotate(-715deg) scale(1); opacity: 0; }
+}
+
+/* Flugscheibe schwebt von rechts oben über mich, schaukelt und zieht links oben ab (Strahl darunter: beam-on-me) */
+.fx-prop.path-hover-over-me { animation-name: path-hover-over-me; animation-timing-function: steps(3, end); left: calc(var(--fx-me-x) + 4%); top: calc(var(--fx-me-y) - 56%); }
+@keyframes path-hover-over-me {
+  0% { left: calc(var(--fx-me-x) + 64%); top: calc(var(--fx-me-y) - 80%); transform: rotate(-8deg); opacity: 1; animation-timing-function: ease-out; }
+  20% { left: calc(var(--fx-me-x) + 4%); top: calc(var(--fx-me-y) - 56%); transform: rotate(0); }
+  35%, 65% { transform: rotate(4deg) translateY(-3px); }
+  50% { transform: rotate(-4deg) translateY(3px); }
+  80% { left: calc(var(--fx-me-x) + 4%); top: calc(var(--fx-me-y) - 56%); transform: rotate(0); opacity: 1; animation-timing-function: ease-in; }
+  100% { left: calc(var(--fx-me-x) - 36%); top: calc(var(--fx-me-y) - 96%); transform: rotate(-10deg); opacity: 0; }
+}
+
+/* Traktorstrahl unter der Flugscheibe: reicht von der Scheibenmitte (+32 px) bis auf mich, egal wie hoch die Bühne ist
+   (Breite = --size, Höhe gestreckt), fährt in Stufen nach unten aus, flackert, zieht mein echtes Gesicht (Reiter) hoch */
+.fx-prop.path-beam-on-me {
+  z-index: 4; /* hinter der Scheibe */ animation-name: path-beam-on-me; animation-timing-function: steps(4, end);
+  left: calc(var(--fx-me-x) + 4%); top: calc(var(--fx-me-y) - 56% + 32px); height: calc(56% - 32px); margin-top: 0; transform-origin: 50% 0;
+}
+@keyframes path-beam-on-me {
+  0% { transform: scaleY(0); opacity: 1; }
+  20% { transform: scaleY(1); }
+  30%, 50%, 70% { opacity: .7; }
+  40%, 60% { opacity: 1; }
+  85% { transform: scaleY(1); opacity: 1; }
+  100% { transform: scaleY(0); opacity: 0; }
+}
+.fx-prop.path-beam-on-me > img.rider { animation: path-beam-lift var(--ms, 1200ms) steps(6, end) both; }
+@keyframes path-beam-lift { 0%, 20% { translate: 0 0; rotate: 0deg; } 85% { translate: 0 -110%; rotate: 8deg; } 100% { translate: 0 -120%; rotate: -4deg; } }
+
 /* ---------- Weniger Bewegung: keine Loops, Effekte stehen statisch am Ziel ---------- */
 @media (prefers-reduced-motion: reduce) {
   .fx-btc { display: none !important; }

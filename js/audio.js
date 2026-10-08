@@ -34,7 +34,25 @@ const SFX = {
   click: () => tone({ f: 1500, t: 0.02, g: 0.1 }),
   rage: () => tone({ f: 70, f2: 50, type: 'sawtooth', t: 0.8, g: 0.3 }),
   coin: () => tone({ f: 1760, f2: 2200, t: 0.1, g: 0.15 }),
+  ufo: theremin,
 };
+
+// Haunebu: Theremin-Sweep, Sinus rauf und runter, Vibrato wird immer wabbeliger (~2,6 s)
+function theremin() {
+  const c = ac(); if (!c || !enabled) return;
+  const o = c.createOscillator(), lfo = c.createOscillator(), depth = c.createGain(), v = c.createGain(), t0 = c.currentTime;
+  o.type = 'sine';
+  o.frequency.setValueAtTime(320, t0);
+  o.frequency.exponentialRampToValueAtTime(940, t0 + 1.1);
+  o.frequency.exponentialRampToValueAtTime(410, t0 + 2.5);
+  lfo.frequency.setValueAtTime(5, t0); lfo.frequency.linearRampToValueAtTime(8, t0 + 2.5);
+  depth.gain.setValueAtTime(8, t0); depth.gain.linearRampToValueAtTime(45, t0 + 2.5);
+  v.gain.setValueAtTime(0.001, t0); v.gain.exponentialRampToValueAtTime(0.2, t0 + 0.25);
+  v.gain.setValueAtTime(0.2, t0 + 2.1); v.gain.exponentialRampToValueAtTime(0.001, t0 + 2.6);
+  lfo.connect(depth).connect(o.frequency);
+  o.connect(v).connect(c.destination);
+  o.start(t0); lfo.start(t0); o.stop(t0 + 2.65); lfo.stop(t0 + 2.65);
+}
 
 export const sfx = {
   play(name) { if (enabled) try { SFX[name]?.(); } catch { /* kein Audio */ } },

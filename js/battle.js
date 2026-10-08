@@ -72,7 +72,7 @@ function resolveEnemyAttack(s, me, ev) {
   if (e.status.weakenedUntil > s.time) factor *= CONST.WEAKEN_FACTOR;
   if (w.dodged) factor *= CONST.DODGE_FACTOR;
   const dealt = atk.damage > 0 ? hurt(me, atk.damage * factor) : 0;
-  ev.push({ type: 'enemyAttack', kind: w.kind, attack: atk, damage: dealt, dodged: w.dodged });
+  ev.push({ type: 'enemyAttack', kind: w.kind, attack: atk, damage: dealt, dodged: w.dodged, fighter: me }); // fighter: KO-Wechsel im selben Schritt steht schon in s.active
   if (!w.dodged) {
     if (atk.poison) { poison(me, atk.poison, s.time); ev.push({ type: 'poisoned', target: 'me', ms: atk.poison.ms }); }
     if (atk.stun) { me.status.stunUntil = s.time + atk.stun; ev.push({ type: 'stun', target: 'me', ms: atk.stun }); }

@@ -6,14 +6,15 @@ import { createMap } from './map.js';
 import { createCatchScreen } from './catch.js';
 import {
   createCollectionScreen, createDexScreen, createShopScreen, createArenaScreen, createVictoryScreen,
-  createQuestsScreen, createLeaderboardScreen, createProfileScreen, createStopScreen,
+  createQuestsScreen, createLeaderboardScreen, createProfileScreen, createStopScreen, distText,
 } from './screens.js';
 import { createBattleScreen } from './battle-ui.js';
 import { makeFighter, makeBoss } from './battle.js';
 import {
   catchReward, arenaWin, arenaReward, arenaScale, powerUp, buyItem, lureActive, dexCount, DEX_TOTAL, addXp, fuse, migrate,
-  pickFood, feed, sell, sellDuplicates, levelUpUids,
+  pickFood, feed, sell, sellDuplicates, levelUpUids, haunebuWin, startBeam, activeBeam, endBeam,
 } from './progress.js';
+import { playSummon, playBeam, playReturn } from './flight.js';
 import { makeWild } from './wild.js';
 import { reachText } from './format.js';
 import { createTicker } from './ticker.js';
@@ -30,7 +31,7 @@ window.addEventListener('error', () => { const p = document.querySelector('#spla
 const fmt = n => n.toLocaleString('de-DE');
 for (const el of document.querySelectorAll('[data-say]')) el.textContent = pickLine(...el.dataset.say.split(':'));
 let save = storage.load();
-let spawns = [], stops = [], pos = null, lastSpawnPos = null, lastStopPos = null;
+let spawns = [], stops = [], pos = null, lastSpawnPos = null, lastStopPos = null, homePos = null, flying = false; // flying: Haunebu-Animation läuft
 let debugWeakBoss = false, debugLegendary = false;
 let today = dayKey();
 let current = 'screen-map', prevScreen = 'screen-map';
@@ -83,6 +84,7 @@ function updateHud() {
   document.querySelectorAll('.sats-chip').forEach(b => { b.textContent = `💰 ${fmt(save.sats)}`; });
   $('#hud-dex').textContent = `Dex ${dexCount(save)}/${DEX_TOTAL}`;
   const mastered = ARENAS.filter(a => save.arenaMastered[a.id]).length;
+  $('#btn-haunebu').classList.toggle('hidden', !save.flugscheibe);
   $('#badge').classList.toggle('hidden', !(save.victoryShown || mastered === ARENAS.length));
   setTabBadge('screen-quests', claimableCount(save));
   const st = online.lastState;
@@ -98,11 +100,12 @@ function updateHud() {
   }
   updateBanners();
 }
+const clock = ms => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')}`;
 function updateBanners() {
   const lure = $('#lure-banner');
   const left = (save.lureUntil || 0) - Date.now();
   lure.classList.toggle('hidden', left <= 0);
-  if (left > 0) lure.textContent = `🧲 Lockmodul: ${Math.floor(left / 60000)}:${String(Math.floor((left % 60000) / 1000)).padStart(2, '0')}`;
+  if (left > 0) lure.textContent = `🧲 Lockmodul: ${clock(left)}`;
   $('#hour-banner').classList.toggle('hidden', !isHappyHour());
   $('#hour-banner').textContent = `⏰ Rüther-Stunde bis ${CONST.HOUR_END}:00 · doppelte Spawns, 50 % mehr Sats`;
   const f = featuredRuether(today);
@@ -110,6 +113,7 @@ function updateBanners() {
   fb.classList.remove('hidden');
   fb.querySelector('img').src = `sprites/${f}.png`;
   fb.querySelector('span').textContent = `Heute: ${RUETHER_BY_ID[f].name} taucht deutlich häufiger auf`;
+  beamTick();
 }
 setInterval(updateBanners, 1000);
 
@@ -191,6 +195,8 @@ const map = createMap({
       ownerName: owner ? `${RUETHER_BY_ID[owner.id].name} (${RARITY_BY_ID[owner.rarity].name}, Lv. ${owner.level})` : null,
       bossBtc: Math.floor(BOSSES[a.boss].btc * arenaScale(level)),
       globalOwner: g ? { ...g, mine: g.owner === save.profile?.nickname } : null,
+      flugscheibe: !!save.flugscheibe,
+      sats: save.sats,
     });
     show('screen-arena');
   },
@@ -240,6 +246,8 @@ setInterval(renderStops, 30_000);
 const locator = createLocator({
   onPosition(p) {
     pos = p;
+    if (!save.beam) homePos = p; // Startpunkt für den Rückflug der Haunebu
+    if (flying) return; // echtes GPS mitten im Hinflug: Marker bleibt bei der Scheibe
     map.setPlayer(p);
     map.setReach(p);
     banner('', 'geo');
@@ -328,6 +336,7 @@ const dex = createDexScreen({ el: $('#screen-dex'), onBack() { show('screen-coll
 const shop = createShopScreen({
   el: $('#screen-shop'),
   onBuy(id) {
+    if (id === 'haunebu') return buyHaunebu();
     const res = buyItem(save, id, Date.now());
     if (res.ok) { sfx.play('coin'); persist(); toast(id === 'lockmodul' ? '🧲 Lockmodul aktiv!' : '🪙 Super-Münze gekauft'); if (id === 'lockmodul') refreshSpawns(); }
     else toast('Nicht genug Sats.');
@@ -403,7 +412,7 @@ const stopScreen = createStopScreen({
 });
 
 // ---------- Arena + Kampf ----------
-// fight = { arena } oder { spawn } (Wildkampf); uids = Team beim Kampfstart (activeIndex zeigt hier hinein)
+// fight = { arena }, { spawn } (Wildkampf) oder { haunebu } (Hitler); uids = Team beim Kampfstart (activeIndex zeigt hier hinein)
 let fight = null;
 function teamFighters() {
   const insts = teamInstances();
@@ -451,7 +460,7 @@ function endWild({ spawn, uids }, { won, reason, activeIndex = 0 }) {
   levelUpToast(ups);
   show('screen-map');
 }
-const arenaScreen = createArenaScreen({ el: $('#screen-arena'), bosses: BOSSES, onBack() { show('screen-map'); }, onFight: startBattle });
+const arenaScreen = createArenaScreen({ el: $('#screen-arena'), bosses: BOSSES, onBack() { show('screen-map'); }, onFight: startBattle, onBeam: beamTo });
 const battleScreen = createBattleScreen({
   el: $('#screen-battle'),
   onEvent(e) {
@@ -463,8 +472,9 @@ const battleScreen = createBattleScreen({
     const f = fight;
     fight = null;
     if (f.spawn) return endWild(f, res);
+    if (f.haunebu) return endHaunebu(res);
     const { won, retry } = res, arena = f.arena;
-    if (retry) return startBattle(arena);
+    if (retry && !(save.beam && !activeBeam(save, Date.now()))) return startBattle(arena); // Flugzeit um: kein „Nochmal", zurück zur Karte, dann Rückflug
     if (won) {
       const w = arenaWin(save, arena.id, save.team[0]);
       gainXp(CONST.XP_ARENA * w.level);
@@ -493,6 +503,111 @@ function showVictoryFace() {
   face.parentElement.className = `frame r-${l.rarity}`;
   $('#screen-victory .say').textContent = `${name}: „${pickLine(l.id, 'appear')}“`;
 }
+
+// ---------- Haunebu (Spec v7 §2/§3) ----------
+// Kauf beschwört die Flugscheibe, Hitler steigt aus. Sieg = save.flugscheibe, damit für Sats 10 Minuten zu jeder Arena.
+function buyHaunebu() {
+  if (!teamInstances().length) { toast('Stell erst ein Team auf. Hitler gibt die Scheibe nicht kampflos her.'); return { ok: false, reason: 'team' }; }
+  const res = buyItem(save, 'haunebu', Date.now());
+  if (!res.ok) { toast(res.reason === 'besitz' ? 'Die Flugscheibe gehört dir schon.' : 'Nicht genug Sats.'); return res; }
+  sfx.play('coin');
+  persist();
+  playSummon(document.body, { line: pickLine('hitler', 'appear') }).catch(() => {}).then(startHaunebu); // Sats sind weg: Kampf auch ohne Animation
+  return res;
+}
+function startHaunebu() {
+  const { uids, team } = teamFighters();
+  const enemy = makeBoss(BOSSES.hitler, 1);
+  if (debugWeakBoss) enemy.btc = 20;
+  fight = { haunebu: true, uids };
+  show('screen-battle');
+  battleScreen.start({ team, enemy, rng: Math.random, mode: 'haunebu', reward: CONST.HAUNEBU_WIN_SATS });
+}
+// Niederlage, Zeit oder Aufgeben: Sats bleiben weg, kein „Nochmal" (die Beschwörung kostet neu), Stats trotzdem speichern
+function endHaunebu({ won }) {
+  if (won) {
+    haunebuWin(save);
+    gainXp(CONST.XP_HAUNEBU);
+    online.postEvent('achievement', 'hat Adolf Hitler besiegt und fliegt jetzt Haunebu!');
+  }
+  afterChange();
+  if (won) toast(`Haunebu erbeutet: +${fmt(CONST.HAUNEBU_WIN_SATS)} Sats. Die Flugscheibe wartet unten rechts auf der Karte.`, { icon: 'haunebu', kind: 'sats' });
+  show('screen-map');
+}
+
+// Flugziel wählen: alle Arenen mit Ort und Entfernung zur echten Position (homePos)
+async function pickBeamTarget() {
+  sfx.play('click');
+  const cost = CONST.HAUNEBU_BEAM_COST;
+  const rows = ARENAS.map(a => {
+    const d = homePos ? distance(homePos, a) : null;
+    const where = `${a.address.match(/\d{5} ([^\s,(]+)/)?.[1] || ''} · ${d == null ? 'Entfernung unbekannt' : d < CONST.ARENA_RANGE ? 'in Reichweite' : distText(d)}`;
+    return `<div class="beam-row"><div class="beam-meta"><b>${esc(a.name)}</b><span class="sub">${esc(where)}</span></div>`
+      + `<button class="primary" data-choice="${a.id}" ${save.sats < cost ? 'disabled' : ''}>${fmt(cost)} Sats</button></div>`;
+  }).join('');
+  const id = await popup({
+    title: 'Wohin fliegen?',
+    html: `<div class="beam-list">${rows}</div><p class="sub">Du bleibst ${CONST.HAUNEBU_BEAM_MS / 60000} Minuten dort: kämpfen, fangen, Stops drehen. Dann fliegt dich die Haunebu zurück.</p>`,
+    buttons: [{ label: 'Abbrechen' }],
+  });
+  if (ARENA_BY_ID[id]) beamTo(ARENA_BY_ID[id]);
+}
+// Hinfliegen: Sats abziehen, speichern, Animation, dann Fake-Position wie beim Debug-Beamen
+async function beamTo(a) {
+  if (flying) return; // Popup liegt über dem Flug-Overlay: kein zweiter Flug parallel
+  const res = startBeam(save, a.id, Date.now());
+  if (!res.ok) return toast(res.reason === 'sats' ? 'Nicht genug Sats.' : 'Ohne Flugscheibe geht das nicht.');
+  save.beam.from = homePos; // Rückflugziel, auch nach Neuladen
+  sfx.play('coin');
+  persist();
+  if (current !== 'screen-map') show('screen-map');
+  flying = true;
+  await playBeam(document.body, { map, to: a, label: a.name }).catch(() => {});
+  flying = false; // vor land(): setFake ruft onPosition sofort
+  land(a);
+  toast(`Gelandet: ${a.name} · ${clock(CONST.HAUNEBU_BEAM_MS)}`, { icon: 'haunebu' });
+}
+function land(a) {
+  const p = offsetPoint(a, 40, 0);
+  locator.setFake(p); map.follow(p); refreshSpawns(); refreshStops(true);
+}
+// Zurück zur echten Ortung; ohne GPS ist der Spieler danach nirgends (wie „GPS wieder an")
+function gpsBack() {
+  locator.clearFake();
+  if (!locator.current) { pos = homePos = null; lastSpawnPos = null; map.setSpawns(spawns = []); map.setReach(null); }
+}
+async function returnHome() {
+  if (!save.beam || flying) return;
+  const to = homePos || save.beam.from || pos;
+  endBeam(save);
+  persist();
+  if (current !== 'screen-map') show('screen-map');
+  flying = true;
+  if (to) await playReturn(document.body, { map, to }).catch(() => {});
+  flying = false; // vor gpsBack(): clearFake ruft onPosition sofort
+  gpsBack();
+  map.follow(locator.current);
+  toast('Die Haunebu hat dich zurückgebracht.', { icon: 'haunebu' });
+}
+// Jede Sekunde (updateBanners): Countdown-Chip; abgelaufen → Rückflug, aber nicht mitten im Kampf, Fang, Stop oder Siegesscreen
+const BEAM_WAIT = ['screen-battle', 'screen-catch', 'screen-stop', 'screen-victory'];
+function beamTick() {
+  const b = activeBeam(save, Date.now()), chip = $('#beam-chip');
+  chip.classList.toggle('hidden', !b);
+  if (b) chip.querySelector('.beam-left').textContent = clock(b.until - Date.now());
+  else if (save.beam && !BEAM_WAIT.includes(current)) returnHome();
+}
+$('#btn-haunebu').addEventListener('click', pickBeamTarget);
+$('#beam-chip').addEventListener('click', async () => {
+  const b = activeBeam(save, Date.now());
+  if (!b) return;
+  const i = await popup({
+    title: 'Haunebu-Flug',
+    html: `<p>Noch ${clock(b.until - Date.now())} am Ziel: ${esc(ARENA_BY_ID[b.arenaId]?.name || 'Arena')}.</p><p class="sub">Wer früher zurückfliegt, bekommt keine Sats zurück.</p>`,
+    buttons: [{ label: 'Bleiben' }, { label: 'Jetzt zurückfliegen', primary: true }],
+  });
+  if (i === 1) returnHome();
+});
 
 // ---------- Onboarding ----------
 const onboarding = createOnboarding({
@@ -537,12 +652,14 @@ $('#title').addEventListener('click', () => {
   if (taps >= 7) { taps = 0; debug.classList.remove('hidden'); }
 });
 if (new URLSearchParams(location.search).get('debug') === '1') debug.classList.remove('hidden');
+// Debug-Beamen und „GPS wieder an" beenden einen laufenden Haunebu-Flug, damit sich nichts überlagert
+const stopBeam = () => { if (save.beam) { endBeam(save); persist(); } };
 debug.querySelectorAll('[data-beam]').forEach(b => b.addEventListener('click', () => {
   const a = ARENA_BY_ID[b.dataset.beam];
-  const p = offsetPoint(a, 40, 0);
-  locator.setFake(p); map.follow(p); refreshSpawns(); refreshStops(true); toast(`Gebeamt: ${a.name}`);
+  stopBeam(); land(a); toast(`Gebeamt: ${a.name}`);
 }));
-$('#dbg-gps').addEventListener('click', () => { locator.clearFake(); if (!locator.current) { pos = null; lastSpawnPos = null; map.setSpawns(spawns = []); map.setReach(null); } toast('GPS wieder an'); });
+$('#dbg-gps').addEventListener('click', () => { stopBeam(); gpsBack(); toast('GPS wieder an'); });
+$('#dbg-haunebu').addEventListener('click', () => { save.flugscheibe = true; afterChange(); toast('Flugscheibe geschenkt'); });
 $('#dbg-respawn').addEventListener('click', () => { spawns = []; refreshSpawns(); toast('Spawns neu'); });
 $('#dbg-stops').addEventListener('click', () => { if (!pos) return toast('Keine Ortung.'); stopSeq++; stops = fakeStops(pos, Math.random); renderStops(); toast('3 Fake-Stops'); });
 $('#dbg-catchall').addEventListener('click', () => { for (const r of RUETHERS) if (!save.box.some(i => i.id === r.id)) catchReward(save, r.id, 'normal', Date.now()); afterChange(); toast('Alle gefangen'); });
@@ -556,6 +673,10 @@ $('#dbg-close').addEventListener('click', () => debug.classList.add('hidden'));
 // ---------- Start ----------
 sfx.setEnabled(save.settings.sound !== false);
 setHapticsEnabled(save.settings.haptics !== false);
+// Haunebu-Flug über Neuladen: noch aktiv → ohne Animation wieder hin, abgelaufen → aufräumen
+const beamAtStart = activeBeam(save, Date.now());
+if (beamAtStart && ARENA_BY_ID[beamAtStart.arenaId]) { homePos = beamAtStart.from || null; land(ARENA_BY_ID[beamAtStart.arenaId]); } // homePos: Entfernungen im Popup, Rückflugziel bei neuem Flug
+else if (save.beam) endBeam(save);
 updateHud();
 ticker.refresh();
 setTimeout(() => {

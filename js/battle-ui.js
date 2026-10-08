@@ -9,12 +9,15 @@ import { hashrateText, isNarration } from './format.js';
 // Zahlen, ₿-Regen, Banner, Sprechblasen), kampfeigene Kleinanimationen in css/battle.css, Sounds, Haptik, Combo, Wut, End-Overlay.
 // Spezial-Attacken laufen als Kinosequenz: die Spielzeit friert ein (pauseUntil), Banner mit Gesicht + Spruch (Spec §6).
 // createBattleScreen({ el, onEnd, onEvent }) -> { start({ team, enemy, rng, mode, arena, arenaLevel, reward, masteredAfter, wild }), stop() }
-// mode 'arena' | 'wild'; wild = { id, rarity, name } (Gegner = wilder Rüther mit echtem Gesicht, kein „Nochmal").
+// mode 'arena' | 'wild' | 'haunebu'; wild = { id, rarity, name } (Gegner = wilder Rüther mit echtem Gesicht, kein „Nochmal").
+// 'haunebu' (v7): Beschwörung aus dem Shop gegen Hitler, ohne arena; Sieg = Flugscheibe erbeutet, kein „Nochmal".
 // onEnd({ won, retry, reason, activeIndex }) genau einmal pro Kampf: Overlay-Button oder Aufgeben (reason 'quit').
 // onEvent(e) für jedes Engine-Event, zusätzlich { type: 'combo', value } bei jeder Combo-Erhöhung.
 
 const sprite = id => `sprites/${id}.png`;
 const bossArt = id => `art/boss-${id}.png`;
+const BOSS_FALLBACK = 'sprites/unknown.png'; // fehlt art/boss-<id>.png noch (Spec v7 §7)
+const HAUNEBU_ART = 'art/fx-haunebu.png';
 const ICON_FALLBACK = 'art/icon-coin.png';
 function icon(name, cls = '') {
   const i = Object.assign(document.createElement('img'), { className: `ico ${cls}`.trim(), src: `art/icon-${name}.png`, alt: '' });
@@ -46,6 +49,9 @@ const FREEZE = { 'chart-up': 2400, handshake: 1600, can: 1500, handbag: 1500, co
 const BOSS_SLOW = 1.4; // Boss-Requisiten laufen 1,4× so lang (ohne Freeze)
 const slow = ms => Math.round(ms * BOSS_SLOW);
 const LINE_MIN = 8000, LINE_SPREAD = 4000; // Gegner-Sprüche alle 8–12 s Spielzeit
+// Betäubung des eigenen Rüthers je Gegner-Attacke (fx) als Text; alles andere zeigt den Firmware-Balken der PS3
+const STUN_TEXT = { wild: 'sprachlos', fan: 'benebelt', ray: 'im Strahl' };
+const BUNKER_MS = 1500; // = bt-bunker in css/battle.css
 const bubbleText = s => { const t = document.createElement('span'); t.className = 'bubble-text'; t.textContent = s; return t.outerHTML; };
 
 export function createBattleScreen({ el, onEnd, onEvent }) {
@@ -58,6 +64,9 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
   const intro = $('.intro'), countdown = intro.querySelector('.countdown'), introBoss = intro.querySelector('.intro-boss');
   const introLine = Object.assign(document.createElement('p'), { className: 'intro-line' });
   intro.insertBefore(introLine, countdown);
+  for (const img of [enemySprite, introBoss, overlay.querySelector('.boss')]) {
+    img.addEventListener('error', () => { if (!img.src.endsWith(BOSS_FALLBACK)) img.src = BOSS_FALLBACK; });
+  }
 
   // HUD v6 (Markup aus index.html einmal umgebaut): BTC mit Icon, Hashrate des aktiven Rüthers, Mining-Leiste mit Label
   function slot(parent, iconName) {
@@ -78,7 +87,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
   let state = null, raf = 0, countRaf = 0, lastTs = 0, running = false, ended = false, down = null;
   let input = freshInput(), dodgeDir = 'left', koPending = false, batchDelay = 0;
   let combo = 0, lastHitAt = -Infinity, stunTextAt = -Infinity;
-  let pauseUntil = 0, heldBtc = null, nextLineAt = Infinity, sayRef = null;
+  let pauseUntil = 0, heldBtc = null, nextLineAt = Infinity, sayRef = null, bossFx = '';
   let ctx = {}; // { mode, arena, arenaLevel, reward, masteredAfter, wild }
   const timers = new Set();
   const pending = new Map(); // node -> { cls: timerId }: Neustart derselben Animation löscht den alten Entfern-Timer
@@ -228,6 +237,8 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     family() { return 0; }, // die echten Christian und Micha kommen mit dem summoned-Event
   };
   // Gegner-Attacken nach attack.fx, 1,4× so lang wie in v5. Rückgabe: ms bis zum Einschlag beim Spieler.
+  // Requisit fliegt vom Gegner zu mir, ohne Drehung; Einschlag bei 86 % (path-arc-to-me)
+  const toMe = (name, ms, size) => { prop(name, 'arc-to-me', { ms, size }, { '--spin': '0deg' }); return Math.round(ms * 0.86); };
   const BOSS_FX = {
     disc() { prop('disc', 'drop-on-me', { ms: slow(500), size: 96 }); return slow(360); },
     yellow() { prop('yellow-light', 'rise-at-enemy', { ms: slow(1200), size: 192 }); return slow(450); },
@@ -238,6 +249,46 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     block() { prop('block', 'drop-on-me', { ms: slow(500), size: 112 }); return slow(360); },
     half() { prop('halving', 'drop-on-me', { ms: slow(700), size: 192 }); return slow(500); },
     key() { prop('key', 'rise-at-enemy', { ms: slow(1200), size: 128 }); return 0; },
+    // Bitcoin-Heizung (Keller): Aufguss, Überhitzung mit rot glühender Kulisse, Umluft weht die Bühne durch, Strom-Heilung.
+    // Wer im Attackennamen steckt, ist mit echtem Gesicht dabei (Spec v7 §1): Viktor in der Gaswolke, Hildegard auf der Handtasche.
+    heat() { // Dosenbier klatscht auf die Heizung, Dampf, dann rollt die Hitzewelle auf mich
+      prop('beer-can', 'arc-to-enemy', { ms: slow(400), size: 80 }, { '--spin': '40deg' });
+      later(() => sheet('smoke', 'enemy', { size: 128 }), slow(340));
+      later(() => toMe('heat', slow(500), 128), slow(300));
+      return slow(300) + Math.round(slow(500) * 0.86);
+    },
+    overheat() {
+      const hit = toMe('heat', slow(900), 224);
+      later(() => floatText(fx, '+70 °C', { x: '50%', y: 'calc(var(--fx-enemy-y) - 10%)', kind: 'mega', ms: 1400 }), slow(200));
+      later(() => anim(stage, 'overheat', 1000), hit);
+      return hit;
+    },
+    fan() { // Lüfter dreht, bläst Viktors grüne Gaswolke mit seinem echten Gesicht auf mich
+      prop('fan', 'spin-at-enemy', { ms: slow(1400), size: 176 });
+      anim(stage, 'blow', slow(1400));
+      prop('gas', 'arc-to-me', { ms: slow(900), size: 176, rider: 'viktor' }, { '--spin': '0deg', '--rider-x': '30%', '--rider-y': '24%', '--rider-size': '40%', '--rider-filter': 'sepia(1) hue-rotate(60deg) saturate(2.2)' });
+      return Math.round(slow(900) * 0.86);
+    },
+    found() { // Hildegard reitet auf ihrer Handtasche von unten zur Heizung und zahlt: ₿-Explosion, Heilung
+      prop('handbag', 'rise-from-bottom', { ms: slow(1000), size: 128, rider: 'hildegard' }, { '--rider-x': '30%', '--rider-y': '-34%' });
+      later(() => sheet('btcburst', 'enemy', { size: 208 }), slow(450));
+      return slow(450);
+    },
+    // Adolf Hitler (Haunebu, Untergang-Meme): Wutanfall, Bleistift auf den Tisch, Flugscheiben-Strahl, ab in den Bunker
+    rant() { anim(enemySprite, 'shake', 300); return toMe('rant', slow(600), 128); },
+    pencil() { // hoher Bogen, knallt hart auf: Staub und „KLACK!" zusätzlich zum Einschlag
+      const ms = slow(1100), hit = Math.round(ms * 0.8);
+      prop('pencil', 'lob-to-me', { ms, size: 128 });
+      later(() => { sheet('smoke', 'me', { size: 176 }); text('KLACK!', 'me', 'big'); }, hit);
+      return hit;
+    },
+    ray(atk, me) { // Flugscheibe schwebt über mir ein, der Strahl zieht mein echtes Gesicht (Reiter) hoch
+      const ms = slow(1400);
+      prop('haunebu', 'hover-over-me', { ms, size: 144 });
+      later(() => prop('tractor-beam', 'beam-on-me', { ms: ms - slow(300), size: 208, ...rider(me) }, { '--rider-x': 'calc(50% - 40px)', '--rider-y': 'calc(100% - 92px)', '--rider-size': '80px' }), slow(300));
+      return slow(500);
+    },
+    bunker() { anim(enemySprite, 'hide', BUNKER_MS); sheet('smoke', 'enemy', { size: 176 }); return Math.round(BUNKER_MS * 0.75); }, // Heilung, wenn er wieder auftaucht
     // Wilder Rüther: Rempler = er springt nach vorn; Lade-Attacke = sein Requisit mit seinem Gesicht fliegt zu dir
     'wild-fast'() { anim(enemySprite, 'lunge', 450); return 220; },
     wild(atk) {
@@ -288,7 +339,8 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
         break;
       case 'dodge': anim(meSprite, `dodge-${dodgeDir}`, 450); text('Ausgewichen!', 'me'); sfx.play('dodge'); break;
       case 'enemyAttack':
-        batchDelay = run(BOSS_FX, e.attack);
+        bossFx = e.attack.fx; // eine Betäubung danach im selben Schritt gehört zu dieser Attacke
+        batchDelay = run(BOSS_FX, e.attack, e.fighter);
         if (e.damage > 0) later(() => {
           if (e.dodged) { num(`-${e.damage}`, 'me'); return; }
           const q = quakeFor(e.damage, e.kind === 'charged');
@@ -301,11 +353,13 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
         break;
       case 'poisoned': later(() => sheet('smoke', at, { size: 128 }), batchDelay); break;
       case 'poison': num(`-${e.damage}`, at); break;
-      case 'stun':
+      case 'stun': {
+        const t = STUN_TEXT[bossFx]; // z. B. Viktors Argumentationslogik: sprachlos, keine PS3-Firmware
         if (at === 'enemy') later(() => { for (let i = 0; i < 3; i++) later(() => num('Z', 'enemy', 'info', 1400), i * 450); }, batchDelay);
-        else if (ctx.wild) later(() => text('sprachlos', 'me'), batchDelay); // Viktors Argumentationslogik, keine PS3-Firmware
+        else if (t) later(() => text(t, 'me'), batchDelay);
         else later(() => prop('firmware', 'bar-on-me', { ms: e.ms, size: 144, html: '<span class="fw-label">Firmware-Update…</span>' }), batchDelay);
         break;
+      }
       case 'weaken': later(() => text('geschwächt', 'enemy'), batchDelay); break;
       case 'heal':
         later(() => {
@@ -496,10 +550,10 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
 
   // ---------- VS-Intro: Arena bzw. „Wilder Rüther", Gesichter, „VS", Spruch, Countdown; erst danach läuft die Schleife ----------
   function showIntro(then) {
-    const me = state.team[state.active], boss = state.enemy, w = ctx.wild;
-    setText(intro.querySelector('.intro-arena'), w ? 'Wilder Rüther' : ctx.arena?.name || 'Arena');
+    const me = state.team[state.active], boss = state.enemy, w = ctx.wild, h = ctx.mode === 'haunebu';
+    setText(intro.querySelector('.intro-arena'), w ? 'Wilder Rüther' : h ? 'Haunebu-Landeplatz' : ctx.arena?.name || 'Arena');
     setText(intro.querySelector('.intro-level'), w ? `${RARITY_BY_ID[w.rarity]?.name || 'Normal'} · Lv. ${boss.level || 1}`
-      : `Arena Lv. ${ctx.arenaLevel}${ctx.masteredAfter ? ' · Meisterkampf' : ''}`);
+      : h ? 'Beschwörung' : `Arena Lv. ${ctx.arenaLevel}${ctx.masteredAfter ? ' · Meisterkampf' : ''}`);
     intro.querySelector('.intro-me').src = sprite(me.id);
     introBoss.src = w ? sprite(w.id) : bossArt(boss.id);
     introBoss.className = w ? `intro-boss sprite face r-${w.rarity}` : 'intro-boss sprite';
@@ -559,15 +613,22 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     countRaf = requestAnimationFrame(step);
   }
   function showOverlay() {
-    const won = !!state.won, boss = state.enemy, w = ctx.wild, img = overlay.querySelector('.boss');
-    img.src = w ? sprite(w.id) : bossArt(boss.id);
-    img.className = w ? `boss sprite face r-${w.rarity}` : `boss sprite${won ? ' fall' : ''}`;
+    const won = !!state.won, boss = state.enemy, w = ctx.wild, h = ctx.mode === 'haunebu', img = overlay.querySelector('.boss');
+    const prize = h && won; // Beschwörung gewonnen: die Flugscheibe statt des fallenden Bosses
+    img.src = w ? sprite(w.id) : prize ? HAUNEBU_ART : bossArt(boss.id);
+    img.className = w ? `boss sprite face r-${w.rarity}` : prize ? 'boss sprite ufo' : `boss sprite${won ? ' fall' : ''}`;
     overlay.classList.toggle('lost', !won); // Niederlage: Papier mit Rotstempel statt Urkunde
     overlay.classList.toggle('wild', !!w);
-    overlay.querySelector('.trophy').classList.toggle('hidden', !won || !!w);
-    overlay.querySelector('.retry').classList.toggle('hidden', won || !!w); // Wildkampf: kein „Nochmal"
-    setText(overlay.querySelector('.done'), won || w ? 'Weiter' : 'Karte');
-    if (w) { // Sieg = gefangen, sonst haut er ab; dazu sein Spruch
+    overlay.classList.toggle('haunebu', h);
+    overlay.querySelector('.trophy').classList.toggle('hidden', !won || !!w || h);
+    overlay.querySelector('.retry').classList.toggle('hidden', won || !!w || h); // Wildkampf und Beschwörung: kein „Nochmal"
+    setText(overlay.querySelector('.done'), won || w || h ? 'Weiter' : 'Karte');
+    if (h) { // Sieg: Flugscheibe erbeutet, Hitlers Abgang als Notiz; sonst ist er mit ihr weg und die Beschwörung kostet neu
+      setText(overlay.querySelector('.title'), won ? 'Reichsflugscheibe erbeutet!' : 'Verloren');
+      setText(overlay.querySelector('.sub'), won ? 'Die Haunebu gehört jetzt dir. Flieg damit zu jeder Arena.' : 'Hitler ist mit der Flugscheibe abgehauen. Beschwör sie neu.');
+      const line = won ? pickLine(boss.id, 'defeat') : '';
+      setText(overlay.querySelector('.arena-note'), line ? `„${line}“` : '');
+    } else if (w) { // Sieg = gefangen, sonst haut er ab; dazu sein Spruch
       const timeout = state.reason === 'timeout' ? 'Die Zeit ist um. ' : '';
       setText(overlay.querySelector('.title'), won ? 'Gefangen!' : 'Abgehauen!');
       setText(overlay.querySelector('.sub'), won ? `${w.name} gehört dir.` : `${timeout}${w.name} ist abgehauen.`);
@@ -621,11 +682,11 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     timers.clear(); pending.clear();
     window.removeEventListener('keydown', onKey);
     fx.innerHTML = ''; bgEl.innerHTML = ''; helpers.innerHTML = ''; helpers.className = 'helpers hidden';
-    flash.className = 'flash'; stage.classList.remove('rage', 'quake-s', 'quake-m', 'quake-l');
+    flash.className = 'flash'; stage.classList.remove('rage', 'quake-s', 'quake-m', 'quake-l', 'overheat', 'blow');
     enemySprite.className = 'enemy-sprite sprite'; meSprite.className = 'sprite';
     specials.classList.remove('shake-x'); enemyPanel.classList.remove('glow'); mePanel.classList.remove('glow');
     resetCombo(); stunTextAt = -Infinity;
-    pauseUntil = 0; heldBtc = null; nextLineAt = Infinity; sayRef = null;
+    pauseUntil = 0; heldBtc = null; nextLineAt = Infinity; sayRef = null; bossFx = '';
     sw.classList.add('hidden'); overlay.classList.add('hidden'); intro.classList.add('hidden');
     overlay.querySelector('.confetti').innerHTML = '';
     down = null; input = freshInput();
@@ -638,8 +699,9 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     const w = isWild ? { id: enemy.id, rarity: enemy.rarity || 'normal', name: enemy.name, ...wild } : null;
     ctx = { mode, arena, arenaLevel, reward, masteredAfter, wild: w };
     ended = false; koPending = false; batchDelay = 0;
-    // Bühne und Intro zeigen art/bg-<arena>.png bzw. im Wildkampf art/bg-catch.png (css)
-    if (isWild) el.dataset.arena = 'wild'; else if (arena?.id) el.dataset.arena = arena.id; else delete el.dataset.arena;
+    // Bühne und Intro zeigen art/bg-<arena>.png, im Wildkampf art/bg-catch.png, bei der Beschwörung art/bg-mondbasis.png (css)
+    const scene = isWild ? 'wild' : mode === 'haunebu' ? 'haunebu' : arena?.id;
+    if (scene) el.dataset.arena = scene; else delete el.dataset.arena;
     const me = state.team[state.active];
     enemySprite.src = w ? sprite(w.id) : bossArt(state.enemy.id);
     if (w) enemySprite.classList.add('face', `r-${w.rarity}`); // echtes Gesicht im Seltenheitsrahmen

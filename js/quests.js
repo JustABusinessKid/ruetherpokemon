@@ -1,4 +1,4 @@
-import { CONST, QUESTS, ACHIEVEMENTS, RUETHERS } from './data.js';
+import { CONST, QUESTS, ACHIEVEMENTS, RUETHERS, ARENAS } from './data.js';
 import { dexCount, DEX_TOTAL } from './progress.js';
 
 export const dayKey = (d = new Date()) =>
@@ -81,13 +81,15 @@ const COND = {
   dex20: s => dexCount(s) >= DEX_TOTAL,
   arena1: s => s.stats.arenaWins >= 1,
   master1: s => Object.keys(s.arenaMastered).length >= 1,
-  master3: s => Object.keys(s.arenaMastered).length >= 3,
+  master3: s => ARENAS.every(a => s.arenaMastered[a.id]),
   combo10: s => (s.stats.maxCombo || 0) >= 10,
   level10: s => s.box.some(i => i.level >= 10),
   stops10: s => (s.stats.stops || 0) >= 10,
   trainer5: s => (s.trainerLevel || 1) >= 5,
   trainer10: s => (s.trainerLevel || 1) >= 10,
   fusion1: s => (s.stats.fusions || 0) >= 1,
+  keller: s => (s.arenaLevels.keller || 1) >= 2,
+  haunebu: s => !!s.flugscheibe,
 };
 // Prüft alle Erfolge, schaltet neue frei (+Sats), gibt die neuen zurück
 export function checkAchievements(save, now = 1) {

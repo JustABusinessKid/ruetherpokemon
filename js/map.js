@@ -1,6 +1,7 @@
 /* global L */
 // Leaflet-Adapter mit Folgen-Modus, Seltenheits-Markern, Arena-Leveln, Dosenbier-Stops und Namensschild des globalen Besitzers.
 // v6: Reichweitenkreis um den Spieler, Spawn-Marker in Reichweite „near" (hüpfen), außerhalb „far" (blass).
+// v7: Keller-Marker mit Treppen-Plakette, flyTo und liftPlayer für den Haunebu-Flug (js/flight.js, Styles in css/flight.css).
 import { CONST } from './data.js';
 import { distance } from './geo.js';
 
@@ -10,22 +11,29 @@ const esc = s => String(s).replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 // Schwert für freie Arenen: 12×16-Pixelgrafik (O = Ink, W = Klinge, L = Klingenlicht, G = Messing, B = Griff)
 const SWORD = ['....OO......', '...OWLO.....', '...OWLO.....', '...OWLO.....', '...OWLO.....', '...OWLO.....', '...OWLO.....', '...OWLO.....',
   'OOOOOOOOOO..', 'OGGGGGGGGO..', 'OOOOOOOOOO..', '...OBBO.....', '...OBBO.....', '...OBBO.....', '...OGGO.....', '...OOOO.....'];
+// Keller-Treppe 8×8 für die Plakette am Keller-Marker
+const STAIRS = ['......LL', '......LL', '....LLLL', '....LLLL', '..LLLLLL', '..LLLLLL', 'LLLLLLLL', 'LLLLLLLL'];
 const PX = { O: '#1E2A22', W: '#C9CED1', L: '#F4E8C8', G: '#F2C94C', B: '#5A3A1E' };
-const swordSvg = `<svg class="sign" viewBox="-2 0 16 16" shape-rendering="crispEdges">${SWORD.flatMap((row, y) =>
+const pxSvg = (rows, cls, viewBox) => `<svg class="${cls}" viewBox="${viewBox}" shape-rendering="crispEdges">${rows.flatMap((row, y) =>
   [...row].map((c, x) => (PX[c] ? `<rect x="${x}" y="${y}" width="1" height="1" fill="${PX[c]}"/>` : ''))).join('')}</svg>`;
+const swordSvg = pxSvg(SWORD, 'sign', '-2 0 16 16');
+const kellerBadge = `<span class="keller-badge">${pxSvg(STAIRS, 'stairs', '0 0 8 8')}</span>`;
 
 function spriteIcon(id, rarity = 'normal', reach = '') {
   const star = rarity === 'legendaer' ? '<img class="star" src="art/icon-star.png" alt="">' : '';
   return L.divIcon({ className: `spawn-icon r-${rarity} ${reach}`, html: `<img class="face" src="sprites/${id}.png" alt="">${star}`, iconSize: [48, 48], iconAnchor: [24, 24] });
 }
-function arenaIcon({ level = 1, mastered = false, ownerId = null, globalOwner = null } = {}) {
-  const badge = `<span class="lvl">${mastered ? '<img src="art/icon-star.png" alt="">Max' : 'Lv.' + level}</span>`;
+function arenaIcon({ level = 1, mastered = false, ownerId = null, globalOwner = null } = {}, id = '') {
+  const keller = id === 'keller';
+  const badge = `<span class="lvl">${mastered ? '<img src="art/icon-star.png" alt="">Max' : 'Lv.' + level}</span>` + (keller ? kellerBadge : '');
   const label = globalOwner?.owner ? `<span class="owner-label${globalOwner.mine ? ' mine' : ''}">${esc(globalOwner.owner)}</span>` : '';
-  const cls = mastered ? ' mastered' : '';
+  const cls = (mastered ? ' mastered' : '') + (keller ? ' arena-keller' : '');
+  // Keller liegt nur 29 m neben Worringen: Schild nach rechts versetzt, sonst decken sich die Marker bei Zoom 16
+  const iconAnchor = keller ? [-20, 12] : [24, 24];
   if (ownerId) {
-    return L.divIcon({ className: 'arena-icon owned' + cls, html: `<img class="sign" src="art/icon-trophy.png" alt=""><img class="owner-face" src="sprites/${ownerId}.png" alt="">${badge}${label}`, iconSize: [48, 48], iconAnchor: [24, 24] });
+    return L.divIcon({ className: 'arena-icon owned' + cls, html: `<img class="sign" src="art/icon-trophy.png" alt=""><img class="owner-face" src="sprites/${ownerId}.png" alt="">${badge}${label}`, iconSize: [48, 48], iconAnchor });
   }
-  return L.divIcon({ className: 'arena-icon' + cls, html: `${swordSvg}${badge}${label}`, iconSize: [48, 48], iconAnchor: [24, 24] });
+  return L.divIcon({ className: 'arena-icon' + cls, html: `${swordSvg}${badge}${label}`, iconSize: [48, 48], iconAnchor });
 }
 const stopIcon = ready => L.divIcon({ className: 'stop-icon px-circle' + (ready ? '' : ' cooling'), html: '<img src="art/icon-beer.png" alt="">', iconSize: [40, 40], iconAnchor: [20, 20] });
 
@@ -41,7 +49,7 @@ export function createMap({ el, arenas, onSpawnTap, onArenaTap, onStopTap, onFol
   const reachOf = s => (!reachPos ? '' : distance(reachPos, s) < CONST.CATCH_RANGE ? 'near' : 'far');
   const arenaMarkers = {};
   for (const a of arenas) {
-    arenaMarkers[a.id] = L.marker([a.lat, a.lon], { icon: arenaIcon() }).addTo(map).on('click', () => onArenaTap(a));
+    arenaMarkers[a.id] = L.marker([a.lat, a.lon], { icon: arenaIcon({}, a.id) }).addTo(map).on('click', () => onArenaTap(a));
   }
   let following = true;
   let centered = false;
@@ -80,7 +88,33 @@ export function createMap({ el, arenas, onSpawnTap, onArenaTap, onStopTap, onFol
         L.marker([s.lat, s.lon], { icon: stopIcon(readyFn(s)), zIndexOffset: 500 }).addTo(stopLayer).on('click', () => onStopTap?.(s));
       }
     },
-    setArena(id, info) { arenaMarkers[id].setIcon(arenaIcon(info)); },
+    setArena(id, info) { arenaMarkers[id].setIcon(arenaIcon(info, id)); },
     invalidate() { map.invalidateSize(); },
+    // Kamera-Flug mit Raus-/Reinzoomen. Folgen aus, sonst zieht das nächste GPS-Update die Karte zurück (follow() schaltet es wieder an).
+    // Löst bei moveend auf, spätestens nach duration + 1 s.
+    flyTo(pos, { duration = 2 } = {}) {
+      following = false; onFollowChange?.(false);
+      return new Promise(resolve => {
+        let t = 0;
+        const done = () => { clearTimeout(t); map.off('moveend', done); resolve(); };
+        try {
+          const ll = [pos.lat, pos.lon];
+          if (!el.clientWidth) { map.setView(ll, 16, { animate: false }); return resolve(); } // Karte verdeckt: Leaflet rechnet sonst mit Größe 0
+          map.flyTo(ll, 16, { duration });
+        } catch { return resolve(); }
+        map.on('moveend', done); // erst nach dem Start: flyTo stoppt ein laufendes panTo, und das feuert sofort moveend
+        t = setTimeout(done, (duration + 1) * 1000);
+      });
+    },
+    // Spieler-Marker steigt in die Scheibe (on) bzw. landet wieder; pos setzt ihn vorher dorthin (Landung am Ziel)
+    liftPlayer(on, pos) {
+      if (pos) { player.setLatLng([pos.lat, pos.lon]); pulse.setLatLng([pos.lat, pos.lon]); }
+      for (const m of [player, pulse]) {
+        const c = m.getElement()?.classList;
+        if (!c) continue;
+        if (on) c.remove('land'); else if (c.contains('lift')) c.add('land');
+        c.toggle('lift', !!on);
+      }
+    },
   };
 }

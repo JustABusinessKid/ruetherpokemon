@@ -29,6 +29,8 @@ async function askText({ title, html, cls, initial = '', ok = 'Speichern' }) {
     return i === 1 ? value : null;
   } finally { box.removeEventListener('input', onInput); }
 }
+// Entfernung für Arena-Screen und Flugscheiben-Popup: unter 1 km in m, sonst „12,3 km"
+export const distText = m => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toLocaleString('de-DE', { maximumFractionDigits: 1 })} km`);
 const emptyState = (icon, text, sub = '') =>
   `<div class="empty">${ico(icon, 'ico-xl empty-ico')}<p>${esc(text)}</p>${sub ? `<p class="sub">${esc(sub)}</p>` : ''}</div>`;
 
@@ -221,15 +223,16 @@ export function createShopScreen({ el, onBuy, onBack }) {
     el.querySelector('.shop-sats').innerHTML = `${ico('coin')}${fmt(save.sats)}`;
     list.innerHTML = '';
     for (const item of SHOP) {
-      const owned = item.id === 'supercoin'
-        ? `Im Besitz: ${save.items.supercoin || 0}`
+      const has = item.id === 'haunebu' && !!save.flugscheibe; // Flugscheibe gibt es nur einmal
+      const owned = item.id === 'supercoin' ? `Im Besitz: ${save.items.supercoin || 0}`
+        : item.id === 'haunebu' ? (has ? 'Im Besitz · Fliegen über die Karte' : '')
         : (save.lureUntil > Date.now() ? 'Gerade aktiv (Kauf verlängert)' : '');
       const div = document.createElement('div');
       div.className = 'shop-item panel thin';
       div.innerHTML = `
         ${ico(kitName(item.icon) || 'shop', 'icon')}
         <div class="meta"><div class="iname">${item.name}</div><div class="sub">${item.desc}</div><div class="sub owned">${owned}</div></div>
-        <button class="buy primary" ${save.sats < item.cost ? 'disabled' : ''}>${fmt(item.cost)}${ico('coin')}</button>`;
+        <button class="buy primary" ${has || save.sats < item.cost ? 'disabled' : ''}>${fmt(item.cost)}${ico('coin')}</button>`;
       div.querySelector('.buy').addEventListener('click', () => {
         const res = onBuy(item.id);
         render();
@@ -243,22 +246,26 @@ export function createShopScreen({ el, onBuy, onBack }) {
 
 // ---------- Arena-Info ----------
 // globalOwner: { owner, leader: { id, rarity, level } | null, since, mine } | null
-export function createArenaScreen({ el, bosses, onFight, onBack }) {
+// v7: außer Reichweite mit Flugscheibe zusätzlich „Mit der Haunebu hinfliegen" → onBeam(arena)
+export function createArenaScreen({ el, bosses, onFight, onBeam, onBack }) {
   el.querySelector('.back').addEventListener('click', onBack);
-  const fight = el.querySelector('.fight');
+  const fight = el.querySelector('.fight'), beam = el.querySelector('.beam'), sprite = el.querySelector('.sprite');
   let arena = null;
   fight.addEventListener('click', () => onFight(arena));
+  beam.addEventListener('click', () => onBeam?.(arena));
+  beam.innerHTML = `${ico('haunebu')}Mit der Haunebu hinfliegen (${fmt(CONST.HAUNEBU_BEAM_COST)}&nbsp;Sats)`; // Preis nicht umbrechen
+  sprite.addEventListener('error', () => { if (!sprite.src.endsWith('/unknown.png')) sprite.src = 'sprites/unknown.png'; }); // Boss-Grafik fehlt noch
   return {
-    show(a, { distanceM, teamSize, level, mastered, ownerName, bossBtc, globalOwner = null }) {
+    show(a, { distanceM, teamSize, level, mastered, ownerName, bossBtc, globalOwner = null, flugscheibe = false, sats = 0 }) {
       arena = a;
       const boss = bosses[a.boss];
       el.querySelector('.arena-name').textContent = a.name;
       el.querySelector('.arena-poster').style.backgroundImage = `url(art/bg-${a.id}.png)`;
-      el.querySelector('.sprite').src = `art/boss-${boss.id}.png`;
+      sprite.src = `art/boss-${boss.id}.png`;
       el.querySelector('.boss-name').textContent = `Boss: ${boss.name} · ${bossBtc} BTC`;
       el.querySelector('.level').innerHTML = mastered ? `${ico('trophy')}Arena gemeistert (Lv. 5)` : `${ico('star')}Arena Lv. ${level} von ${CONST.ARENA_LEVELS}`;
       el.querySelector('.address').textContent = a.address;
-      el.querySelector('.distance').textContent = distanceM == null ? 'Entfernung unbekannt (keine Ortung)' : `Entfernung: ${Math.round(distanceM)} m`;
+      el.querySelector('.distance').textContent = distanceM == null ? 'Entfernung unbekannt (keine Ortung)' : `Entfernung: ${distText(distanceM)}`;
       const go = el.querySelector('.global-owner');
       let text;
       if (!globalOwner) text = 'Noch von niemandem gehalten.';
@@ -274,10 +281,12 @@ export function createArenaScreen({ el, bosses, onFight, onBack }) {
       el.querySelector('.reward').innerHTML = `Belohnung: ${fmt(arenaReward(level))}${ico('coin')}`;
       const inRange = distanceM != null && distanceM < CONST.ARENA_RANGE;
       let status = '';
-      if (!inRange) status = `Du musst näher als ${CONST.ARENA_RANGE} m ran.`;
+      if (!inRange) status = distanceM == null ? `Du musst näher als ${CONST.ARENA_RANGE} m ran.` : `Zu weit weg (${distText(distanceM)}). Näher als ${CONST.ARENA_RANGE} m ran.`;
       else if (teamSize === 0) status = 'Du brauchst mindestens einen Rüther im Team.';
       el.querySelector('.status').textContent = status;
       fight.disabled = !(inRange && teamSize > 0);
+      beam.classList.toggle('hidden', inRange || !flugscheibe);
+      beam.disabled = sats < CONST.HAUNEBU_BEAM_COST;
     },
   };
 }

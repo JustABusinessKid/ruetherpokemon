@@ -43,6 +43,18 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .ticker .t-christian { color: var(--paper); background: var(--green); }
 .ticker .t-christian small { font: 800 11px/1 var(--font-body); }
 
+/* ---------- Haunebu (v7): Flugscheiben-Knopf über dem Folge-Knopf, Countdown-Chip, Flugziel-Liste im Popup ---------- */
+.haunebu-fab { position: absolute; right: 16px; bottom: 84px; z-index: 1000; width: 48px; height: 48px; padding: 0; background: var(--teal); }
+.topbar .beam-chip { font: 700 14px/1 var(--font-pixel); font-variant-numeric: tabular-nums; color: var(--ink); background: var(--teal); }
+/* Chip sichtbar: Titel behält seine Breite, auf schmalen Handys rutscht der Chip in die Kurszeile */
+#screen-map .topbar:has(.beam-chip:not(.hidden)) h1 { flex-basis: auto; }
+.beam-chip:not(.hidden) + .ticker { flex-basis: 0; }
+.beam-list { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; text-align: left; }
+.beam-row { display: flex; align-items: center; gap: 8px; padding: 8px; background: var(--paper-2); border: 2px solid var(--ink); }
+.beam-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.beam-meta b { font: 700 15px/1.2 var(--font-pixel); }
+.beam-row button { flex: none; padding: 4px 10px; font-size: 14px; }
+
 /* ---------- Screens, Blende ---------- */
 .screen.with-tabs { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); }
 .screen.enter { animation: app-screen-in .2s steps(3, end); }

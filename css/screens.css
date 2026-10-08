@@ -127,6 +127,7 @@
 .arena-note .global-owner.mine { background: var(--amber); }
 .arena-note .status { color: var(--red); font-weight: 800; }
 .arena-body .fight { min-width: 200px; min-height: 52px; font-size: 20px; }
+.arena-body .beam { max-width: 343px; background: var(--teal); } /* v7: außer Reichweite mit der Flugscheibe hin */
 
 /* ---------- Weniger Bewegung: Fusion, Level-Up-Sterne, Kauf-Blitz, Atmen aus ---------- */
 @media (prefers-reduced-motion: reduce) {

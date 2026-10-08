@@ -1,4 +1,4 @@
-import { CONST, RARITIES, RARITY_BY_ID, RUETHERS, RUETHER_BY_ID, SHOP } from './data.js';
+import { CONST, RARITIES, RARITY_BY_ID, RUETHERS, RUETHER_BY_ID, SHOP, ARENA_BY_ID } from './data.js';
 import { ringBonus } from './catch-logic.js';
 
 // ---------- Seltenheit ----------
@@ -81,12 +81,35 @@ export const lureActive = (save, now) => (save.lureUntil || 0) > now;
 export function buyItem(save, itemId, now = 0) {
   const item = SHOP.find(i => i.id === itemId);
   if (!item) return { ok: false, reason: 'unbekannt' };
+  if (itemId === 'haunebu' && save.flugscheibe) return { ok: false, reason: 'besitz' };
   if (save.sats < item.cost) return { ok: false, reason: 'sats' };
   save.sats -= item.cost;
+  if (itemId === 'haunebu') return { ok: true, summon: true }; // Beschwörung startet den Hitler-Kampf, kein Inventar
   if (itemId === 'lockmodul') save.lureUntil = Math.max(now, save.lureUntil || 0) + CONST.LURE_MS;
   else save.items[itemId] = (save.items[itemId] || 0) + 1;
   return { ok: true };
 }
+
+// ---------- v7: Haunebu-Reichsflugscheibe ----------
+export function haunebuWin(save) {
+  const sats = CONST.HAUNEBU_WIN_SATS;
+  save.flugscheibe = true;
+  save.sats += sats;
+  save.stats.haunebuWins = (save.stats.haunebuWins || 0) + 1;
+  return { sats };
+}
+// Ein neuer Flug ersetzt einen laufenden (volle Kosten, 10 Minuten neu).
+export function startBeam(save, arenaId, now) {
+  if (!save.flugscheibe) return { ok: false, reason: 'keine' };
+  if (!ARENA_BY_ID[arenaId]) return { ok: false, reason: 'arena' };
+  if (save.sats < CONST.HAUNEBU_BEAM_COST) return { ok: false, reason: 'sats' };
+  save.sats -= CONST.HAUNEBU_BEAM_COST;
+  const until = now + CONST.HAUNEBU_BEAM_MS;
+  save.beam = { arenaId, until };
+  return { ok: true, until };
+}
+export const activeBeam = (save, now) => (save.beam && save.beam.until > now ? save.beam : null);
+export function endBeam(save) { save.beam = null; }
 
 // ---------- XP / Trainer-Level ----------
 export const xpForLevel = level => CONST.LEVEL_XP_STEP * level;
@@ -203,8 +226,8 @@ export function levelUpUids(save, uids, n = CONST.WIN_LEVEL_UP) {
 export function emptySaveV3() {
   return {
     version: 3, box: [], team: [], sats: 0, dex: {}, arenaLevels: {}, arenaMastered: {}, arenaOwners: {},
-    items: { lockmodul: 0, supercoin: 0 }, lureUntil: 0, victoryShown: false,
-    stats: { catches: 0, arenaWins: 0, stops: 0, fusions: 0, specials: 0, dodges: 0, maxCombo: 0, superHits: 0 },
+    items: { lockmodul: 0, supercoin: 0 }, lureUntil: 0, victoryShown: false, flugscheibe: false, beam: null,
+    stats: { catches: 0, arenaWins: 0, stops: 0, fusions: 0, specials: 0, dodges: 0, maxCombo: 0, superHits: 0, haunebuWins: 0 },
     nextUid: 1,
     profile: null, xp: 0, trainerLevel: 1,
     quests: { date: '', list: [] }, streak: { count: 0, lastDay: '' }, achievements: {}, stopCooldowns: {},
@@ -226,6 +249,8 @@ function upgradeToV3(s) {
     achievements: s.achievements && typeof s.achievements === 'object' ? s.achievements : {},
     stopCooldowns: s.stopCooldowns && typeof s.stopCooldowns === 'object' ? s.stopCooldowns : {},
     profile: s.profile && typeof s.profile.nickname === 'string' && s.profile.nickname.length >= 2 ? s.profile : null,
+    flugscheibe: s.flugscheibe === true,
+    beam: s.beam && typeof s.beam.arenaId === 'string' && typeof s.beam.until === 'number' ? s.beam : null,
   };
 }
 export function migrate(d) {
