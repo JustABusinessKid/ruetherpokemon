@@ -528,7 +528,7 @@ function endHaunebu({ won }) {
   if (won) {
     haunebuWin(save);
     gainXp(CONST.XP_HAUNEBU);
-    online.postEvent('achievement', 'hat Adolf Hitler besiegt und fliegt jetzt Haunebu!');
+    online.postEvent('achievement', 'hat die Haunebu erbeutet und fliegt jetzt zu jeder Arena!');
   }
   afterChange();
   if (won) toast(`Haunebu erbeutet: +${fmt(CONST.HAUNEBU_WIN_SATS)} Sats. Die Flugscheibe wartet unten rechts auf der Karte.`, { icon: 'haunebu', kind: 'sats' });
