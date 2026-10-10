@@ -1,39 +1,7 @@
 {
  "v": 1,
- "lastMsgTime": 0,
+ "lastMsgTime": 1791648182,
  "players": {
-  "legacy:Adolf": {
-   "nickname": "Adolf",
-   "avatar": "micha",
-   "sats": 54880,
-   "dex": 18,
-   "trophies": 41,
-   "mastered": 3,
-   "level": 24,
-   "xp": 1980,
-   "leader": {
-    "id": "micha",
-    "rarity": "legendaer",
-    "level": 20
-   },
-   "t": 1791629410247
-  },
-  "legacy:BTC": {
-   "nickname": "BTC",
-   "avatar": "christian",
-   "sats": 33275,
-   "dex": 20,
-   "trophies": 38,
-   "mastered": 3,
-   "level": 16,
-   "xp": 2000,
-   "leader": {
-    "id": "hildegard",
-    "rarity": "legendaer",
-    "level": 20
-   },
-   "t": 1791629622660
-  },
   "legacy:Josef": {
    "nickname": "Josef",
    "avatar": "hildegard",
@@ -89,51 +57,188 @@
    "xp": 0,
    "leader": null,
    "t": 1791555895947
+  },
+  "C-w_CUaEP-FRT271jxj2J9Fpmi7nZRiJBkW7o1pXg3I": {
+   "nickname": "Adolf",
+   "avatar": "micha",
+   "sats": 55410,
+   "dex": 20,
+   "trophies": 41,
+   "mastered": 4,
+   "level": 24,
+   "xp": 2750,
+   "leader": {
+    "id": "micha",
+    "rarity": "legendaer",
+    "level": 20
+   },
+   "t": 1791647537640
+  },
+  "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
+   "nickname": "BTC",
+   "avatar": "christian",
+   "sats": 46675,
+   "dex": 20,
+   "trophies": 51,
+   "mastered": 4,
+   "level": 20,
+   "xp": 1050,
+   "leader": {
+    "id": "christian",
+    "rarity": "legendaer",
+    "level": 20
+   },
+   "t": 1791648186759
   }
  },
  "arenas": {
   "pcsale": {
-   "ownerId": "legacy:Adolf",
+   "ownerId": "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k",
    "leader": {
-    "id": "micha",
+    "id": "hildegard",
     "rarity": "legendaer",
     "level": 20
    },
    "level": 5,
-   "since": 1791628709196
+   "since": 1791637981054
   },
   "huettenberg": {
-   "ownerId": "legacy:Adolf",
+   "ownerId": "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k",
    "leader": {
-    "id": "micha",
+    "id": "hildegard",
     "rarity": "legendaer",
     "level": 20
    },
    "level": 5,
-   "since": 1791628746022
+   "since": 1791637911030
   },
   "worringen": {
-   "ownerId": "legacy:Adolf",
+   "ownerId": "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k",
    "leader": {
-    "id": "micha",
+    "id": "hildegard",
     "rarity": "legendaer",
     "level": 20
    },
    "level": 5,
-   "since": 1791629066508
+   "since": 1791637824114
   },
   "keller": {
-   "ownerId": "legacy:Adolf",
+   "ownerId": "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k",
    "leader": {
-    "id": "micha",
+    "id": "hildegard",
     "rarity": "legendaer",
     "level": 20
    },
    "level": 5,
-   "since": 1791629407629
+   "since": 1791637863535
   }
  },
  "events": [
+  {
+   "at": 1791647856102,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Onkel Micha erschaffen!",
+   "m": "xqG2eMld6zJwn590"
+  },
+  {
+   "at": 1791647853816,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Viktor erschaffen!",
+   "m": "PwPnnHfmBaQltBsO"
+  },
+  {
+   "at": 1791647851330,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Viktor erschaffen!",
+   "m": "8e3Hpizu00OuiRGO"
+  },
+  {
+   "at": 1791647841670,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Onkel Micha erschaffen!",
+   "m": "jF6App9wj-eKRVVq"
+  },
+  {
+   "at": 1791638375362,
+   "nickname": "BTC",
+   "kind": "level",
+   "text": "ist Trainer Lv. 20 geworden!",
+   "m": "K_hO56ivrKPXCYg6"
+  },
+  {
+   "at": 1791638217605,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Onkel Micha erschaffen!",
+   "m": "0fZkZQSP--vk6MYe"
+  },
+  {
+   "at": 1791638210576,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Christian erschaffen!",
+   "m": "YklcP-NScaEXb5z2"
+  },
+  {
+   "at": 1791637981054,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat PC Sale erobert (Lv. 5) und Adolf rausgeworfen.",
+   "m": "_BdJTfiO5L_NypxU"
+  },
+  {
+   "at": 1791637981032,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat PC Sale gemeistert!",
+   "m": "tc-6Q_2jqgQgW9d8"
+  },
+  {
+   "at": 1791637911030,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat Hüttenbergstraße erobert (Lv. 5) und Adolf rausgeworfen.",
+   "m": "YWTz5BH-z8fhTyAr"
+  },
+  {
+   "at": 1791637911012,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat Hüttenbergstraße gemeistert!",
+   "m": "4yMFeXCvOwVX-aXL"
+  },
+  {
+   "at": 1791637863535,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat Keller der Rütherschanze erobert (Lv. 5) und Adolf rausgeworfen.",
+   "m": "2S7dHp5fgXN8t-_X"
+  },
+  {
+   "at": 1791637863517,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat Keller der Rütherschanze gemeistert!",
+   "m": "PQBjwH3GMQc8dWna"
+  },
+  {
+   "at": 1791637824114,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat Rütherschanze Worringen erobert (Lv. 5) und Adolf rausgeworfen.",
+   "m": "fMu4tu6Cw5_hIas1"
+  },
+  {
+   "at": 1791637824092,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat Rütherschanze Worringen gemeistert!",
+   "m": "x3Iz598YrZHnD0IQ"
+  },
   {
    "at": 1791629407729,
    "nickname": "Adolf",
@@ -378,111 +483,6 @@
    "kind": "level",
    "text": "ist Trainer Lv. 15 geworden!",
    "m": "legacy-1791627618406"
-  },
-  {
-   "at": 1791627546318,
-   "nickname": "BTC",
-   "kind": "fusion",
-   "text": "hat per Fusion einen epischen Ramona Rüther erschaffen!",
-   "m": "legacy-1791627546318"
-  },
-  {
-   "at": 1791627539745,
-   "nickname": "BTC",
-   "kind": "fusion",
-   "text": "hat per Fusion einen epischen Ramona Rüther erschaffen!",
-   "m": "legacy-1791627539745"
-  },
-  {
-   "at": 1791627534731,
-   "nickname": "BTC",
-   "kind": "fusion",
-   "text": "hat per Fusion einen legendären Viktor erschaffen!",
-   "m": "legacy-1791627534731"
-  },
-  {
-   "at": 1791627532633,
-   "nickname": "BTC",
-   "kind": "fusion",
-   "text": "hat per Fusion einen epischen Viktor erschaffen!",
-   "m": "legacy-1791627532633"
-  },
-  {
-   "at": 1791627521483,
-   "nickname": "BTC",
-   "kind": "fusion",
-   "text": "hat per Fusion einen epischen Hildegard erschaffen!",
-   "m": "legacy-1791627521483"
-  },
-  {
-   "at": 1791627474122,
-   "nickname": "BTC",
-   "kind": "arena",
-   "text": "hat Rütherschanze Worringen erobert (Lv. 5).",
-   "m": "legacy-1791627474122"
-  },
-  {
-   "at": 1791627473759,
-   "nickname": "BTC",
-   "kind": "achievement",
-   "text": "hat Rütherschanze Worringen gemeistert!",
-   "m": "legacy-1791627473759"
-  },
-  {
-   "at": 1791627311713,
-   "nickname": "BTC",
-   "kind": "arena",
-   "text": "hat Hüttenbergstraße erobert (Lv. 5).",
-   "m": "legacy-1791627311713"
-  },
-  {
-   "at": 1791627310792,
-   "nickname": "BTC",
-   "kind": "achievement",
-   "text": "hat Hüttenbergstraße gemeistert!",
-   "m": "legacy-1791627310792"
-  },
-  {
-   "at": 1791623169776,
-   "nickname": "BTC",
-   "kind": "arena",
-   "text": "hat Keller der Rütherschanze erobert (Lv. 5).",
-   "m": "legacy-1791623169776"
-  },
-  {
-   "at": 1791623169348,
-   "nickname": "BTC",
-   "kind": "achievement",
-   "text": "hat Keller der Rütherschanze gemeistert!",
-   "m": "legacy-1791623169348"
-  },
-  {
-   "at": 1791623120566,
-   "nickname": "BTC",
-   "kind": "arena",
-   "text": "hat Rütherschanze Worringen erobert (Lv. 5).",
-   "m": "legacy-1791623120566"
-  },
-  {
-   "at": 1791623120069,
-   "nickname": "BTC",
-   "kind": "achievement",
-   "text": "hat Rütherschanze Worringen gemeistert!",
-   "m": "legacy-1791623120069"
-  },
-  {
-   "at": 1791622502376,
-   "nickname": "BTC",
-   "kind": "fusion",
-   "text": "hat per Fusion einen legendären Ramona Rüther erschaffen!",
-   "m": "legacy-1791622502376"
-  },
-  {
-   "at": 1791618233711,
-   "nickname": "BTC",
-   "kind": "catch",
-   "text": "hat einen legendären Onkel Micha gefangen!",
-   "m": "legacy-1791618233711"
   }
  ]
 }
