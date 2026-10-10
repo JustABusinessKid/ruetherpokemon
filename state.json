@@ -1,0 +1,488 @@
+{
+ "v": 1,
+ "lastMsgTime": 0,
+ "players": {
+  "legacy:Adolf": {
+   "nickname": "Adolf",
+   "avatar": "micha",
+   "sats": 54880,
+   "dex": 18,
+   "trophies": 41,
+   "mastered": 3,
+   "level": 24,
+   "xp": 1980,
+   "leader": {
+    "id": "micha",
+    "rarity": "legendaer",
+    "level": 20
+   },
+   "t": 1791629410247
+  },
+  "legacy:BTC": {
+   "nickname": "BTC",
+   "avatar": "christian",
+   "sats": 33275,
+   "dex": 20,
+   "trophies": 38,
+   "mastered": 3,
+   "level": 16,
+   "xp": 2000,
+   "leader": {
+    "id": "hildegard",
+    "rarity": "legendaer",
+    "level": 20
+   },
+   "t": 1791629622660
+  },
+  "legacy:Josef": {
+   "nickname": "Josef",
+   "avatar": "hildegard",
+   "sats": 150,
+   "dex": 0,
+   "trophies": 0,
+   "mastered": 0,
+   "level": 1,
+   "xp": 0,
+   "leader": null,
+   "t": 1791483151773
+  },
+  "legacy:Heinrich": {
+   "nickname": "Heinrich",
+   "avatar": "christian",
+   "sats": 20260,
+   "dex": 6,
+   "trophies": 1,
+   "mastered": 0,
+   "level": 3,
+   "xp": 390,
+   "leader": {
+    "id": "hildegard",
+    "rarity": "normal",
+    "level": 2
+   },
+   "t": 1791485415682
+  },
+  "legacy:Test": {
+   "nickname": "Test",
+   "avatar": "christian",
+   "sats": 9760,
+   "dex": 2,
+   "trophies": 0,
+   "mastered": 0,
+   "level": 2,
+   "xp": 90,
+   "leader": {
+    "id": "christian",
+    "rarity": "normal",
+    "level": 2
+   },
+   "t": 1791485555912
+  },
+  "legacy:Büro": {
+   "nickname": "Büro",
+   "avatar": "christian",
+   "sats": 150,
+   "dex": 0,
+   "trophies": 0,
+   "mastered": 0,
+   "level": 1,
+   "xp": 0,
+   "leader": null,
+   "t": 1791555895947
+  }
+ },
+ "arenas": {
+  "pcsale": {
+   "ownerId": "legacy:Adolf",
+   "leader": {
+    "id": "micha",
+    "rarity": "legendaer",
+    "level": 20
+   },
+   "level": 5,
+   "since": 1791628709196
+  },
+  "huettenberg": {
+   "ownerId": "legacy:Adolf",
+   "leader": {
+    "id": "micha",
+    "rarity": "legendaer",
+    "level": 20
+   },
+   "level": 5,
+   "since": 1791628746022
+  },
+  "worringen": {
+   "ownerId": "legacy:Adolf",
+   "leader": {
+    "id": "micha",
+    "rarity": "legendaer",
+    "level": 20
+   },
+   "level": 5,
+   "since": 1791629066508
+  },
+  "keller": {
+   "ownerId": "legacy:Adolf",
+   "leader": {
+    "id": "micha",
+    "rarity": "legendaer",
+    "level": 20
+   },
+   "level": 5,
+   "since": 1791629407629
+  }
+ },
+ "events": [
+  {
+   "at": 1791629407729,
+   "nickname": "Adolf",
+   "kind": "arena",
+   "text": "hat Keller der Rütherschanze erobert (Lv. 5) und BTC rausgeworfen.",
+   "m": "legacy-1791629407729"
+  },
+  {
+   "at": 1791629407269,
+   "nickname": "Adolf",
+   "kind": "achievement",
+   "text": "hat Keller der Rütherschanze gemeistert!",
+   "m": "legacy-1791629407269"
+  },
+  {
+   "at": 1791629066600,
+   "nickname": "Adolf",
+   "kind": "arena",
+   "text": "hat Rütherschanze Worringen erobert (Lv. 5) und BTC rausgeworfen.",
+   "m": "legacy-1791629066600"
+  },
+  {
+   "at": 1791629066226,
+   "nickname": "Adolf",
+   "kind": "achievement",
+   "text": "hat Rütherschanze Worringen gemeistert!",
+   "m": "legacy-1791629066226"
+  },
+  {
+   "at": 1791628746128,
+   "nickname": "Adolf",
+   "kind": "arena",
+   "text": "hat Hüttenbergstraße erobert (Lv. 5) und BTC rausgeworfen.",
+   "m": "legacy-1791628746128"
+  },
+  {
+   "at": 1791628745604,
+   "nickname": "Adolf",
+   "kind": "achievement",
+   "text": "hat Hüttenbergstraße gemeistert!",
+   "m": "legacy-1791628745604"
+  },
+  {
+   "at": 1791628714513,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat Rütherschanze Worringen erobert (Lv. 5) und Adolf rausgeworfen.",
+   "m": "legacy-1791628714513"
+  },
+  {
+   "at": 1791628714103,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat Rütherschanze Worringen gemeistert!",
+   "m": "legacy-1791628714103"
+  },
+  {
+   "at": 1791628709292,
+   "nickname": "Adolf",
+   "kind": "arena",
+   "text": "hat PC Sale erobert (Lv. 5) und BTC rausgeworfen.",
+   "m": "legacy-1791628709292"
+  },
+  {
+   "at": 1791628708968,
+   "nickname": "Adolf",
+   "kind": "achievement",
+   "text": "hat PC Sale gemeistert!",
+   "m": "legacy-1791628708968"
+  },
+  {
+   "at": 1791628677280,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat Keller der Rütherschanze erobert (Lv. 5) und Adolf rausgeworfen.",
+   "m": "legacy-1791628677280"
+  },
+  {
+   "at": 1791628676357,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat Keller der Rütherschanze gemeistert!",
+   "m": "legacy-1791628676357"
+  },
+  {
+   "at": 1791628675147,
+   "nickname": "Adolf",
+   "kind": "arena",
+   "text": "hat Rütherschanze Worringen erobert (Lv. 5) und BTC rausgeworfen.",
+   "m": "legacy-1791628675147"
+  },
+  {
+   "at": 1791628674683,
+   "nickname": "Adolf",
+   "kind": "achievement",
+   "text": "hat Rütherschanze Worringen gemeistert!",
+   "m": "legacy-1791628674683"
+  },
+  {
+   "at": 1791628625558,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat Hüttenbergstraße erobert (Lv. 5) und Adolf rausgeworfen.",
+   "m": "legacy-1791628625558"
+  },
+  {
+   "at": 1791628625299,
+   "nickname": "Adolf",
+   "kind": "arena",
+   "text": "hat Keller der Rütherschanze erobert (Lv. 5).",
+   "m": "legacy-1791628625299"
+  },
+  {
+   "at": 1791628625039,
+   "nickname": "Adolf",
+   "kind": "achievement",
+   "text": "hat Keller der Rütherschanze gemeistert!",
+   "m": "legacy-1791628625039"
+  },
+  {
+   "at": 1791628625004,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat Hüttenbergstraße gemeistert!",
+   "m": "legacy-1791628625004"
+  },
+  {
+   "at": 1791628582074,
+   "nickname": "Adolf",
+   "kind": "arena",
+   "text": "hat Keller der Rütherschanze erobert (Lv. 4) und BTC rausgeworfen.",
+   "m": "legacy-1791628582074"
+  },
+  {
+   "at": 1791628564139,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat Keller der Rütherschanze erobert (Lv. 5) und Adolf rausgeworfen.",
+   "m": "legacy-1791628564139"
+  },
+  {
+   "at": 1791628563708,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat Keller der Rütherschanze gemeistert!",
+   "m": "legacy-1791628563708"
+  },
+  {
+   "at": 1791628544744,
+   "nickname": "Adolf",
+   "kind": "arena",
+   "text": "hat Keller der Rütherschanze erobert (Lv. 3).",
+   "m": "legacy-1791628544744"
+  },
+  {
+   "at": 1791628520969,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat Rütherschanze Worringen erobert (Lv. 5).",
+   "m": "legacy-1791628520969"
+  },
+  {
+   "at": 1791628520649,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat Rütherschanze Worringen gemeistert!",
+   "m": "legacy-1791628520649"
+  },
+  {
+   "at": 1791628507132,
+   "nickname": "Adolf",
+   "kind": "arena",
+   "text": "hat Keller der Rütherschanze erobert (Lv. 2) und BTC rausgeworfen.",
+   "m": "legacy-1791628507132"
+  },
+  {
+   "at": 1791628236119,
+   "nickname": "Adolf",
+   "kind": "arena",
+   "text": "hat Hüttenbergstraße erobert (Lv. 5) und BTC rausgeworfen.",
+   "m": "legacy-1791628236119"
+  },
+  {
+   "at": 1791628234490,
+   "nickname": "Adolf",
+   "kind": "achievement",
+   "text": "hat Hüttenbergstraße gemeistert!",
+   "m": "legacy-1791628234490"
+  },
+  {
+   "at": 1791628115586,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat PC Sale erobert (Lv. 5).",
+   "m": "legacy-1791628115586"
+  },
+  {
+   "at": 1791628115136,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat PC Sale gemeistert!",
+   "m": "legacy-1791628115136"
+  },
+  {
+   "at": 1791628020827,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat PC Sale erobert (Lv. 5).",
+   "m": "legacy-1791628020827"
+  },
+  {
+   "at": 1791628020595,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat PC Sale gemeistert!",
+   "m": "legacy-1791628020595"
+  },
+  {
+   "at": 1791627692625,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat Keller der Rütherschanze erobert (Lv. 5).",
+   "m": "legacy-1791627692625"
+  },
+  {
+   "at": 1791627692306,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat Keller der Rütherschanze gemeistert!",
+   "m": "legacy-1791627692306"
+  },
+  {
+   "at": 1791627618625,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Hildegard erschaffen!",
+   "m": "legacy-1791627618625"
+  },
+  {
+   "at": 1791627618406,
+   "nickname": "BTC",
+   "kind": "level",
+   "text": "ist Trainer Lv. 15 geworden!",
+   "m": "legacy-1791627618406"
+  },
+  {
+   "at": 1791627546318,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Ramona Rüther erschaffen!",
+   "m": "legacy-1791627546318"
+  },
+  {
+   "at": 1791627539745,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Ramona Rüther erschaffen!",
+   "m": "legacy-1791627539745"
+  },
+  {
+   "at": 1791627534731,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Viktor erschaffen!",
+   "m": "legacy-1791627534731"
+  },
+  {
+   "at": 1791627532633,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Viktor erschaffen!",
+   "m": "legacy-1791627532633"
+  },
+  {
+   "at": 1791627521483,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Hildegard erschaffen!",
+   "m": "legacy-1791627521483"
+  },
+  {
+   "at": 1791627474122,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat Rütherschanze Worringen erobert (Lv. 5).",
+   "m": "legacy-1791627474122"
+  },
+  {
+   "at": 1791627473759,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat Rütherschanze Worringen gemeistert!",
+   "m": "legacy-1791627473759"
+  },
+  {
+   "at": 1791627311713,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat Hüttenbergstraße erobert (Lv. 5).",
+   "m": "legacy-1791627311713"
+  },
+  {
+   "at": 1791627310792,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat Hüttenbergstraße gemeistert!",
+   "m": "legacy-1791627310792"
+  },
+  {
+   "at": 1791623169776,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat Keller der Rütherschanze erobert (Lv. 5).",
+   "m": "legacy-1791623169776"
+  },
+  {
+   "at": 1791623169348,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat Keller der Rütherschanze gemeistert!",
+   "m": "legacy-1791623169348"
+  },
+  {
+   "at": 1791623120566,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat Rütherschanze Worringen erobert (Lv. 5).",
+   "m": "legacy-1791623120566"
+  },
+  {
+   "at": 1791623120069,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat Rütherschanze Worringen gemeistert!",
+   "m": "legacy-1791623120069"
+  },
+  {
+   "at": 1791622502376,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Ramona Rüther erschaffen!",
+   "m": "legacy-1791622502376"
+  },
+  {
+   "at": 1791618233711,
+   "nickname": "BTC",
+   "kind": "catch",
+   "text": "hat einen legendären Onkel Micha gefangen!",
+   "m": "legacy-1791618233711"
+  }
+ ]
+}
