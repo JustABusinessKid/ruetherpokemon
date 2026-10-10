@@ -512,16 +512,17 @@ function buyHaunebu() {
   if (!res.ok) { toast(res.reason === 'besitz' ? 'Die Flugscheibe gehört dir schon.' : 'Nicht genug Sats.'); return res; }
   sfx.play('coin');
   persist();
-  playSummon(document.body, { line: pickLine('hitler', 'appear') }).catch(() => {}).then(startHaunebu); // Sats sind weg: Kampf auch ohne Animation
+  const line = pickLine('hitler', 'appear'); // steht im Banner; das Kampf-Intro nimmt dann einen anderen
+  playSummon(document.body, { line }).catch(() => {}).then(() => startHaunebu(line)); // Sats sind weg: Kampf auch ohne Animation
   return res;
 }
-function startHaunebu() {
+function startHaunebu(shownLine = '') {
   const { uids, team } = teamFighters();
   const enemy = makeBoss(BOSSES.hitler, 1);
   if (debugWeakBoss) enemy.btc = 20;
   fight = { haunebu: true, uids };
   show('screen-battle');
-  battleScreen.start({ team, enemy, rng: Math.random, mode: 'haunebu', reward: CONST.HAUNEBU_WIN_SATS });
+  battleScreen.start({ team, enemy, rng: Math.random, mode: 'haunebu', reward: CONST.HAUNEBU_WIN_SATS, shownLine });
 }
 // Niederlage, Zeit oder Aufgeben: Sats bleiben weg, kein „Nochmal" (die Beschwörung kostet neu), Stats trotzdem speichern
 function endHaunebu({ won }) {

@@ -68,11 +68,14 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
   const sparkleVisible = on => { if (sparkle) sparkle.el.style.visibility = on ? '' : 'hidden'; };
   function resetCoin() { coin.className = superActive ? 'coin super' : 'coin'; setCoin(0, 0); sparkleVisible(true); }
   function spriteAnim(cls) { sprite.classList.remove('hop', 'suck', 'pop'); if (cls) sprite.classList.add(cls); }
-  // Spruch als Sprechblase über dem Rüther; hängt in .target und läuft so mit ihm mit
-  const talk = (kind, ms = 2600, t = pickLine(def.id, kind)) => {
+  // Spruch als Sprechblase über dem Rüther; hängt in .target und läuft so mit ihm mit. stay: bleibt an der Stelle in der
+  // Bühne stehen (Flucht: er rennt aus ihr heraus, sonst wäre sie nach 0,3 s aus dem Bild)
+  const talk = (kind, ms = 2600, t = pickLine(def.id, kind), stay = false) => {
     if (!t) return;
-    target.querySelectorAll('.fx-say').forEach(n => n.remove()); // nie zwei Blasen übereinander
-    bubble(target, t, { x: '22%', y: '-4%', ms });
+    stage.querySelectorAll('.fx-say').forEach(n => n.remove()); // nie zwei Blasen übereinander
+    if (!stay) { bubble(target, t, { x: '22%', y: '-4%', ms }); return; }
+    const r = target.getBoundingClientRect(), s = stage.getBoundingClientRect();
+    bubble(stage, t, { x: r.left - s.left + r.width * 0.22, y: r.top - s.top - r.height * 0.04, ms });
   };
   function say(text, ms = 1200, cls = '') {
     clearTimeout(msgTimer); timers.delete(msgTimer);
@@ -116,7 +119,7 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
   // ---- Rüther lebt: hüpfen, wehren ----
   function scheduleHop() {
     after(rand(3000, 6000), () => {
-      if (alive() && !target.classList.contains('angry')) {
+      if (alive() && !target.classList.contains('angry') && !target.querySelector('.fx-say')) { // hüpft nicht unter die eigene Blase
         spriteAnim('hop'); after(500, () => sprite.classList.remove('hop'));
       }
       scheduleHop();
@@ -248,7 +251,7 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
     }
     sprite.style.setProperty('--sx', `${land.x - sc.x}px`);
     sprite.style.setProperty('--sy', `${land.y - sc.y}px`);
-    target.querySelectorAll('.fx-say').forEach(n => n.remove()); // die Blase schwebt nicht weiter, wenn er in der Münze steckt
+    stage.querySelectorAll('.fx-say').forEach(n => n.remove()); // die Blase schwebt nicht weiter, wenn er in der Münze steckt
     spriteAnim('suck');
     await wait(400);
 
@@ -274,7 +277,7 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
     if (caught) {
       coin.classList.add('glow');
       burst();
-      say('Gefangen!');
+      say('Gefangen!', 1200, 'top'); // über dem Belohnungszettel, das Sprite ist schon eingesaugt
       sfx.play('catch'); haptic([20, 30, 60]);
       const r = onCaught?.({ spawn, usedSuperCoin });
       if (r) {
@@ -297,10 +300,10 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
     left -= 1; renderThrows();
     await wait(400);
     if (left <= 0) {
-      target.classList.add('flee'); // ganzes Ziel rennt weg, die Sprechblase in .target läuft mit
       const line = pickLine(def.id, 'flee');
       if (line && isNarration(line, def.name)) say(line, 2200, 'narr'); // „Viktor ist zur Börse gelaufen." erzählt der Streifen, keine Blase
-      else { say('Abgehauen!'); talk('flee', 2400, line); }
+      else { say('Abgehauen!'); talk('flee', 2400, line, true); }
+      target.classList.add('flee'); // ganzes Ziel rennt weg, die Blase bleibt stehen
       await wait(2200);
       finish(false);
       return;

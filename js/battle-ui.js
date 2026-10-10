@@ -1,14 +1,16 @@
 import { CONST, RARITIES, RARITY_BY_ID, LINES, pickLine } from './data.js';
-import { createBattle, tick } from './battle.js';
+import { createBattle, tick, msToChargedWarn } from './battle.js';
 import { sfx, haptic } from './audio.js';
-import { playSheet, propFx, confetti, floatText, btcRain, banner, say } from './fx.js';
+import { playSheet, propFx, confetti, floatText, btcRain, banner } from './fx.js';
 import { hashrateText, isNarration } from './format.js';
 
 // Kampf-Bildschirm: VS-Intro mit Countdown, requestAnimationFrame-Schleife um die Engine,
 // Pointer-Eingabe, Events → Grafik-Effekte aus art/ über js/fx.js (Requisiten mit echten Gesichtern als Reiter, Sheets,
 // Zahlen, ₿-Regen, Banner, Sprechblasen), kampfeigene Kleinanimationen in css/battle.css, Sounds, Haptik, Combo, Wut, End-Overlay.
+// Gegner-Sprüche und Ausrufe stehen in der eigenen Blase .enemy-say unter der Gegner-Leiste, außerhalb der Bühne (Spec v7 §2c).
 // Spezial-Attacken laufen als Kinosequenz: die Spielzeit friert ein (pauseUntil), Banner mit Gesicht + Spruch (Spec §6).
-// createBattleScreen({ el, onEnd, onEvent }) -> { start({ team, enemy, rng, mode, arena, arenaLevel, reward, masteredAfter, wild }), stop() }
+// createBattleScreen({ el, onEnd, onEvent }) -> { start({ team, enemy, rng, mode, arena, arenaLevel, reward, masteredAfter, wild, shownLine }), stop() }
+// shownLine: appear-Spruch, der schon vor dem Kampf zu sehen war (Beschwörungs-Banner); das Intro nimmt einen anderen.
 // mode 'arena' | 'wild' | 'haunebu'; wild = { id, rarity, name } (Gegner = wilder Rüther mit echtem Gesicht, kein „Nochmal").
 // 'haunebu' (v7): Beschwörung aus dem Shop gegen Hitler, ohne arena; Sieg = Flugscheibe erbeutet, kein „Nochmal".
 // Gegner-Helfer (v7b, Wolfsschanzen-Beschwörung): state.enemySummons → .enemy-helpers neben dem Boss (art/boss-<id>.png).
@@ -28,14 +30,19 @@ function icon(name, cls = '') {
 const fmt = n => n.toLocaleString('de-DE');
 const freshInput = () => ({ taps: 0, dodge: false, special: null, switchTo: null });
 const RARITY_COLORS = RARITIES.map(r => `var(--r-${r.id})`);
-// Ankerpunkte auf der Bühne = die Pfad-Anker aus css/theme.css (--fx-enemy-*, --fx-me-*), Texte etwas darüber
-const AT = { enemy: { x: 'var(--fx-enemy-x)', y: 'var(--fx-enemy-y)' }, me: { x: 'var(--fx-me-x)', y: 'var(--fx-me-y)' } };
-const TXT = { enemy: { x: 'var(--fx-enemy-x)', y: 'calc(var(--fx-enemy-y) - 12%)' }, me: { x: 'calc(var(--fx-me-x) + 4%)', y: 'calc(var(--fx-me-y) - 14%)' } };
+// Ankerpunkte auf der Bühne = die Pfad-Anker aus css/theme.css (--fx-enemy-*, --fx-me-*), Texte etwas darüber.
+// hit = Tipp-Treffer am Gegner (--fx-hit-*, css/battle.css): rechts neben dem Gesicht, solange dort ein echtes ist
+const AT = { enemy: { x: 'var(--fx-enemy-x)', y: 'var(--fx-enemy-y)' }, me: { x: 'var(--fx-me-x)', y: 'var(--fx-me-y)' }, hit: { x: 'var(--fx-hit-x)', y: 'var(--fx-hit-y)' } };
+// Zahlen am Gegner über den Tipp-Treffern (nicht über den rechten Rand); bei mir: --fx-me-num-y (css/battle.css), über der
+// Helferreihe, solange Christian und Micha dort stehen; beside = rechts neben meinem Gesicht im Flugscheiben-Strahl
+const TXT = {
+  enemy: { x: 'min(var(--fx-hit-x), calc(100% - 44px))', y: 'calc(var(--fx-hit-y) - 12%)' },
+  me: { x: 'calc(var(--fx-me-x) + 4%)', y: 'var(--fx-me-num-y)' },
+  beside: { x: 'calc(var(--fx-me-x) + 30%)', y: 'var(--fx-me-num-y)' },
+};
 // Info-Texte zum eigenen Rüther (Ausgewichen!, … du bist dran!): mittig, damit lange Namen nicht links aus der Bühne laufen,
-// und 12 % über den Schadenszahlen, damit sich beides nicht überdeckt
-const INFO_ME = { x: '50%', y: 'calc(var(--fx-me-y) - 26%)' };
-// Sprechblase des Gegners: Zipfel links oben am Gegner, Blase läuft nach rechts
-const SAY_AT = { x: 'calc(var(--fx-enemy-x) - 18%)', y: 'calc(var(--fx-enemy-y) - 14%)', side: 'left' };
+// 12 % über den Schadenszahlen; im Wildkampf unter seinem echten Gesicht (--fx-info-me-y, css/battle.css)
+const INFO_ME = { x: '50%', y: 'var(--fx-info-me-y)' };
 const jitter = (x, px) => `calc(${x} + ${Math.round((Math.random() - 0.5) * px)}px)`;
 // Einschlag-Sheet wächst mit dem Schaden: Tipp (3) ≈ 76 px, Spezial (40) = 224 px
 const impactSize = dmg => Math.min(256, 64 + Math.round(dmg) * 4);
@@ -50,6 +57,7 @@ const FREEZE = { 'chart-up': 2400, handshake: 1600, can: 1500, handbag: 1500, co
 const BOSS_SLOW = 1.4; // Boss-Requisiten laufen 1,4× so lang (ohne Freeze)
 const slow = ms => Math.round(ms * BOSS_SLOW);
 const LINE_MIN = 8000, LINE_SPREAD = 4000; // Gegner-Sprüche alle 8–12 s Spielzeit
+const SAY_MS = 3000; // so lange steht ein Spruch in der Gegner-Blase
 // Betäubung des eigenen Rüthers je Gegner-Attacke (fx) als Text; alles andere zeigt den Firmware-Balken der PS3
 const STUN_TEXT = { wild: 'sprachlos', fan: 'benebelt', ray: 'im Strahl' };
 const BUNKER_MS = 1500; // = bt-bunker in css/battle.css
@@ -59,8 +67,9 @@ const bubbleText = s => { const t = document.createElement('span'); t.className 
 
 export function createBattleScreen({ el, onEnd, onEvent }) {
   const $ = s => el.querySelector(s);
-  const flash = $('.flash'), stage = $('.stage'), bgEl = $('.stage .bg'), fx = $('.fx'), helpers = $('.helpers'), comboEl = $('.combo');
+  const flash = $('.flash'), battleTop = $('.battle-top'), stage = $('.stage'), bgEl = $('.stage .bg'), fx = $('.fx'), helpers = $('.helpers'), comboEl = $('.combo');
   const enemyHelpers = $('.enemy-helpers');
+  const enemySay = $('.enemy-say'), sayFace = enemySay.querySelector('.say-face'), sayText = enemySay.querySelector('.say-text');
   const enemySprite = $('.enemy-sprite'), timerEl = $('.timer');
   const enemyPanel = $('.fighter.enemy'), mePanel = $('.fighter.me');
   const frame = mePanel.querySelector('.frame'), meSprite = frame.querySelector('.sprite'), energyFill = mePanel.querySelector('.energy .fill');
@@ -68,7 +77,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
   const intro = $('.intro'), countdown = intro.querySelector('.countdown'), introBoss = intro.querySelector('.intro-boss');
   const introLine = Object.assign(document.createElement('p'), { className: 'intro-line' });
   intro.insertBefore(introLine, countdown);
-  for (const img of [enemySprite, introBoss, overlay.querySelector('.boss')]) {
+  for (const img of [enemySprite, introBoss, overlay.querySelector('.boss'), sayFace]) {
     img.addEventListener('error', () => { if (!img.src.endsWith(BOSS_FALLBACK)) img.src = BOSS_FALLBACK; });
   }
 
@@ -91,7 +100,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
   let state = null, raf = 0, countRaf = 0, lastTs = 0, running = false, ended = false, down = null;
   let input = freshInput(), dodgeDir = 'left', koPending = false, batchDelay = 0;
   let combo = 0, lastHitAt = -Infinity, stunTextAt = -Infinity;
-  let pauseUntil = 0, heldBtc = null, nextLineAt = Infinity, sayRef = null, bossFx = '';
+  let pauseUntil = 0, heldBtc = null, nextLineAt = Infinity, sayTimer = 0, bossFx = '', bossHit = null;
   let rede = []; // laufende Krupp-Rede (Pult, Wutblase, Sprechblase): die nächste Rede baut sie ab
   let ctx = {}; // { mode, arena, arenaLevel, reward, masteredAfter, wild }
   const timers = new Set();
@@ -140,8 +149,8 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
   const text = (t, at, kind = 'info') => floatText(fx, t, { ...(at === 'me' ? INFO_ME : TXT[at]), kind, ms: 1200 });
   function hitEnemy(n) {
     anim(enemySprite, 'shake', 300);
-    anim(enemySprite, 'hit', 70); // 2 Frames weiß
-    sheet('impact', 'enemy', { size: impactSize(n) });
+    anim(enemySprite, 'hit', 70); // 2 Frames weiß (echtes Gesicht nur heller, css/battle.css)
+    sheet('impact', 'hit', { size: impactSize(n) });
     later(() => dmgNum(n, 'enemy'), 50);
   }
   // Einschlag einer Spezial-Attacke: ₿-Explosion, große Zahl 1,6 s, Beben, Boss blitzt zweimal, ab 20 Schaden ₿-Regen
@@ -149,11 +158,11 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     anim(enemySprite, 'shake', 300);
     anim(enemySprite, 'hit', 70);
     later(() => anim(enemySprite, 'hit', 70), 140);
-    sheet('btcburst', 'enemy', { size: Math.min(256, 160 + n * 3) });
+    sheet('btcburst', 'hit', { size: Math.min(256, 160 + n * 3) }); // wie die Tipp-Treffer neben einem echten Gesicht
     const q = quakeFor(n, true);
     anim(stage, q, QUAKE_MS[q]);
-    // unter der Mitte, damit die steigende Zahl nicht hinter dem Banner verschwindet
-    later(() => floatText(fx, `-${n}`, { x: TXT.enemy.x, y: 'calc(var(--fx-enemy-y) + 6%)', kind: 'big', ms: 1600 }), 50);
+    // unter der Mitte, damit die steigende Zahl nicht hinter dem Banner und „+70 %" verschwindet; Papierweiß auf der goldenen Explosion
+    later(() => floatText(fx, `-${n}`, { x: TXT.enemy.x, y: 'calc(var(--fx-hit-y) + 22%)', kind: 'big burst', ms: 1600 }), 50);
     if (n >= 20) btcRain(fx, { n: n >= 40 ? 28 : 18 });
     sfx.play('hit'); haptic(30);
   }
@@ -187,24 +196,45 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     combo = 0; lastHitAt = -Infinity;
     comboEl.className = 'combo hidden';
   }
-  // Gegner (wilder Rüther oder Boss) sagt einen Spruch als Sprechblase; nächster frühestens in 8–12 s Spielzeit
-  function speak(kind = 'fight') {
-    nextLineAt = state.time + LINE_MIN + Math.random() * LINE_SPREAD;
-    const line = pickLine(ctx.wild?.id || state.enemy.id, kind);
+  // Gegner-Blase (Spec v7 §2c): hängt unter der Gegner-Leiste über der Bühne, Porträt = Boss-Bild bzw. echtes Gesicht
+  // im Seltenheitsrahmen. Ein neuer Text ersetzt den alten sofort; shout = Attackenname in Rot. Solange sie steht,
+  // rutschen Combo und Gegner-Banner unter sie (.talking, --say-clear = Abstand Bühnen-Oberkante → Blasen-Unterkante)
+  let said = null; // was gerade in der Blase steht { line, shout, until }: steht nach einem Spezial-Freeze wieder da
+  function talk(line, shout = false, ms = SAY_MS) {
     if (!line) return;
-    sayRef?.stop();
-    sayRef = say(fx, line, { ...SAY_AT, ms: 2600 });
+    const w = ctx.wild;
+    sayFace.src = w ? sprite(w.id) : bossArt(state.enemy.id);
+    sayFace.className = w ? `say-face face r-${w.rarity}` : 'say-face';
+    setText(sayText, line);
+    enemySay.classList.toggle('shout', shout);
+    enemySay.style.top = `${battleTop.offsetTop + battleTop.offsetHeight - 4}px`;
+    enemySay.classList.remove('hidden');
+    anim(enemySay, 'pop', 300);
+    el.style.setProperty('--say-clear', `${enemySay.offsetTop + enemySay.offsetHeight - stage.offsetTop + 6}px`);
+    el.classList.add('talking');
+    clearTimeout(sayTimer); timers.delete(sayTimer);
+    sayTimer = later(hideSay, ms);
+    said = { line, shout, until: performance.now() + ms };
+  }
+  function hideSay() { enemySay.classList.add('hidden'); el.classList.remove('talking'); said = null; }
+  // Gegner sagt einen Spruch; nächster frühestens in 8–12 s Spielzeit. Nur wenn er ausreden kann, bevor der Ausruf
+  // der nächsten Lade-Attacke ihn ersetzt (sonst später nochmal prüfen; der Ausruf legt den nächsten Spruch dahinter)
+  function speak(kind = 'fight') {
+    if (msToChargedWarn(state) < SAY_MS) return;
+    nextLineAt = state.time + LINE_MIN + Math.random() * LINE_SPREAD;
+    talk(pickLine(ctx.wild?.id || state.enemy.id, kind));
   }
 
   // Spezial-Attacken nach attack.fx (Spec §6): Requisit art/fx-<name>.png mit dem Gesicht des Angreifers als Reiter.
   // Rückgabe: ms bis zum Einschlag (₿-Explosion, Zahl, Beben, Folge-Effekte). Die Spielzeit steht derweil (FREEZE).
   const FX = {
-    'chart-up'(atk, me) { // Mond hinter dem Boss, Kerzen steigen, Rakete mit Christians Gesicht, „+70 %", Einschlag
+    'chart-up'(atk, me) { // Mond hinter dem Boss, Kerzen steigen, Rakete mit Christians Gesicht auf dem Rumpf (unter dem Banner),
+      // Einschlag und „+70 %" erst, wenn sie ausgeblendet ist (80 % von 1400 ms ab 500 ms), sonst lägen sie auf seinem Gesicht
       node('moon', 2600, bgEl);
       prop('candles', 'rise-from-bottom', { ms: 1600, size: 256 });
-      later(() => prop('btc-rocket', 'launch', { ms: 1400, size: 176, ...rider(me) }, { '--rider-x': '22%', '--rider-y': '-14%', '--rider-size': '42%' }), 500);
-      later(() => floatText(fx, '+70 %', { x: '50%', y: 'calc(var(--fx-enemy-y) - 10%)', kind: 'mega', ms: 1400 }), 1000);
-      return 1300;
+      later(() => prop('btc-rocket', 'launch', { ms: 1400, size: 176, ...rider(me) }, { '--rider-x': '34%', '--rider-y': '40%', '--rider-size': '42%' }), 500);
+      later(() => floatText(fx, '+70 %', { x: '50%', y: 'calc(var(--fx-enemy-y) - 10%)', kind: 'mega', ms: 1400 }), 1650);
+      return 1650;
     },
     handshake(atk, me) {
       prop('handshake', 'pulse-at-enemy', { ms: 1600, size: 160, ...rider(me) }, { '--rider-x': '-30%', '--rider-y': '-8%', '--rider-size': '46%' });
@@ -230,8 +260,12 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
       later(() => sheet('smoke', 'enemy', { y: '50%', size: 160 }), 800);
       return 600;
     },
-    speech(atk, me) { // Sprechblase hängt an Viktors großem Gesicht, der Boss kippt grau (stun → render)
-      prop('speech', 'bubble-at-me', { ms: 2200, size: 208, html: bubbleText(atk.flavour || pickLine(me.id, 'fight')), ...rider(me) }, { '--rider-x': '-34%', '--rider-y': '64%', '--rider-size': '54%' });
+    speech(atk, me) { // Sprechblase hängt an Viktors großem Gesicht, der Boss kippt grau (stun → render). Im Wildkampf kleiner unten
+      // rechts mit Viktors Gesicht unter dem Text am Zipfel; das echte Gesicht des Gegners weicht derweil nach links aus (.aside, css/battle.css)
+      const w = !!ctx.wild;
+      if (w) anim(stage, 'aside', 2200);
+      prop('speech', 'bubble-at-me', { ms: 2200, size: w ? 160 : 208, html: bubbleText(atk.flavour || pickLine(me.id, 'fight')), ...rider(me) },
+        w ? { '--rider-x': '30%', '--rider-y': '70%', '--rider-size': '40%' } : { '--rider-x': '-34%', '--rider-y': '64%', '--rider-size': '54%' });
       return 400;
     },
     mms(atk, me) { prop('mms', 'rise-at-enemy', { ms: 1600, size: 160, ...rider(me) }, { '--rider-x': '28%', '--rider-y': '34%' }); later(mmsBurst, 500); return 700; }, // Gesicht im Haufen, sonst steckt es unter dem Banner
@@ -271,11 +305,13 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     fan() { // Lüfter dreht, bläst Viktors grüne Gaswolke mit seinem echten Gesicht auf mich
       prop('fan', 'spin-at-enemy', { ms: slow(1400), size: 176 });
       anim(stage, 'blow', slow(1400));
+      anim(stage, 'side-hits', slow(900)); // Tipp-Treffer rechts neben Viktors Gesicht, solange er losfliegt
       prop('gas', 'arc-to-me', { ms: slow(900), size: 176, rider: 'viktor' }, { '--spin': '0deg', '--rider-x': '30%', '--rider-y': '24%', '--rider-size': '40%', '--rider-filter': 'sepia(1) hue-rotate(60deg) saturate(2.2)' });
       return Math.round(slow(900) * 0.86);
     },
     found() { // Hildegard reitet auf ihrer Handtasche von unten zur Heizung und zahlt: ₿-Explosion, Heilung
       prop('handbag', 'rise-from-bottom', { ms: slow(1000), size: 128, rider: 'hildegard' }, { '--rider-x': '30%', '--rider-y': '-34%' });
+      anim(stage, 'side-hits', slow(1000)); // Tipp-Treffer und Heilung rechts neben Hildegards Gesicht
       later(() => sheet('btcburst', 'enemy', { size: 208 }), slow(450));
       return slow(450);
     },
@@ -294,7 +330,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     },
     wolfsschanze(atk) { // Holzbanner, Spielzeit steht; Goebbels und Himmler kommen mit dem enemySummoned-Event
       pauseUntil = Math.max(pauseUntil, performance.now() + WOLF_MS);
-      sayRef?.stop();
+      hideSay(); // das Banner trägt den Namen selbst; der Ausruf stand die 1,2 s Warnzeit davor
       banner(fx, { title: `${atk.name}!`, sub: 'Goebbels! Himmler! Sofort zu mir!', portrait: bossArt(state.enemy.id), ms: WOLF_MS });
       return 0;
     },
@@ -311,8 +347,10 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
       if (atk.prop === 'family') return familyRush();
       const hits = atk.damage > 0, ms = slow(800), size = atk.prop === 'speech' ? 176 : 128;
       const html = atk.prop === 'speech' ? bubbleText(atk.flavour || pickLine(atk.ownerId, 'fight')) : '';
+      // Gesicht im Requisit statt darüber: am Scheitel von Bogen bzw. Aufstieg steckte es sonst unter der Gegner-Blase
+      // (sein Ausruf steht dort); bei der Sprechblase unter dem Text
       prop(atk.prop || 'chart-up', hits ? 'arc-to-me' : 'rise-at-enemy', { ms, size, html, rider: atk.ownerId || ctx.wild?.id, riderRarity: ctx.wild?.rarity || 'normal' },
-        { '--spin': '-30deg', '--rider-x': '30%', '--rider-y': '-36%' });
+        { '--spin': '-30deg', '--rider-x': '30%', '--rider-y': atk.prop === 'speech' ? '72%' : '34%' });
       return hits ? Math.round(ms * 0.86) : 0;
     },
   };
@@ -327,7 +365,11 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
       case 'special': { // Kinosequenz: Spielzeit steht, Banner mit Gesicht + Spruch, Requisit mit Reiter, dann Einschlag
         const me = e.fighter, atk = e.attack, freeze = FREEZE[atk.fx] || CONST.CINEMATIC_MS; // e.fighter: KO-Wechsel im selben Schritt steht schon in state.active
         pauseUntil = performance.now() + freeze;
-        sayRef?.stop();
+        // eigenes Banner oben frei: Reiter-Gesichter der Requisiten liegen knapp darunter. Was der Gegner gerade sagt
+        // (z. B. der Ausruf seiner Lade-Attacke, die nach dem Freeze einschlägt), steht danach für den Rest wieder da
+        const was = said, rest = said ? said.until - performance.now() : 0;
+        hideSay();
+        if (rest > 0) later(() => { if (!state.over) talk(was.line, was.shout, Math.max(rest, 1500)); }, freeze);
         const subs = (LINES[me.id]?.fight || []).filter(l => !l.includes(atk.name)); // Spruch wiederholt nicht den Titel
         banner(fx, { title: atk.fx === 'family' ? 'Familientreffen!' : atk.name, sub: subs[Math.floor(Math.random() * subs.length)] || '', portrait: sprite(me.id), rarity: me.rarity, ms: freeze });
         batchDelay = run(FX, atk, me);
@@ -342,37 +384,41 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
       case 'specialDenied': anim(specials, 'shake-x', 400); break;
       case 'stunnedTap': { // höchstens ein „betäubt" gleichzeitig (lebt 1,2 s)
         const now = performance.now();
-        if (now - stunTextAt > 1200) { stunTextAt = now; text('betäubt', 'me'); }
+        if (now - stunTextAt > 1200) { stunTextAt = now; text('betäubt', 'me'); } // stunTextAt kann in der Zukunft liegen (stun)
         break;
       }
       case 'warn':
         sfx.play('warn'); // Blinken und Ausholen hängen am Zustand (render)
-        if (e.kind === 'charged' && e.attack.fx === 'wild') { // der Wilde ruft seine Lade-Attacke aus (zufällige Sprüche nennen oft die falsche)
-          sayRef?.stop();
-          sayRef = say(fx, `${e.attack.name}!`, { ...SAY_AT, ms: 2600 });
-          nextLineAt = state.time + LINE_MIN;
+        if (e.kind === 'charged') { // Lade-Attacke (Boss-Spezial bzw. die des Wilden) als Ausruf; schnelle Attacken kämen zu oft
+          talk(`${e.attack.name}!`, true);
+          nextLineAt = state.time + SAY_MS + 500; // nächster Spruch gleich nach dem Ausruf, damit er vor dem nächsten ausreden kann
         }
         break;
       case 'dodge': anim(meSprite, `dodge-${dodgeDir}`, 450); text('Ausgewichen!', 'me'); sfx.play('dodge'); break;
-      case 'enemyAttack':
-        bossFx = e.attack.fx; // eine Betäubung danach im selben Schritt gehört zu dieser Attacke
+      case 'enemyAttack': {
+        bossFx = e.attack.fx; bossHit = e.fighter; // eine Betäubung danach im selben Schritt gehört zu dieser Attacke
         batchDelay = run(BOSS_FX, e.attack, e.fighter);
+        const ray = e.attack.fx === 'ray', at = ray ? 'beside' : 'me'; // im Strahl hängt mein echtes Gesicht am Anker: kein Einschlag, Zahl daneben
         if (e.damage > 0) later(() => {
-          if (e.dodged) { num(`-${e.damage}`, 'me'); return; }
+          if (e.dodged) { num(`-${e.damage}`, at); return; }
           const q = quakeFor(e.damage, e.kind === 'charged');
           anim(stage, q, QUAKE_MS[q]);
           anim(meSprite, 'shake', 300);
-          sheet('impact', 'me', { size: impactSize(e.damage) });
-          dmgNum(e.damage, 'me');
+          if (!ray) sheet('impact', 'me', { size: impactSize(e.damage) });
+          dmgNum(e.damage, at);
           sfx.play('hit'); haptic(20);
         }, batchDelay);
         break;
+      }
       case 'poisoned': later(() => sheet('smoke', at, { size: 128 }), batchDelay); break;
       case 'poison': num(`-${e.damage}`, at); break;
       case 'stun': {
         const t = STUN_TEXT[bossFx]; // z. B. Viktors Argumentationslogik: sprachlos, keine PS3-Firmware
         if (at === 'enemy') later(() => { for (let i = 0; i < 3; i++) later(() => num('Z', 'enemy', 'info', 1400), i * 450); }, batchDelay);
-        else if (t) later(() => text(t, 'me'), batchDelay);
+        else if (t) { // kein „betäubt" darüber; geht er am Treffer K.o., steht dort nur „… ist pleite!"
+          stunTextAt = performance.now() + batchDelay;
+          if (bossHit?.btc > 0) later(() => text(t, 'me'), batchDelay);
+        }
         else later(() => prop('firmware', 'bar-on-me', { ms: e.ms, size: 144, html: '<span class="fw-label">Firmware-Update…</span>' }), batchDelay);
         break;
       }
@@ -392,7 +438,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
       case 'rage': // Wutphase: roter Pixel-Rahmen bleibt bis Kampfende, Boss rot getönt und wackelt, „WUT!", Plakette am Namen (render)
         stage.classList.add('rage');
         anim(enemySprite, 'rage-shake', 1000);
-        floatText(fx, 'WUT!', { ...TXT.enemy, kind: 'big', ms: 1200 });
+        floatText(fx, 'WUT!', { ...TXT.enemy, kind: 'big wut', ms: 1200 }); // .wut liegt über den Tipp-Zahlen
         sfx.play('rage'); haptic([30, 30, 30, 30, 80]);
         break;
       case 'faint': // KO erst, wenn der auslösende Boss-Angriff eingeschlagen ist
@@ -412,7 +458,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
         break;
       }
       case 'win':
-        sayRef?.stop();
+        hideSay();
         later(() => { enemySprite.classList.add('ko'); sfx.play('win'); haptic([30, 30, 30]); }, batchDelay);
         later(showOverlay, batchDelay + 900);
         break;
@@ -480,9 +526,12 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
   }
 
   // ---------- Rendern pro Frame ----------
+  // Name und Stufe getrennt: bei wenig Platz (WUT-Plakette) kürzt die Ellipse nur den Namen (css/battle.css)
+  for (const p of [enemyPanel, mePanel]) p.querySelector('.fname').innerHTML = '<span class="nm"></span><span class="lv"></span>';
   function panel(p, f, t, btc = f.btc) {
     const name = p.querySelector('.fname');
-    setText(name, `${f.name}${f.level ? ` · Lv. ${f.level}` : ''}`);
+    setText(name.firstChild, f.name);
+    setText(name.lastChild, f.level ? ` · Lv. ${f.level}` : '');
     name.classList.toggle('rage', !!f.rage);
     const pct = Math.max(0, Math.round((100 * btc) / f.maxBtc));
     const fill = p.querySelector('.hp .fill');
@@ -580,7 +629,9 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     introBoss.className = w ? `intro-boss sprite face r-${w.rarity}` : 'intro-boss sprite';
     setText(intro.querySelector('.intro-me-name'), me.name);
     setText(intro.querySelector('.intro-boss-name'), boss.name);
-    const line = pickLine(w?.id || boss.id, 'appear');
+    // nicht derselbe Spruch wie gerade im Beschwörungs-Banner (ctx.shownLine)
+    const pool = (LINES[w?.id || boss.id]?.appear || []).filter(l => l !== ctx.shownLine);
+    const line = pool[Math.floor(Math.random() * pool.length)] || '';
     setText(introLine, line ? `${boss.name}: „${line}“` : '');
     introLine.classList.toggle('hidden', !line);
     countdown.textContent = ''; countdown.className = 'countdown';
@@ -590,7 +641,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
       countdown.classList.toggle('go', i === COUNTDOWN.length - 1);
       anim(countdown, 'pop', 450);
     }, INTRO_LEAD + i * COUNT_STEP));
-    later(() => { intro.classList.add('hidden'); then(); }, CONST.INTRO_MS);
+    later(() => { intro.classList.add('hidden'); then(); talk(line); }, CONST.INTRO_MS); // Spruch steht danach noch 3 s in der Blase
   }
 
   // ---------- Eingabe ----------
@@ -635,6 +686,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
   }
   function showOverlay() {
     const won = !!state.won, boss = state.enemy, w = ctx.wild, h = ctx.mode === 'haunebu', img = overlay.querySelector('.boss');
+    hideSay();
     const prize = h && won; // Beschwörung gewonnen: die Flugscheibe statt des fallenden Bosses
     img.src = w ? sprite(w.id) : prize ? HAUNEBU_ART : bossArt(boss.id);
     img.className = w ? `boss sprite face r-${w.rarity}` : prize ? 'boss sprite ufo' : `boss sprite${won ? ' fall' : ''}`;
@@ -705,22 +757,22 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     fx.innerHTML = ''; bgEl.innerHTML = ''; helpers.innerHTML = ''; helpers.className = 'helpers hidden';
     enemyHelpers.innerHTML = ''; enemyHelpers.className = 'enemy-helpers hidden';
     rede.forEach(p => p.stop()); rede = [];
-    flash.className = 'flash'; stage.classList.remove('rage', 'quake-s', 'quake-m', 'quake-l', 'overheat', 'blow');
+    flash.className = 'flash'; stage.classList.remove('rage', 'quake-s', 'quake-m', 'quake-l', 'overheat', 'blow', 'side-hits', 'aside');
     enemySprite.className = 'enemy-sprite sprite'; meSprite.className = 'sprite';
     specials.classList.remove('shake-x'); enemyPanel.classList.remove('glow'); mePanel.classList.remove('glow');
     resetCombo(); stunTextAt = -Infinity;
-    pauseUntil = 0; heldBtc = null; nextLineAt = Infinity; sayRef = null; bossFx = '';
-    sw.classList.add('hidden'); overlay.classList.add('hidden'); intro.classList.add('hidden');
+    pauseUntil = 0; heldBtc = null; nextLineAt = Infinity; sayTimer = 0; bossFx = ''; bossHit = null;
+    sw.classList.add('hidden'); overlay.classList.add('hidden'); intro.classList.add('hidden'); hideSay();
     overlay.querySelector('.confetti').innerHTML = '';
     down = null; input = freshInput();
   }
 
-  function start({ team, enemy, rng = Math.random, mode = 'arena', arena = null, arenaLevel = 1, reward = 0, masteredAfter = false, wild = null }) {
+  function start({ team, enemy, rng = Math.random, mode = 'arena', arena = null, arenaLevel = 1, reward = 0, masteredAfter = false, wild = null, shownLine = '' }) {
     stop();
     const isWild = mode === 'wild';
     state = createBattle({ team, enemy, rng, duration: isWild ? CONST.WILD_DURATION : undefined });
     const w = isWild ? { id: enemy.id, rarity: enemy.rarity || 'normal', name: enemy.name, ...wild } : null;
-    ctx = { mode, arena, arenaLevel, reward, masteredAfter, wild: w };
+    ctx = { mode, arena, arenaLevel, reward, masteredAfter, wild: w, shownLine };
     ended = false; koPending = false; batchDelay = 0;
     // Bühne und Intro zeigen art/bg-<arena>.png, im Wildkampf art/bg-catch.png, bei der Beschwörung art/bg-mondbasis.png (css)
     const scene = isWild ? 'wild' : mode === 'haunebu' ? 'haunebu' : arena?.id;

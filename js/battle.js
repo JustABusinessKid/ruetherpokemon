@@ -119,6 +119,14 @@ function enemyStep(s, me, ev) {
   if (e.warning && s.time >= e.warning.firesAt) resolveEnemyAttack(s, me, ev);
 }
 
+// Spielzeit bis zur Warnung vor der nächsten Lade-Attacke, mindestens (0, solange sie läuft). Die UI lässt einen
+// Gegner-Spruch nur kommen, wenn er bis dahin ausreden kann; sonst ersetzt ihn der Ausruf sofort (Spec v7 §2c).
+export function msToChargedWarn(s) {
+  const e = s.enemy;
+  if (e.warning?.kind === 'charged') return 0;
+  return Math.max(0, e.nextChargedAt - e.charged[e.chargedIndex].warn - s.time);
+}
+
 // Helfer schlagen alle SUMMON_INTERVAL auf target, abgelaufene fliegen raus
 function helperStep(s, list, target, type, ev) {
   for (const su of list) {

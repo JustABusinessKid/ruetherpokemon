@@ -33,6 +33,8 @@ p { margin: 0; }
   font: 700 22px/1.1 var(--font-pixel); color: var(--paper); text-shadow: 2px 2px 0 var(--ink);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* Arena-Namen sind lang („Keller der Rütherschanze") und stehen nur hier: kleiner, notfalls zweizeilig statt gekürzt */
+#screen-arena .arena-name { font-size: clamp(17px, 5vw, 22px); line-height: 1.05; white-space: normal; }
 .topbar button { position: relative; flex: none; min-height: 36px; padding: 4px 8px; gap: 4px; font-size: 14px; border-width: 2px; box-shadow: var(--shadow-sm); white-space: nowrap; }
 .topbar button::before { content: ''; position: absolute; inset: -4px; } /* Trefffläche 44 px bei 36 px Optik */
 .topbar .sats-chip { font-size: 16px; background: var(--gold); }

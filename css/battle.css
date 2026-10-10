@@ -3,7 +3,10 @@
    spielt die Grafiken aus art/ ab. Hier: Bühne, HUD, Intro, Overlay und kampfeigene Kleinanimationen (Präfix bt-).
    Bewegung in ganzen Pixeln bzw. mit steps(); keine weichen Schatten, keine Verläufe außer Dither und Segmenten.
    Einmal-Animationen nutzen translate/rotate/scale einzeln, damit sie sich nicht gegenseitig überschreiben.
-   Ebenen: .bg 0 · Boss 1 · .rage::after/.helpers/.enemy-helpers 2 · .fx/.combo 3 · .flash 5 · .switch 6 · .intro 8 · .quit 9 · .overlay 10 */
+   Ebenen: .bg 0 · Boss 1 · .rage::after/.enemy-helpers 2 · .fx 3 · .combo/.stage-hint/.helpers (sichtbar)/.enemy-helpers.arrive 4
+   · .flash 5 · .switch 6 · .enemy-say 7 · .intro 8 · .quit 9 · .overlay 10. In .fx: Requisit 5 · Sheet/₿-Regen 6 · Requisit mit
+   echtem Gesicht/.rush 7 · Text 8 (WUT! 9) · Banner-Brett und Sprechblasen-Requisit 9 · mega 10. Echte Gesichter (.helpers, .rush,
+   Reiter) liegen über Requisiten und Einschlägen, Texte weichen ihnen aus (--fx-hit-*, --fx-info-me-y, TXT.beside in battle-ui.js). */
 
 #screen-battle {
   --bt-outline: 2px 0 0 var(--ink), -2px 0 0 var(--ink), 0 2px 0 var(--ink), 0 -2px 0 var(--ink), 3px 3px 0 var(--ink);
@@ -37,8 +40,10 @@
 #screen-battle .fighter.glow { animation: bt-glow .9s steps(1); }
 @keyframes bt-glow { 0%, 40%, 80% { outline: 3px solid var(--teal); } 20%, 60%, 100% { outline: 3px solid transparent; } }
 #screen-battle .fighter .info { flex: 1; min-width: 0; }
-#screen-battle .fname { font: 700 16px/1.15 var(--font-pixel); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#screen-battle .fname.rage::before { content: 'WUT'; display: inline-block; margin-right: 6px; padding: 0 4px; font: 800 12px/15px var(--font-body); vertical-align: 2px; color: var(--paper); background: var(--red); border: 2px solid var(--ink); }
+#screen-battle .fname { display: flex; align-items: center; font: 700 16px/1.15 var(--font-pixel); white-space: nowrap; overflow: hidden; }
+#screen-battle .fname .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; } /* nur der Name wird gekürzt, die Stufe bleibt */
+#screen-battle .fname .lv { flex: none; white-space: pre; }
+#screen-battle .fname.rage::before { content: 'WUT'; flex: none; display: inline-block; margin-right: 6px; padding: 0 4px; font: 800 12px/15px var(--font-body); vertical-align: 2px; color: var(--paper); background: var(--red); border: 2px solid var(--ink); }
 #screen-battle .bar { margin: 3px 0; }
 /* unter 16 px Nunito statt Pixelify (dort lesen sich 420/440 BTC wie 480/440 GTC) */
 #screen-battle .btc { display: flex; align-items: center; gap: 3px; min-width: 0; overflow: hidden; white-space: nowrap; font: 800 12px/1.3 var(--font-body); font-variant-numeric: tabular-nums; color: var(--ink-soft); }
@@ -83,8 +88,8 @@
   position: absolute; inset: 0; z-index: 0; pointer-events: none; image-rendering: pixelated;
   background: repeating-conic-gradient(rgba(27, 43, 75, .4) 0 25%, transparent 0 50%) 0 0 / 4px 4px, var(--arena-bg, none) center / cover no-repeat, var(--night);
 }
-#screen-battle .stage-hint {
-  position: absolute; left: 0; right: 0; bottom: 0; margin: 0; padding: 3px 6px; pointer-events: none;
+#screen-battle .stage-hint { /* über den Effekten (Rednerpult, Krupp-Blase), sonst wird er alle 2,3 s verdeckt */
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; margin: 0; padding: 3px 6px; pointer-events: none;
   text-align: center; font: 800 11px/1.2 var(--font-body); color: var(--paper); background: rgba(30, 42, 34, .8);
 }
 /* Beben nach Schaden in ganzen Pixeln: s < 15 (2 px), m < 30 (4 px), l darüber (6 px) */
@@ -128,6 +133,7 @@
 #screen-battle .stage.rage .enemy-sprite { filter: sepia(1) saturate(5) hue-rotate(-40deg) brightness(.95); }
 /* Treffer-Blitz: 2 Frames reines Weiß (JS nimmt .hit nach 70 ms wieder ab), schlägt Gift- und Wut-Tönung */
 #screen-battle .stage .enemy-sprite.hit { filter: brightness(0) invert(1); }
+#screen-battle .stage .enemy-sprite.face.hit { filter: brightness(1.5); border-color: var(--paper); } /* echtes Gesicht bleibt erkennbar */
 /* Echte Gesichter (Wildkampf, Intro, Overlay) im Pixel-Rahmen in Seltenheitsfarbe */
 #screen-battle .face { --rc: var(--r-normal); background: var(--paper-2); border: 6px solid var(--rc); outline: 3px solid var(--ink); box-shadow: 8px 8px 0 3px rgba(30, 42, 34, .55); image-rendering: pixelated; }
 #screen-battle .face.r-selten { --rc: var(--r-selten); }
@@ -141,8 +147,32 @@
 #screen-battle .stage .bg .moon { position: absolute; inset: 0; background: url(../art/bg-moon.png) center / cover no-repeat; image-rendering: pixelated; animation: bt-moon 2.6s steps(6) both; }
 @keyframes bt-moon { 0% { opacity: 0; } 18%, 82% { opacity: 1; } 100% { opacity: 0; } }
 
-/* Combo-Zähler über dem Boss, ab ×10 blinkend mit Sternen */
-#screen-battle .combo { position: absolute; left: 50%; top: 8px; z-index: 3; translate: -50% 0; font: 700 34px/1 var(--font-pixel); color: var(--gold); text-shadow: var(--bt-outline); pointer-events: none; }
+/* Gegner-Blase (Spec v7 §2c): unter der Gegner-Leiste über der Bühne, außerhalb aller Effekte; top setzt battle-ui.js.
+   Pixel-Zipfel zeigt nach oben links in die Gegner-Leiste (neben deren Text); links Boss-Bild bzw. echtes Gesicht */
+#screen-battle .enemy-say {
+  position: absolute; left: 12px; right: 12px; z-index: 7; pointer-events: none;
+  display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 5px 10px 5px 6px;
+  background: var(--paper); border: 3px solid var(--ink); box-shadow: 4px 4px 0 var(--ink);
+  transform-origin: 56px 0;
+}
+#screen-battle .enemy-say::before {
+  content: ''; position: absolute; left: 50px; top: -15px; width: 3px; height: 3px; background: var(--ink);
+  box-shadow: 0 3px var(--ink), 3px 3px var(--ink), 0 6px var(--ink), 3px 6px var(--paper), 6px 6px var(--ink),
+    0 9px var(--ink), 3px 9px var(--paper), 6px 9px var(--paper), 9px 9px var(--ink),
+    0 12px var(--ink), 3px 12px var(--paper), 6px 12px var(--paper), 9px 12px var(--paper), 12px 12px var(--ink);
+}
+#screen-battle .enemy-say .say-face { flex: none; width: 36px; height: 36px; image-rendering: pixelated; }
+#screen-battle .enemy-say .say-face.face { border-width: 2px; outline-width: 2px; box-shadow: none; }
+#screen-battle .enemy-say .say-text {
+  margin: 0; min-width: 0; font: 800 14px/1.25 var(--font-body); color: var(--ink);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden;
+}
+#screen-battle .enemy-say.shout .say-text { color: var(--red); }
+#screen-battle .enemy-say.pop { animation: bt-say-pop .3s steps(3); }
+@keyframes bt-say-pop { 0% { scale: .5; opacity: 0; } 66% { scale: 1.05; opacity: 1; } 100% { scale: 1; } }
+
+/* Combo-Zähler über dem Boss, ab ×10 blinkend mit Sternen; über den Effekten (.fx 3), damit Requisiten und Zahlen ihn nicht verdecken */
+#screen-battle .combo { position: absolute; left: 50%; top: 8px; z-index: 4; translate: -50% 0; font: 700 34px/1 var(--font-pixel); color: var(--gold); text-shadow: var(--bt-outline); pointer-events: none; }
 #screen-battle .combo.bump { animation: bt-bump .2s steps(2); }
 #screen-battle .combo.hot { animation: bt-hot .3s steps(1) infinite; }
 #screen-battle .combo.hot.bump { animation: bt-bump .2s steps(2), bt-hot .3s steps(1) infinite; }
@@ -152,6 +182,11 @@
 #screen-battle .combo.hot::before { left: -30px; }
 #screen-battle .combo.hot::after { right: -30px; animation-delay: .2s; }
 @keyframes bt-twinkle { 50% { opacity: 0; } }
+/* Solange die Gegner-Blase oben auf der Bühne steht: klein links unter ihr (Mitte = Zahlen-Zone und Gesicht des Wilden), ohne Sterne.
+   Während eines Banners (Spielzeit steht, die Combo ändert sich nicht) aus */
+#screen-battle.talking .combo { left: 8px; top: max(8px, var(--say-clear, 8px)); translate: none; font-size: 24px; }
+#screen-battle.talking .combo.hot::before, #screen-battle.talking .combo.hot::after { display: none; }
+#screen-battle .stage:has(.fx-banner) .combo { visibility: hidden; }
 
 /* Familientreffen: die echten Sprites von Christian und Micha rennen neben den eigenen Rüther, die Ebene hüpft bei jedem Schlag */
 #screen-battle .helpers { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
@@ -162,7 +197,9 @@
   animation: bt-run-in .6s steps(6) both; animation-delay: calc(var(--i, 0) * 150ms);
 }
 @keyframes bt-run-in { 0% { translate: -260px 0; } 50% { translate: -60px -10px; } 70% { translate: -30px 0; } }
-#screen-battle .helpers.arrive, #screen-battle .enemy-helpers.arrive { z-index: 4; } /* im Freeze der Beschwörung über dem Banner-Dimmer (.fx 3) */
+/* Christians und Michas echte Gesichter liegen über allen Effekten (.fx 3: Rednerpult, Strahl, Einschläge, Dimmer);
+   Goebbels und Himmler nur beim Hereinrennen im Freeze über dem Banner-Dimmer */
+#screen-battle .helpers:not(.hidden), #screen-battle .enemy-helpers.arrive { z-index: 4; }
 #screen-battle .helpers.hop, #screen-battle .enemy-helpers.hop { animation: bt-hop .3s steps(3); }
 @keyframes bt-hop { 50% { translate: 0 -12px; } }
 /* Wolfsschanzen-Beschwörung (Hitler, v7b), Spiegelbild zum Familientreffen: Goebbels links, Himmler rechts neben dem Boss,
@@ -200,7 +237,22 @@
 }
 
 /* Effekt-Ebene (Requisiten, Sheets, Zahlen aus fx.js) und kampfeigene Teile; Anker --fx-* aus theme.css */
-#screen-battle .fx { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 3; }
+#screen-battle .fx {
+  position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 3;
+  --fx-me-num-y: calc(var(--fx-me-y) - 14%); --fx-info-me-y: calc(var(--fx-me-y) - 26%); --fx-hit-x: var(--fx-enemy-x); --fx-hit-y: var(--fx-enemy-y);
+}
+/* Echtes Gesicht am Gegner (Wildkampf; Viktor bzw. Hildegard fliegen bei der Heizung los: .side-hits): Tipp-Einschläge und Zahlen
+   rechts daneben; im Wildkampf Info-Texte bei mir („Ausgewichen!") unter seinem Gesicht am Bühnenboden */
+#screen-battle[data-arena="wild"] .fx, #screen-battle .stage.side-hits .fx { --fx-hit-x: calc(var(--fx-enemy-x) + 36%); --fx-hit-y: 50%; }
+#screen-battle[data-arena="wild"] .fx { --fx-info-me-y: calc(100% - 30px); }
+/* Viktors Sprechblase im Wildkampf (.aside, 2,2 s): Blase unten rechts, das echte Gesicht des Gegners rückt kleiner nach links */
+#screen-battle .stage.aside .enemy-sprite.face { position: relative; left: -26%; top: 4%; scale: .75; }
+#screen-battle .stage.aside .fx-prop.path-bubble-at-me { left: calc(100% - var(--size, 160px) / 2 - 4px); top: calc(100% - var(--size, 160px) / 2 - 44px); }
+/* WUT! über den Tipp-Zahlen; Zahl der eigenen Spezial-Attacke in Papierweiß auf der goldenen ₿-Explosion */
+#screen-battle .fx-text.wut { z-index: 9; }
+#screen-battle .fx-text.burst { color: var(--paper); }
+/* Schadenszahlen bei mir: stehen Christian und Micha dort, über ihrer Reihe (Oberkante me-y − 48 px, 12 px Hüpfer) statt dahinter */
+#screen-battle .helpers:not(.hidden) ~ .fx { --fx-me-num-y: calc(var(--fx-me-y) - 100px); }
 #screen-battle .fx .tap { position: absolute; width: 32px; height: 32px; margin: -16px 0 0 -16px; border: 3px solid var(--paper); box-shadow: 0 0 0 2px var(--ink), inset 0 0 0 2px var(--ink); animation: bt-tap .3s steps(3) forwards; }
 @keyframes bt-tap { from { scale: .5; } to { scale: 1.5; opacity: 0; } }
 /* Hardware-Wallet: Münz-Sheet wandert vom Boss zum eigenen Rüther */
@@ -218,7 +270,7 @@
 #screen-battle .fx-prop .bubble-text { top: 9%; bottom: 30%; left: 12%; right: 12%; font-size: 15px; line-height: 1.2; }
 /* Familientreffen gegen dich: Christian und Micha rennen von rechts herein, kloppen, rennen wieder raus */
 #screen-battle .fx .rush img {
-  position: absolute; left: 110%; top: calc(var(--fx-me-y) - 52px); width: 64px; height: 64px; image-rendering: pixelated;
+  position: absolute; left: 110%; top: calc(var(--fx-me-y) - 52px); z-index: 7; /* über Einschlag und Requisiten */ width: 64px; height: 64px; image-rendering: pixelated;
   background: var(--paper-2); border: 3px solid var(--paper); outline: 2px solid var(--ink); box-shadow: 3px 3px 0 2px var(--ink);
   animation: bt-rush 1.6s steps(16) both; animation-delay: calc(var(--i, 0) * 120ms);
 }
@@ -242,7 +294,7 @@
 @keyframes bt-rant-pop { 0% { scale: .3; opacity: 0; } 15% { scale: 1.2; opacity: 1; } 25%, 45%, 65% { scale: 1; rotate: -10deg; } 35%, 55%, 75% { rotate: 10deg; } 85% { rotate: 0deg; opacity: 1; } 100% { opacity: 0; } }
 /* Sprechblase der Rede: unten rechts statt mitten auf ihm und neben Einschlag und Schadenszahl bei mir;
    Bild gespiegelt, damit der Zipfel nach links oben zu ihm zeigt */
-#screen-battle .fx-prop.krupp-speech { left: 72%; top: calc(var(--fx-me-y) - 8%); }
+#screen-battle .fx-prop.krupp-speech { left: 72%; top: min(calc(var(--fx-me-y) - 8%), calc(100% - var(--size, 160px) / 2 - 4px)); } /* kleine Bühne: ganz drin */
 #screen-battle .fx-prop.krupp-speech > img { scale: -1 -1; }
 #screen-battle .fx-prop.krupp-speech .bubble-text { top: 30%; bottom: 9%; }
 /* Familientreffen läuft: Blase über die Helferreihe (Helfer-Oberkante me-y − 48 px, 12 px Hüpfer), damit Christians und
@@ -306,7 +358,7 @@
   max-width: 320px; margin: 4px 0 0; padding: 6px 12px; text-align: center;
   font: 800 14px/1.3 var(--font-body); color: var(--ink);
   background: var(--paper); border: 3px solid var(--ink); box-shadow: 4px 4px 0 var(--ink);
-  animation: bt-fade-in .4s steps(2) .7s both;
+  animation: bt-fade-in .4s steps(2) .3s both; /* früh lesbar; danach steht der Spruch noch 3 s in der Gegner-Blase */
 }
 #screen-battle .countdown { min-height: 80px; margin-top: 10px; font: 700 64px/80px var(--font-pixel); color: var(--paper); text-shadow: var(--bt-outline-lg); }
 #screen-battle .countdown.pop { animation: bt-pop .45s steps(4); }
@@ -324,8 +376,10 @@
   box-shadow: 0 0 0 100vmax rgba(27, 43, 75, .82);
   animation: bt-fade-in .4s steps(4);
 }
-#screen-battle .overlay .confetti { position: absolute; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; }
-#screen-battle .overlay > :not(.confetti) { position: relative; z-index: 2; } /* ₿-Regen und Konfetti fallen hinter Text und Knöpfen */
+/* ₿-Regen und Konfetti nur oben um das Bild (Polster 28 px + Bild 112–128 px): auf Goldmünzen wären der graue Untertitel, die Sats
+   und der Spruch kaum lesbar; die Münzen blenden vor dem Titel aus */
+#screen-battle .overlay .confetti { position: absolute; inset: 0 0 auto; height: 150px; z-index: 1; overflow: hidden; pointer-events: none; }
+#screen-battle .overlay > :not(.confetti) { position: relative; z-index: 2; } /* ₿-Regen und Konfetti fallen hinter Bild, Text und Knöpfen */
 #screen-battle .overlay .boss { width: 128px; height: 128px; image-rendering: pixelated; }
 #screen-battle .overlay .boss.fall { animation: bt-fall 1.2s steps(8) forwards; }
 @keyframes bt-fall { 70% { rotate: 90deg; translate: 32px 32px; opacity: .6; } 100% { rotate: 90deg; translate: 32px 56px; opacity: 0; } }
@@ -360,7 +414,8 @@
   #screen-battle .specials button.ready, #screen-battle .combo.hot, #screen-battle .combo.hot::before, #screen-battle .combo.hot::after,
   #screen-battle .enemy-sprite.rage-shake, #screen-battle .helpers.hop, #screen-battle .enemy-sprite.lunge,
   #screen-battle .helpers .helper, #screen-battle .enemy-helpers.hop, #screen-battle .enemy-helpers .helper, #screen-battle .stage .bg .moon,
-  #screen-battle .stage.overheat .bg, #screen-battle .stage.blow .bg, #screen-battle .enemy-sprite.hide, #screen-battle .overlay .boss.ufo { animation: none !important; }
+  #screen-battle .stage.overheat .bg, #screen-battle .stage.blow .bg, #screen-battle .enemy-sprite.hide, #screen-battle .overlay .boss.ufo,
+  #screen-battle .enemy-say.pop { animation: none !important; }
   #screen-battle .stage.blow::before { display: none; }
   #screen-battle .enemy-sprite.hide { opacity: 0; } /* Bunker: einfach kurz weg */
   #screen-battle .fx .rush img { animation: none !important; left: calc(var(--fx-me-x) + 6% + var(--i, 0) * 60px); }

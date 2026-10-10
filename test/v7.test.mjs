@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptySaveV3, migrate, buyItem, haunebuWin, startBeam, activeBeam, endBeam } from '../js/progress.js';
 import { checkAchievements } from '../js/quests.js';
-import { makeFighter, makeBoss, createBattle, tick } from '../js/battle.js';
+import { makeFighter, makeBoss, createBattle, tick, msToChargedWarn } from '../js/battle.js';
 import { CONST, ARENAS, BOSSES, RUETHER_BY_ID } from '../js/data.js';
 
 test('v7: neuer Spielstand hat Flugscheibe, Beam und haunebuWins', () => {
@@ -243,4 +243,29 @@ test('v7: enemyAttack nennt den getroffenen Rüther, auch wenn er im selben Schr
   assert.equal(hit.fighter, first);
   assert.equal(ev.find(e => e.type === 'faint').fighter, first);
   assert.equal(s.team[s.active], s.team[1]); // state.active zeigt schon auf den Nächsten
+});
+
+// v7c §2c: Gegner-Sprüche stehen 3 s in der Blase; ein Ausruf der Lade-Attacke ersetzt sie sofort
+test('v7c: msToChargedWarn: Sprüche passen zwischen die Ausrufe, auch in der Wut', () => {
+  const SAY = 3000;
+  for (const def of [BOSSES.hitler, BOSSES.heizung]) {
+    const s = createBattle({ team: [strong('christian'), strong('micha')], enemy: makeBoss(def, 1), rng: () => 0.5 });
+    s.team.forEach(f => { f.btc = f.maxBtc = 1e6; });
+    s.enemy.btc = s.enemy.maxBtc = 1e6;
+    const fits = [], warns = [], lines = [];
+    let nextLineAt = 8000; // Regel wie in battle-ui.js: Ausruf → Spruch frühestens SAY + 500 danach, sonst alle 8 s
+    while (s.time < 80_000) {
+      if (s.time >= 40_000 && !s.enemy.rage) s.enemy.btc = s.enemy.maxBtc / 2; // nächster Tipp löst die Wut aus
+      for (const e of tick(s, 50, { taps: 1 })) {
+        if (e.type === 'warn' && e.kind === 'charged') { warns.push(s.time); nextLineAt = s.time + SAY + 500; }
+      }
+      const ok = msToChargedWarn(s) >= SAY;
+      if (ok) fits.push(s.time);
+      if (ok && s.time >= nextLineAt) { lines.push(s.time); nextLineAt = s.time + 8000; }
+    }
+    assert.ok(s.enemy.rage, def.id);
+    for (const w of warns) assert.ok(!fits.some(t => t > w - SAY && t < w), `${def.id}: Spruch vor Ausruf bei ${w}`);
+    assert.ok(lines.filter(t => t < 40_000).length >= 3, `${def.id}: Sprüche normal`);
+    assert.ok(lines.filter(t => t > 41_000).length >= 3, `${def.id}: Sprüche in der Wut`);
+  }
 });

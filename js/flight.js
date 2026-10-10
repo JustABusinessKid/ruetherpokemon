@@ -40,7 +40,7 @@ function here(...sels) {
 // Zielpunkt des Strahls; die Scheibe schwebt darüber (css/flight.css)
 const aim = (el, p) => { el.style.setProperty('--tx', `${p.x}px`); el.style.setProperty('--ty', `${p.y}px`); };
 
-// ~2,8 s: Nacht, Sterne, Scheibe sinkt und wackelt, Strahl an, Wackeln + Rauch + Holzbanner mit Hitlers Spruch
+// ~3,7 s: Nacht, Sterne, Scheibe sinkt und wackelt, Strahl an, Wackeln + Rauch + Holzbanner mit Hitlers Spruch
 export async function playSummon(host, { line = '' } = {}) {
   const el = overlay(host, 'summon', stars());
   try {
@@ -51,8 +51,9 @@ export async function playSummon(host, { line = '' } = {}) {
     await wait(400);
     el.classList.add('quake');
     playSheet(el.firstElementChild, 'smoke', { x: 'var(--tx)', y: 'calc(var(--ty) + 32px)', size: 160 });
-    banner(el, { title: 'Die Reichsflugscheibe landet …', sub: line, ms: 1300 });
-    await wait(1300);
+    // Hitler als Porträt, damit klar ist, wer spricht; 2,2 s, davon ~1,7 s ruhig lesbar (fx-banner 12–90 %)
+    banner(el, { title: 'Die Reichsflugscheibe landet …', sub: line, portrait: 'art/boss-hitler.png', ms: 2200 });
+    await wait(2200);
   } catch (e) { console.warn('Haunebu-Animation', e); } finally { el.remove(); }
 }
 

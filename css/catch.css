@@ -19,7 +19,7 @@
 .catch-stage[data-rarity="legendaer"] .rarity-badge .ico { animation: catch-blink .8s steps(1) infinite; }
 
 /* Rüther: .target läuft in 4-px-Schritten hin und her, der Sprite darin hüpft/wehrt sich/wird eingesaugt. */
-.target { position: absolute; left: 50%; bottom: min(316px, calc(100% - 230px - env(safe-area-inset-top))); /* Oberkante bleibt unter dem Badge, darüber Platz für die Sprechblase */ width: 160px; height: 160px; margin-left: -80px; animation: catch-roam 4s steps(20) infinite; }
+.target { position: absolute; left: 50%; bottom: max(196px, min(316px, calc(100% - 273px - env(safe-area-inset-top)))); /* Oberkante ≥ 113 px: unter dem Badge Platz für eine zweizeilige Sprechblase */ width: 160px; height: 160px; margin-left: -80px; animation: catch-roam 4s steps(20) infinite; }
 /* Aura ab selten: drei harte Ringe mit gestufter Deckung, pulsiert in zwei Stufen */
 .target .aura { position: absolute; inset: -7px; opacity: 0; pointer-events: none;
   box-shadow: 0 0 0 6px color-mix(in srgb, var(--rc) 75%, transparent), 0 0 0 12px color-mix(in srgb, var(--rc) 45%, transparent), 0 0 0 18px color-mix(in srgb, var(--rc) 20%, transparent); }
@@ -41,10 +41,12 @@
 .sprite.hop { animation: catch-hop .5s steps(4); }
 .sprite.suck { animation: catch-suck .4s steps(6) forwards; }
 .sprite.pop { animation: catch-pop .4s steps(4) both; }
-/* Abhauen: das ganze Ziel rennt los, die Sprechblase darin läuft mit; catch-flee (translate) kommt zum angehaltenen Hin-und-her (transform) dazu */
+/* Abhauen: das ganze Ziel rennt los, die Sprechblase bleibt in der Bühne stehen (catch.js); catch-flee (translate) kommt zum angehaltenen Hin-und-her (transform) dazu */
 #screen-catch[data-state] .target.flee { animation: catch-roam 4s steps(20) infinite paused, catch-flee .8s steps(12) forwards; }
-/* Sprechblase (fx.js say) hängt in .target und läuft mit; die Breite richtet sich nach der Bühne statt nach dem 160-px-Ziel */
-.target .fx-say { max-width: 200px; font-size: 14px; }
+/* Sprechblase (fx.js say) hängt in .target und läuft mit (beim Abhauen in der Bühne); die Breite richtet sich nach der Bühne statt nach dem 160-px-Ziel */
+.catch-stage .fx-say { max-width: 200px; font-size: 14px; }
+/* Außer im Flug und beim Ziehen (Münze vorn) liegt der Rüther samt Blase über Badge, Rauch und Funken: echtes Gesicht frei, Blase lesbar */
+#screen-catch[data-state="idle"] .target, #screen-catch[data-state="seq"] .target { z-index: 5; }
 #screen-catch[data-state="seq"] .target { animation-play-state: paused; }
 #screen-catch[data-state="seq"] .ring,
 #screen-catch[data-state="seq"] .target .aura { opacity: 0; }
@@ -55,10 +57,11 @@
 .catch-fx .legend { position: absolute; font: 700 44px/1 var(--font-pixel); letter-spacing: 2px; white-space: nowrap; color: var(--gold); text-shadow: 2px 0 0 var(--ink), -2px 0 0 var(--ink), 0 2px 0 var(--ink), 0 -2px 0 var(--ink), 3px 3px 0 var(--ink), 6px 6px 0 var(--wood-2); animation: catch-legend .5s steps(4) both; }
 
 /* Meldung als Papierstreifen, mittig, bricht bei langen Namen um */
-.catch-msg { position: absolute; left: 0; right: 0; bottom: 178px; z-index: 4; width: max-content; max-width: calc(100% - 32px); margin: 0 auto; padding: 4px 12px; font: 700 30px/1.1 var(--font-pixel); color: var(--ink); background: var(--paper); border: 3px solid var(--ink); box-shadow: var(--shadow); opacity: 0; pointer-events: none; }
+.catch-msg { position: absolute; left: 0; right: 0; bottom: 168px; /* zwischen Münze und Ziel */ z-index: 4; width: max-content; max-width: calc(100% - 32px); margin: 0 auto; padding: 4px 12px; font: 700 30px/1.1 var(--font-pixel); color: var(--ink); background: var(--paper); border: 3px solid var(--ink); box-shadow: var(--shadow); opacity: 0; pointer-events: none; }
 .catch-msg:empty { visibility: hidden; }
 .catch-msg.show { opacity: 1; animation: catch-msg .24s steps(3); }
 .catch-msg.narr { font: 800 18px/1.3 var(--font-body); } /* Erzähltext beim Abhauen: länger, daher Fließtext */
+.catch-msg.top { bottom: auto; top: calc(46% - 64px); } /* „Gefangen!" über dem Belohnungszettel */
 
 /* Belohnung als angehefteter Papierzettel */
 .catch-stage .reward { position: absolute; left: 50%; top: 46%; z-index: 5; min-width: 200px; padding: 14px 18px 12px; border: 3px solid var(--ink); background: var(--paper); color: var(--ink); box-shadow: 6px 6px 0 var(--wood-2); pointer-events: none; transform: translateX(-50%) rotate(-2deg); animation: catch-reward .4s steps(4) both; }
