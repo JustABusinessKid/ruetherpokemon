@@ -1,4 +1,4 @@
-import { CONST, API_BASE, RUETHERS, RUETHER_BY_ID, BOSSES, ARENAS, ARENA_BY_ID, RARITY_BY_ID, pickLine } from './data.js';
+import { CONST, RUETHERS, RUETHER_BY_ID, BOSSES, ARENAS, ARENA_BY_ID, RARITY_BY_ID, pickLine } from './data.js';
 import * as storage from './storage.js';
 import { createLocator, distance, offsetPoint } from './geo.js';
 import { updateSpawns } from './spawn.js';
@@ -24,7 +24,7 @@ import { fetchStops } from './overpass.js';
 import { setScreen, toast, popup, onTab, setTabBadge, esc, ico } from './ui.js';
 import { createOnboarding } from './onboarding.js';
 import { sfx, haptic, setHapticsEnabled } from './audio.js';
-import { createOnline } from './online.js';
+import { createOnline, onlineConfig } from './online.js';
 
 const $ = s => document.querySelector(s);
 window.addEventListener('error', () => { const p = document.querySelector('#splash p'); if (p) p.textContent = 'Fehler beim Laden. Bitte Seite neu laden.'; }, { once: true });
@@ -157,7 +157,7 @@ setInterval(() => { if (dayKey() !== today) dailyCheck(); }, 60_000);
 // ---------- Online ----------
 const online = createOnline({
   // Lokal (localhost/127.0.0.1) nur mit ?online=1 gegen das echte Backend, sonst offline: Testläufe landen nicht in der Rangliste
-  apiBase: /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && !new URLSearchParams(location.search).has('online') ? null : API_BASE,
+  config: onlineConfig(location),
   getPayload() {
     if (!save.profile) return null;
     return {

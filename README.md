@@ -1,7 +1,7 @@
 # Rüther GO
 
 Pokémon GO, aber man fängt Rüthers. Handy-Web-App (PWA). Spielstand liegt im
-Browser, Rangliste und Arena-Besitzer kommen von einem kleinen Backend.
+Browser, Rangliste und Arena-Besitzer laufen über GitHub (ntfy-Nachrichten plus GitHub Action).
 
 ## Starten
 
@@ -9,7 +9,6 @@ Browser, Rangliste und Arena-Besitzer kommen von einem kleinen Backend.
 
 Dann `http://localhost:8000` öffnen. Auf dem Handy braucht die Ortung HTTPS,
 also auf einen statischen Host (z.B. GitHub Pages) legen. Live unter
-`https://ruether-go.higgsfield.app/play/` und
 `https://justabusinesskid.github.io/ruetherpokemon/`.
 
 ## Steuerung
@@ -32,10 +31,13 @@ also auf einen statischen Host (z.B. GitHub Pages) legen. Live unter
 
 ## Online
 
-Backend: `https://ruether-go.higgsfield.app` (`API_BASE` in `js/data.js`).
-Rangliste, Aktivitäts-Feed und Arena-Besitzer gelten für alle Spieler: wer eine
-Arena gewinnt, steht als Besitzer auf jeder Karte. Spieler werden über ein
-zufälliges Geräte-Token erkannt, es gibt kein Konto und kein Passwort.
+Kein eigenes Backend mehr (Higgsfield ist abgeschaltet). Live-Nachrichten gehen
+signiert über ntfy.sh, eine GitHub Action schreibt alle 15 Minuten den Stand in
+den Branch `online-data` (Konfiguration `ONLINE` in `js/data.js`, Details in
+[online/README.md](online/README.md)). Rangliste, Aktivitäts-Feed und
+Arena-Besitzer gelten für alle Spieler: wer eine Arena gewinnt, steht als
+Besitzer auf jeder Karte. Jedes Gerät hat einen eigenen Schlüssel, es gibt kein
+Konto und kein Passwort.
 
 Ist das Backend nicht erreichbar, läuft alles lokal weiter: Fangen, Kämpfen,
 Quests und Stops funktionieren ohne Netz, der Punkt unten links wird grau und

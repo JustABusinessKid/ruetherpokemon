@@ -1,0 +1,43 @@
+# Online-Welt: ntfy-Nachrichten alle 15 Minuten in state.json (Branch online-data) übernehmen.
+# Merge-Regeln stehen in js/online-merge.js (dasselbe Modul wie im Spiel). Doku: online/README.md
+name: Online-Sync
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: online-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          path: main
+      - uses: actions/checkout@v5
+        with:
+          ref: online-data
+          path: data
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+      - name: Nachrichten mergen
+        run: node --experimental-detect-module main/tools/online-sync.mjs data/state.json
+      - name: Nur bei Änderung committen
+        working-directory: data
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then echo "keine Änderung"; exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add state.json
+          git commit -m "Online-Stand aktualisieren"
+          git push

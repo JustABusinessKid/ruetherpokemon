@@ -94,7 +94,13 @@ export const CONST = {
   XP_HAUNEBU: 500,
 };
 
-export const API_BASE = null; // Higgsfield-Backend abgeschaltet (2026-10-10): Online-Welt aus, Spiel läuft offline
+export const API_BASE = null; // Higgsfield-Backend abgeschaltet (2026-10-10)
+// Online-Welt über GitHub: Live-Nachrichten über ntfy.sh (signiert), dauerhafter Stand im Branch online-data (GitHub Action)
+export const ONLINE = {
+  topic: 'ruether-go-8b419c181681af1d',
+  bus: 'https://ntfy.sh',
+  snapshotUrl: 'https://raw.githubusercontent.com/JustABusinessKid/ruetherpokemon/online-data/state.json',
+};
 export const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
 // Ausweich-Server, der Reihe nach; die öffentlichen Instanzen sind oft überlastet (504)
 export const OVERPASS_URLS = [OVERPASS_URL, 'https://z.overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
