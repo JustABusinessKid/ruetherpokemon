@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1791648182,
+ "lastMsgTime": 1791662337,
  "players": {
   "legacy:Josef": {
    "nickname": "Josef",
@@ -61,56 +61,56 @@
   "C-w_CUaEP-FRT271jxj2J9Fpmi7nZRiJBkW7o1pXg3I": {
    "nickname": "Adolf",
    "avatar": "micha",
-   "sats": 55410,
+   "sats": 86430,
    "dex": 20,
-   "trophies": 41,
-   "mastered": 4,
-   "level": 24,
-   "xp": 2750,
+   "trophies": 47,
+   "mastered": 5,
+   "level": 26,
+   "xp": 2080,
    "leader": {
     "id": "micha",
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1791647537640
+   "t": 1791662124519
   },
   "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
    "nickname": "BTC",
    "avatar": "christian",
-   "sats": 46675,
+   "sats": 38315,
    "dex": 20,
-   "trophies": 51,
-   "mastered": 4,
-   "level": 20,
-   "xp": 1050,
+   "trophies": 58,
+   "mastered": 5,
+   "level": 23,
+   "xp": 1490,
    "leader": {
     "id": "christian",
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1791648186759
+   "t": 1791662084690
   }
  },
  "arenas": {
   "pcsale": {
    "ownerId": "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k",
    "leader": {
-    "id": "hildegard",
+    "id": "christian",
     "rarity": "legendaer",
     "level": 20
    },
    "level": 5,
-   "since": 1791637981054
+   "since": 1791657228380
   },
   "huettenberg": {
-   "ownerId": "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k",
+   "ownerId": "C-w_CUaEP-FRT271jxj2J9Fpmi7nZRiJBkW7o1pXg3I",
    "leader": {
-    "id": "hildegard",
+    "id": "micha",
     "rarity": "legendaer",
     "level": 20
    },
    "level": 5,
-   "since": 1791637911030
+   "since": 1791657151259
   },
   "worringen": {
    "ownerId": "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k",
@@ -125,15 +125,319 @@
   "keller": {
    "ownerId": "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k",
    "leader": {
-    "id": "hildegard",
+    "id": "christian",
     "rarity": "legendaer",
     "level": 20
    },
    "level": 5,
-   "since": 1791637863535
+   "since": 1791657331979
+  },
+  "neuschwabenland": {
+   "ownerId": "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k",
+   "leader": {
+    "id": "christian",
+    "rarity": "legendaer",
+    "level": 20
+   },
+   "level": 5,
+   "since": 1791657429214
   }
  },
  "events": [
+  {
+   "at": 1791662336901,
+   "nickname": "Adolf",
+   "kind": "catch",
+   "text": "hat einen legendären Viktor gefangen!",
+   "m": "uF82CQSUUHM4l2ii"
+  },
+  {
+   "at": 1791662297848,
+   "nickname": "BTC",
+   "kind": "catch",
+   "text": "hat einen legendären Christian gefangen!",
+   "m": "LI5qNCgWIxAaKVvU"
+  },
+  {
+   "at": 1791662211407,
+   "nickname": "Adolf",
+   "kind": "catch",
+   "text": "hat einen legendären Viktor gefangen!",
+   "m": "iRVhQL_k8kMWswP0"
+  },
+  {
+   "at": 1791662174744,
+   "nickname": "Adolf",
+   "kind": "catch",
+   "text": "hat einen legendären Christian gefangen!",
+   "m": "zGION2U-1L4wlogA"
+  },
+  {
+   "at": 1791661399500,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat die Haunebu erbeutet und fliegt 10 Minuten lang frei zu jeder Arena!",
+   "m": "aYsSFnhYP15-3S2S"
+  },
+  {
+   "at": 1791661293575,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Onkel Micha erschaffen!",
+   "m": "fr3dhRBZSRW_PsJm"
+  },
+  {
+   "at": 1791660711335,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat die Haunebu erbeutet und fliegt 10 Minuten lang frei zu jeder Arena!",
+   "m": "1FVxEq94jCKb46DX"
+  },
+  {
+   "at": 1791660605031,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Christian erschaffen!",
+   "m": "rH9eCaqss0v27uen"
+  },
+  {
+   "at": 1791660594344,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Viktor erschaffen!",
+   "m": "6jL-ugKOA8E8Pvi6"
+  },
+  {
+   "at": 1791660573455,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Christian erschaffen!",
+   "m": "vrWg8qFsRT0PkZU4"
+  },
+  {
+   "at": 1791660527084,
+   "nickname": "BTC",
+   "kind": "quest",
+   "text": "hat die Haunebu-Quest „Michas PS3“ geschafft!",
+   "m": "90Pc7lI5qDhM30q-"
+  },
+  {
+   "at": 1791660416990,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat die Haunebu erbeutet und fliegt 10 Minuten lang frei zu jeder Arena!",
+   "m": "YCQyTK4uEDLYRXzs"
+  },
+  {
+   "at": 1791660366923,
+   "nickname": "BTC",
+   "kind": "quest",
+   "text": "hat die Haunebu-Quest „Hangar-Sabotage“ geschafft!",
+   "m": "fCvPwBla-mDDzgfU"
+  },
+  {
+   "at": 1791660221063,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat die Haunebu erbeutet und fliegt 10 Minuten lang frei zu jeder Arena!",
+   "m": "yFLgIbx_YaM9pXXy"
+  },
+  {
+   "at": 1791657843769,
+   "nickname": "Adolf",
+   "kind": "quest",
+   "text": "hat die Haunebu-Quest „Kalter Keller“ geschafft!",
+   "m": "puMK5q0cYPHuY_dw"
+  },
+  {
+   "at": 1791657834693,
+   "nickname": "BTC",
+   "kind": "quest",
+   "text": "hat die Haunebu-Quest „Kalter Keller“ geschafft!",
+   "m": "H89_r_eBJT_El0-c"
+  },
+  {
+   "at": 1791657736756,
+   "nickname": "Adolf",
+   "kind": "quest",
+   "text": "hat die Haunebu-Quest „Michas PS3“ geschafft!",
+   "m": "PPxnkuNO_LJZO4K7"
+  },
+  {
+   "at": 1791657732311,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat die Haunebu erbeutet und fliegt 10 Minuten lang frei zu jeder Arena!",
+   "m": "hE_xy7Yx7-PeFUj7"
+  },
+  {
+   "at": 1791657704548,
+   "nickname": "BTC",
+   "kind": "quest",
+   "text": "hat die Haunebu-Quest „Der Tachionenraub“ geschafft!",
+   "m": "LRHrIiFQJ84i2rZ1"
+  },
+  {
+   "at": 1791657562516,
+   "nickname": "Adolf",
+   "kind": "quest",
+   "text": "hat die Haunebu-Quest „Hangar-Sabotage“ geschafft!",
+   "m": "mwUjq6UvuVkptEiN"
+  },
+  {
+   "at": 1791657429214,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat Geheime Festung Neuschwabenland erobert (Lv. 5).",
+   "m": "mKun35OIpMF3Omk8"
+  },
+  {
+   "at": 1791657429189,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat Geheime Festung Neuschwabenland gemeistert!",
+   "m": "Cp-fPEG7iyRJod3t"
+  },
+  {
+   "at": 1791657419018,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat Geheime Festung Neuschwabenland erobert (Lv. 4).",
+   "m": "JcMB7CEzdnfYm_U3"
+  },
+  {
+   "at": 1791657408077,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat Geheime Festung Neuschwabenland erobert (Lv. 3).",
+   "m": "fcCnVn4wQElvTYgW"
+  },
+  {
+   "at": 1791657399751,
+   "nickname": "Adolf",
+   "kind": "achievement",
+   "text": "hat die Haunebu erbeutet und fliegt 10 Minuten lang frei zu jeder Arena!",
+   "m": "rzwEEvZ4mBSnPWjD"
+  },
+  {
+   "at": 1791657396983,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat Geheime Festung Neuschwabenland erobert (Lv. 2) und Adolf rausgeworfen.",
+   "m": "n6MPPX6pWaLBy1_B"
+  },
+  {
+   "at": 1791657359064,
+   "nickname": "Adolf",
+   "kind": "quest",
+   "text": "hat die Haunebu-Quest „Der Tachionenraub“ geschafft!",
+   "m": "2A79eZPJWGgU6zcU"
+  },
+  {
+   "at": 1791657331979,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat Keller der Rütherschanze erobert (Lv. 5).",
+   "m": "kV6PnG42vOQruB5P"
+  },
+  {
+   "at": 1791657331954,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat Keller der Rütherschanze gemeistert!",
+   "m": "9_jxx65Lb0rKwZP2"
+  },
+  {
+   "at": 1791657228380,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat PC Sale erobert (Lv. 5).",
+   "m": "_Ftx9f7DfU6-Fple"
+  },
+  {
+   "at": 1791657228357,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat PC Sale gemeistert!",
+   "m": "sGk85n2QbWQ9wQGg"
+  },
+  {
+   "at": 1791657210293,
+   "nickname": "Adolf",
+   "kind": "arena",
+   "text": "hat Geheime Festung Neuschwabenland erobert (Lv. 5).",
+   "m": "7nTJvDRY8dv0Tmfn"
+  },
+  {
+   "at": 1791657210284,
+   "nickname": "Adolf",
+   "kind": "achievement",
+   "text": "hat Geheime Festung Neuschwabenland gemeistert!",
+   "m": "O8MBruYYn6-lssN5"
+  },
+  {
+   "at": 1791657203452,
+   "nickname": "Adolf",
+   "kind": "arena",
+   "text": "hat Geheime Festung Neuschwabenland erobert (Lv. 4).",
+   "m": "GwxbRoioitppJPay"
+  },
+  {
+   "at": 1791657196667,
+   "nickname": "Adolf",
+   "kind": "arena",
+   "text": "hat Geheime Festung Neuschwabenland erobert (Lv. 3).",
+   "m": "TacLPZ31c3Kul5WI"
+  },
+  {
+   "at": 1791657190019,
+   "nickname": "Adolf",
+   "kind": "arena",
+   "text": "hat Geheime Festung Neuschwabenland erobert (Lv. 2) und BTC rausgeworfen.",
+   "m": "S0a4-QZ9UEkQsVnz"
+  },
+  {
+   "at": 1791657151259,
+   "nickname": "Adolf",
+   "kind": "arena",
+   "text": "hat Hüttenbergstraße erobert (Lv. 5) und BTC rausgeworfen.",
+   "m": "dvxd9fWPyaf9rULm"
+  },
+  {
+   "at": 1791657151250,
+   "nickname": "Adolf",
+   "kind": "achievement",
+   "text": "hat Hüttenbergstraße gemeistert!",
+   "m": "AgN0yd4_ylpk-Xwp"
+  },
+  {
+   "at": 1791657061835,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat Geheime Festung Neuschwabenland erobert (Lv. 1) und Adolf rausgeworfen.",
+   "m": "Iferwrp797mYHur5"
+  },
+  {
+   "at": 1791656965460,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat die Haunebu erbeutet und fliegt 10 Minuten lang frei zu jeder Arena!",
+   "m": "7O77BX5f5gHOuqjX"
+  },
+  {
+   "at": 1791656822236,
+   "nickname": "Adolf",
+   "kind": "arena",
+   "text": "hat Geheime Festung Neuschwabenland erobert (Lv. 1).",
+   "m": "0kEY1cRtczTcpEXF"
+  },
+  {
+   "at": 1791656725083,
+   "nickname": "Adolf",
+   "kind": "achievement",
+   "text": "hat die Haunebu erbeutet und fliegt 10 Minuten lang frei zu jeder Arena!",
+   "m": "-246_R99_Kd_ZGN9"
+  },
   {
    "at": 1791647856102,
    "nickname": "BTC",
@@ -189,300 +493,6 @@
    "kind": "arena",
    "text": "hat PC Sale erobert (Lv. 5) und Adolf rausgeworfen.",
    "m": "_BdJTfiO5L_NypxU"
-  },
-  {
-   "at": 1791637981032,
-   "nickname": "BTC",
-   "kind": "achievement",
-   "text": "hat PC Sale gemeistert!",
-   "m": "tc-6Q_2jqgQgW9d8"
-  },
-  {
-   "at": 1791637911030,
-   "nickname": "BTC",
-   "kind": "arena",
-   "text": "hat Hüttenbergstraße erobert (Lv. 5) und Adolf rausgeworfen.",
-   "m": "YWTz5BH-z8fhTyAr"
-  },
-  {
-   "at": 1791637911012,
-   "nickname": "BTC",
-   "kind": "achievement",
-   "text": "hat Hüttenbergstraße gemeistert!",
-   "m": "4yMFeXCvOwVX-aXL"
-  },
-  {
-   "at": 1791637863535,
-   "nickname": "BTC",
-   "kind": "arena",
-   "text": "hat Keller der Rütherschanze erobert (Lv. 5) und Adolf rausgeworfen.",
-   "m": "2S7dHp5fgXN8t-_X"
-  },
-  {
-   "at": 1791637863517,
-   "nickname": "BTC",
-   "kind": "achievement",
-   "text": "hat Keller der Rütherschanze gemeistert!",
-   "m": "PQBjwH3GMQc8dWna"
-  },
-  {
-   "at": 1791637824114,
-   "nickname": "BTC",
-   "kind": "arena",
-   "text": "hat Rütherschanze Worringen erobert (Lv. 5) und Adolf rausgeworfen.",
-   "m": "fMu4tu6Cw5_hIas1"
-  },
-  {
-   "at": 1791637824092,
-   "nickname": "BTC",
-   "kind": "achievement",
-   "text": "hat Rütherschanze Worringen gemeistert!",
-   "m": "x3Iz598YrZHnD0IQ"
-  },
-  {
-   "at": 1791629407729,
-   "nickname": "Adolf",
-   "kind": "arena",
-   "text": "hat Keller der Rütherschanze erobert (Lv. 5) und BTC rausgeworfen.",
-   "m": "legacy-1791629407729"
-  },
-  {
-   "at": 1791629407269,
-   "nickname": "Adolf",
-   "kind": "achievement",
-   "text": "hat Keller der Rütherschanze gemeistert!",
-   "m": "legacy-1791629407269"
-  },
-  {
-   "at": 1791629066600,
-   "nickname": "Adolf",
-   "kind": "arena",
-   "text": "hat Rütherschanze Worringen erobert (Lv. 5) und BTC rausgeworfen.",
-   "m": "legacy-1791629066600"
-  },
-  {
-   "at": 1791629066226,
-   "nickname": "Adolf",
-   "kind": "achievement",
-   "text": "hat Rütherschanze Worringen gemeistert!",
-   "m": "legacy-1791629066226"
-  },
-  {
-   "at": 1791628746128,
-   "nickname": "Adolf",
-   "kind": "arena",
-   "text": "hat Hüttenbergstraße erobert (Lv. 5) und BTC rausgeworfen.",
-   "m": "legacy-1791628746128"
-  },
-  {
-   "at": 1791628745604,
-   "nickname": "Adolf",
-   "kind": "achievement",
-   "text": "hat Hüttenbergstraße gemeistert!",
-   "m": "legacy-1791628745604"
-  },
-  {
-   "at": 1791628714513,
-   "nickname": "BTC",
-   "kind": "arena",
-   "text": "hat Rütherschanze Worringen erobert (Lv. 5) und Adolf rausgeworfen.",
-   "m": "legacy-1791628714513"
-  },
-  {
-   "at": 1791628714103,
-   "nickname": "BTC",
-   "kind": "achievement",
-   "text": "hat Rütherschanze Worringen gemeistert!",
-   "m": "legacy-1791628714103"
-  },
-  {
-   "at": 1791628709292,
-   "nickname": "Adolf",
-   "kind": "arena",
-   "text": "hat PC Sale erobert (Lv. 5) und BTC rausgeworfen.",
-   "m": "legacy-1791628709292"
-  },
-  {
-   "at": 1791628708968,
-   "nickname": "Adolf",
-   "kind": "achievement",
-   "text": "hat PC Sale gemeistert!",
-   "m": "legacy-1791628708968"
-  },
-  {
-   "at": 1791628677280,
-   "nickname": "BTC",
-   "kind": "arena",
-   "text": "hat Keller der Rütherschanze erobert (Lv. 5) und Adolf rausgeworfen.",
-   "m": "legacy-1791628677280"
-  },
-  {
-   "at": 1791628676357,
-   "nickname": "BTC",
-   "kind": "achievement",
-   "text": "hat Keller der Rütherschanze gemeistert!",
-   "m": "legacy-1791628676357"
-  },
-  {
-   "at": 1791628675147,
-   "nickname": "Adolf",
-   "kind": "arena",
-   "text": "hat Rütherschanze Worringen erobert (Lv. 5) und BTC rausgeworfen.",
-   "m": "legacy-1791628675147"
-  },
-  {
-   "at": 1791628674683,
-   "nickname": "Adolf",
-   "kind": "achievement",
-   "text": "hat Rütherschanze Worringen gemeistert!",
-   "m": "legacy-1791628674683"
-  },
-  {
-   "at": 1791628625558,
-   "nickname": "BTC",
-   "kind": "arena",
-   "text": "hat Hüttenbergstraße erobert (Lv. 5) und Adolf rausgeworfen.",
-   "m": "legacy-1791628625558"
-  },
-  {
-   "at": 1791628625299,
-   "nickname": "Adolf",
-   "kind": "arena",
-   "text": "hat Keller der Rütherschanze erobert (Lv. 5).",
-   "m": "legacy-1791628625299"
-  },
-  {
-   "at": 1791628625039,
-   "nickname": "Adolf",
-   "kind": "achievement",
-   "text": "hat Keller der Rütherschanze gemeistert!",
-   "m": "legacy-1791628625039"
-  },
-  {
-   "at": 1791628625004,
-   "nickname": "BTC",
-   "kind": "achievement",
-   "text": "hat Hüttenbergstraße gemeistert!",
-   "m": "legacy-1791628625004"
-  },
-  {
-   "at": 1791628582074,
-   "nickname": "Adolf",
-   "kind": "arena",
-   "text": "hat Keller der Rütherschanze erobert (Lv. 4) und BTC rausgeworfen.",
-   "m": "legacy-1791628582074"
-  },
-  {
-   "at": 1791628564139,
-   "nickname": "BTC",
-   "kind": "arena",
-   "text": "hat Keller der Rütherschanze erobert (Lv. 5) und Adolf rausgeworfen.",
-   "m": "legacy-1791628564139"
-  },
-  {
-   "at": 1791628563708,
-   "nickname": "BTC",
-   "kind": "achievement",
-   "text": "hat Keller der Rütherschanze gemeistert!",
-   "m": "legacy-1791628563708"
-  },
-  {
-   "at": 1791628544744,
-   "nickname": "Adolf",
-   "kind": "arena",
-   "text": "hat Keller der Rütherschanze erobert (Lv. 3).",
-   "m": "legacy-1791628544744"
-  },
-  {
-   "at": 1791628520969,
-   "nickname": "BTC",
-   "kind": "arena",
-   "text": "hat Rütherschanze Worringen erobert (Lv. 5).",
-   "m": "legacy-1791628520969"
-  },
-  {
-   "at": 1791628520649,
-   "nickname": "BTC",
-   "kind": "achievement",
-   "text": "hat Rütherschanze Worringen gemeistert!",
-   "m": "legacy-1791628520649"
-  },
-  {
-   "at": 1791628507132,
-   "nickname": "Adolf",
-   "kind": "arena",
-   "text": "hat Keller der Rütherschanze erobert (Lv. 2) und BTC rausgeworfen.",
-   "m": "legacy-1791628507132"
-  },
-  {
-   "at": 1791628236119,
-   "nickname": "Adolf",
-   "kind": "arena",
-   "text": "hat Hüttenbergstraße erobert (Lv. 5) und BTC rausgeworfen.",
-   "m": "legacy-1791628236119"
-  },
-  {
-   "at": 1791628234490,
-   "nickname": "Adolf",
-   "kind": "achievement",
-   "text": "hat Hüttenbergstraße gemeistert!",
-   "m": "legacy-1791628234490"
-  },
-  {
-   "at": 1791628115586,
-   "nickname": "BTC",
-   "kind": "arena",
-   "text": "hat PC Sale erobert (Lv. 5).",
-   "m": "legacy-1791628115586"
-  },
-  {
-   "at": 1791628115136,
-   "nickname": "BTC",
-   "kind": "achievement",
-   "text": "hat PC Sale gemeistert!",
-   "m": "legacy-1791628115136"
-  },
-  {
-   "at": 1791628020827,
-   "nickname": "BTC",
-   "kind": "arena",
-   "text": "hat PC Sale erobert (Lv. 5).",
-   "m": "legacy-1791628020827"
-  },
-  {
-   "at": 1791628020595,
-   "nickname": "BTC",
-   "kind": "achievement",
-   "text": "hat PC Sale gemeistert!",
-   "m": "legacy-1791628020595"
-  },
-  {
-   "at": 1791627692625,
-   "nickname": "BTC",
-   "kind": "arena",
-   "text": "hat Keller der Rütherschanze erobert (Lv. 5).",
-   "m": "legacy-1791627692625"
-  },
-  {
-   "at": 1791627692306,
-   "nickname": "BTC",
-   "kind": "achievement",
-   "text": "hat Keller der Rütherschanze gemeistert!",
-   "m": "legacy-1791627692306"
-  },
-  {
-   "at": 1791627618625,
-   "nickname": "BTC",
-   "kind": "fusion",
-   "text": "hat per Fusion einen legendären Hildegard erschaffen!",
-   "m": "legacy-1791627618625"
-  },
-  {
-   "at": 1791627618406,
-   "nickname": "BTC",
-   "kind": "level",
-   "text": "ist Trainer Lv. 15 geworden!",
-   "m": "legacy-1791627618406"
   }
  ]
 }
