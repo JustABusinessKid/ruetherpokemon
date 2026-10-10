@@ -35,7 +35,23 @@ const SFX = {
   rage: () => tone({ f: 70, f2: 50, type: 'sawtooth', t: 0.8, g: 0.3 }),
   coin: () => tone({ f: 1760, f2: 2200, t: 0.1, g: 0.15 }),
   ufo: theremin,
+  // v8: Lockmodul-Welle und Quest-Modus (Schritt, Alarm, Klau, Gas)
+  wave: () => seq([523, 784], { type: 'sine', t: 0.1, g: 0.12 }, 0.08),
+  step: () => tone({ f: 140, f2: 90, type: 'triangle', t: 0.04, g: 0.08 }),
+  alarm: () => seq([880, 660, 880, 660], { t: 0.12, g: 0.18 }, 0.14),
+  steal: () => seq([1568, 2093], { type: 'sine', t: 0.08, g: 0.15 }, 0.06),
+  gas: () => hiss(0.7, 0.12),
 };
+
+// Rauschen mit Abklingen (Giftgas-Zischen)
+function hiss(t, g) {
+  const c = ac(); if (!c || !enabled) return;
+  const n = Math.floor(c.sampleRate * t), buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+  const src = c.createBufferSource(), v = c.createGain();
+  src.buffer = buf; v.gain.value = g;
+  src.connect(v).connect(c.destination); src.start();
+}
 
 // Haunebu: Theremin-Sweep, Sinus rauf und runter, Vibrato wird immer wabbeliger (~2,6 s)
 function theremin() {

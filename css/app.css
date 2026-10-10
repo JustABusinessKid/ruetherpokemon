@@ -54,6 +54,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .beam-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .beam-meta b { font: 700 15px/1.2 var(--font-pixel); }
 .beam-row button { flex: none; padding: 4px 10px; font-size: 14px; }
+.beam-row.only { padding-left: 14px; box-shadow: inset 6px 0 0 var(--teal); } /* v8: Neuschwabenland, nur per Haunebu */
 
 /* ---------- Screens, Blende ---------- */
 .screen.with-tabs { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); }
@@ -201,6 +202,79 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .quest-card .claim:disabled { opacity: 1; color: var(--ink-soft); background: var(--paper-2); }
 .quest-reset { padding: 8px 16px 12px; text-align: center; }
 
+/* ---------- v8 Haunebu-Quests: Bereich oben im Quests-Tab, Team-Wahl, Ergebnis ---------- */
+.quests-scroll { flex: 1; min-height: 0; overflow: auto; }
+.quests-scroll .quest-list { flex: none; overflow: visible; }
+.hq { display: flex; flex-direction: column; gap: 12px; padding: 0 16px; }
+.hq-box { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 12px; }
+.hq-box.on { box-shadow: inset 6px 0 0 var(--teal), var(--shadow); }
+.hq-box .hq-ico { flex: none; width: 40px; height: 40px; }
+.hq-box .hq-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.hq-box .big { font: 700 18px/1.2 var(--font-pixel); }
+.hq-box .sub { font-variant-numeric: tabular-nums; }
+.hq-box .hq-shop { flex: 1 0 100%; min-height: 44px; font-size: 16px; }
+.hq-missing { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.hq-missing li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 8px; font-size: 14px; font-weight: 800; background: var(--paper-2); border: 2px solid var(--ink); }
+.hq-missing li .sub { flex: none; white-space: nowrap; }
+.mission-card {
+  display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 10px 12px; padding: 10px; color: var(--ink);
+  background-color: var(--paper); background-image: var(--dither-paper); background-size: 4px 4px;
+  border: 3px solid var(--ink); box-shadow: var(--shadow);
+}
+.mission-card .m-art { width: 72px; height: 72px; background: var(--night) center / cover no-repeat; image-rendering: pixelated; border: 2px solid var(--ink); }
+.mission-card .m-meta { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mission-card .m-name { display: flex; align-items: center; gap: 4px; font: 700 18px/1.15 var(--font-pixel); }
+.mission-card .m-goal { font-size: 14px; font-weight: 800; }
+.mission-card .m-reward { display: flex; align-items: center; flex-wrap: wrap; gap: 0 2px; font: 700 14px/1.3 var(--font-pixel); }
+.mission-card .m-start { grid-column: 1 / -1; min-height: 44px; }
+
+/* Team-Wahl: Box als Zeilen mit echtem Gesicht, Quest-Kräften und Reihenfolge-Plakette, unten Holzleiste mit Abflug */
+#screen-questteam .qt-scroll { flex: 1; min-height: 0; overflow: auto; padding: 16px 16px 12px; }
+#screen-questteam .section-title { margin: 16px 0 8px; }
+.qt-brief { display: flex; flex-direction: column; gap: 6px; font-size: 14px; line-height: 1.4; }
+.qt-list { display: flex; flex-direction: column; gap: 8px; }
+.qt-row {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) 32px; gap: 10px; align-items: center;
+  width: 100%; padding: 8px; text-align: left; font: 400 14px/1.3 var(--font-body);
+}
+.qt-row.on { background: var(--paper-2); box-shadow: 0 0 0 3px var(--amber), var(--shadow); }
+.qt-row .frame img { width: 56px; height: 56px; }
+.qt-name { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; font: 700 17px/1.2 var(--font-pixel); }
+.qt-powers { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.qt-power { display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px 1px 2px; font: 800 12px/1.2 var(--font-body); background: var(--paper-2); border: 2px solid var(--ink); }
+.qt-row.on .qt-power { background: var(--paper); }
+.qt-power img { width: 20px; height: 20px; }
+.qt-pick { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; font: 700 18px/1 var(--font-pixel); background: var(--paper-2); border: 3px solid var(--ink); }
+.qt-row.on .qt-pick { background: var(--amber); }
+.qt-foot { flex: none; display: flex; align-items: center; gap: 12px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); border-top: 3px solid var(--ink); }
+.qt-hb { flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; font: 700 15px var(--font-pixel); font-variant-numeric: tabular-nums; color: var(--paper); }
+.qt-go { min-width: 156px; min-height: 52px; font-size: 20px; }
+
+/* Ergebnis: Kulisse des Handlungsorts, echte Gesichter (hüpfen bei Erfolg), Zettel mit Ziel, Zeit, Alarm, Bestwert, Beute */
+#screen-questresult {
+  overflow: auto; padding: calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
+  background-color: var(--night); background-position: center; background-size: cover; background-repeat: no-repeat; image-rendering: pixelated;
+  box-shadow: inset 0 0 0 100vmax rgba(27, 43, 75, .6);
+}
+.qr-body { width: 100%; max-width: 343px; margin: auto; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.qr-faces { display: flex; justify-content: center; gap: 12px; padding-top: 8px; }
+.qr-faces .frame img { width: 80px; height: 80px; }
+#screen-questresult.won .qr-faces .frame { animation: app-qr-hop .6s steps(1, end) var(--d, 0s) infinite; }
+#screen-questresult:not(.won) .qr-faces .frame { transform: rotate(-6deg) translateY(4px); }
+#screen-questresult:not(.won) .qr-faces .frame:nth-child(2) { transform: rotate(5deg) translateY(6px); }
+@keyframes app-qr-hop { 50% { transform: translateY(-8px); } }
+.qr-title { margin: 0; font: 700 32px/1.1 var(--font-pixel); color: var(--paper); text-shadow: 3px 3px 0 var(--ink); }
+#screen-questresult.won .qr-title { color: var(--gold); }
+.qr-mission { color: var(--paper-2); font-weight: 800; }
+.qr-card { width: 100%; display: flex; flex-direction: column; gap: 6px; text-align: left; }
+.qr-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding-bottom: 4px; font-size: 14px; border-bottom: 2px dashed rgba(30, 42, 34, .25); }
+.qr-row b { font: 700 15px/1.2 var(--font-pixel); text-align: right; }
+.qr-gain { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.qr-gain .big { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; font: 700 24px/1.1 var(--font-pixel); background: var(--gold); border: 3px solid var(--ink); box-shadow: var(--shadow-sm); }
+.qr-gain .big.xp { background: var(--teal); }
+.qr-text { padding: 8px 12px; font: 700 14px/1.4 var(--font-body); color: var(--ink); background: var(--paper); border: 3px solid var(--ink); box-shadow: var(--shadow); }
+.qr-done { min-width: 200px; min-height: 52px; font-size: 20px; }
+
 /* ---------- Rangliste: Holzbrett mit Papierzeilen ---------- */
 .lb-status { padding: 8px 16px 0; }
 .lb-status:empty { display: none; }
@@ -314,7 +388,8 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 
 /* ---------- Weniger Bewegung ---------- */
 @media (prefers-reduced-motion: reduce) {
-  .splash img, .onb-coin, .screen.enter, .onb-slide.active, .tabbar .tab-badge, .toast-item, .popup, .popup-card.pop, .stop-result.show { animation: none !important; }
+  .splash img, .onb-coin, .screen.enter, .onb-slide.active, .tabbar .tab-badge, .toast-item, .popup, .popup-card.pop, .stop-result.show,
+  #screen-questresult .qr-faces .frame { animation: none !important; }
   .wheel.spinning, .wheel.spinning span { transition-duration: .6s; }
   .switch-row input::after { transition: none; }
 }

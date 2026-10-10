@@ -23,6 +23,7 @@
 #screen-battle[data-arena="keller"] { --arena-bg: url(../art/bg-keller.png); }
 #screen-battle[data-arena="wild"] { --arena-bg: url(../art/bg-catch.png); } /* Wildkampf: Fang-Kulisse */
 #screen-battle[data-arena="haunebu"] { --arena-bg: url(../art/bg-mondbasis.png); } /* Beschwörung: Mondbasis-Hangar */
+#screen-battle[data-arena="neuschwabenland"] { --arena-bg: url(../art/bg-neuschwabenland.png); } /* v8: Eis-Bunker, Tachionenbitcoin */
 
 /* Warn-Blinken vor Boss-Angriffen: gelb = schnell, rot = Lade-Attacke */
 #screen-battle .flash { position: absolute; inset: 0; z-index: 5; pointer-events: none; opacity: 0; }
@@ -236,6 +237,29 @@
   100% { translate: 0 0; scale: 1; opacity: 1; }
 }
 
+/* Tachionenbitcoin (v8): Vor-Echo = die Münze blitzt zwei Frames hell auf (überschreibt kurz das Atmen) */
+#screen-battle .enemy-sprite.blink { animation: bt-blink .24s steps(1); }
+@keyframes bt-blink { 0%, 66% { filter: brightness(1.6) saturate(.6); } 33%, 100% { filter: none; } }
+/* Kausalitätsbruch: Kulisse und Münze flackern in Negativ-Farben (echte Gesichter liegen nicht in .bg und sind nicht der Boss) */
+#screen-battle .stage.negative .bg, #screen-battle .stage.negative .enemy-sprite { animation: bt-negative .7s steps(1); }
+@keyframes bt-negative { 0%, 30%, 60% { filter: invert(1) hue-rotate(180deg); } 15%, 45%, 75%, 100% { filter: none; } }
+/* … und die eigene Leiste glitcht: springt in Pixeln, Farbkanäle violett/türkis versetzt; das echte Gesicht bleibt ungetönt */
+#screen-battle .fighter.me.glitch { animation: bt-glitch .9s steps(1); }
+@keyframes bt-glitch {
+  0% { translate: -6px 0; box-shadow: -4px 0 0 var(--r-episch), 4px 0 0 var(--teal); }
+  12% { translate: 5px -2px; transform: skewX(-6deg); box-shadow: 4px 0 0 var(--r-episch), -4px 0 0 var(--teal); }
+  24% { translate: -3px 2px; transform: none; box-shadow: -6px 2px 0 var(--teal), 6px -2px 0 var(--r-episch); }
+  36% { translate: 6px 0; transform: skewX(4deg); }
+  48% { translate: 0 0; transform: none; box-shadow: var(--shadow); }
+  60% { translate: -4px 0; box-shadow: -4px 0 0 var(--r-episch), 4px 0 0 var(--teal); }
+  72%, 100% { translate: 0 0; transform: none; box-shadow: var(--shadow); }
+}
+/* Zeitschleife: Kulisse und Münze ruckeln zurück wie ein spulendes Band, entsättigt */
+#screen-battle .stage.rewind .bg { scale: 1.04; animation: bt-rewind-bg .3s steps(1) infinite; }
+@keyframes bt-rewind-bg { 0% { translate: 6px 0; filter: saturate(.3) contrast(1.3); } 50% { translate: -4px 2px; filter: saturate(.3) contrast(1.3) brightness(1.2); } }
+#screen-battle .stage.rewind .enemy-sprite { animation: bt-rewind-boss .3s steps(1) infinite; }
+@keyframes bt-rewind-boss { 0% { translate: 12px 0; } 33% { translate: 4px -4px; } 66% { translate: -8px 0; } }
+
 /* Effekt-Ebene (Requisiten, Sheets, Zahlen aus fx.js) und kampfeigene Teile; Anker --fx-* aus theme.css */
 #screen-battle .fx {
   position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 3;
@@ -302,6 +326,73 @@
 #screen-battle .helpers:not(.hidden) ~ .fx .fx-prop.krupp-speech { left: calc(100% - var(--size, 160px) / 2 - 4px); top: calc(var(--fx-me-y) - 60px - var(--size, 160px) / 2); }
 /* Firmware-Update (bar-on-me): Beschriftung über dem Requisit, den Balken zeichnet theme.css */
 #screen-battle .fx-prop .fw-label { top: auto; right: auto; bottom: 100%; left: 50%; translate: -50% 0; padding: 2px 6px; white-space: nowrap; font: 800 12px/1.15 var(--font-body); color: var(--paper); background: var(--ink); }
+
+/* Tachionenbitcoin (v8). Pixel-Echos: Kopien der Münze (art/fx-echo.png bzw. das Boss-Bild, violett-türkis getönt: .self).
+   echo-pre löst sich vor der Warnung seitlich ab; echo-dash rast in 420 ms (= ECHO_DASH_MS) auf mich, je --i (0–2) etwas versetzt;
+   echo-back ist dieselbe Bahn rückwärts (Zeitschleife) */
+#screen-battle .fx .echo { position: absolute; left: var(--fx-enemy-x); top: var(--fx-enemy-y); z-index: 5; width: 112px; height: 112px; margin: -56px 0 0 -56px; }
+#screen-battle .fx .echo img { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+#screen-battle .fx .echo img.self { opacity: .75; filter: sepia(1) saturate(4) hue-rotate(220deg) brightness(1.15); }
+#screen-battle .fx .echo.echo-pre { left: 50%; top: 50%; width: 192px; height: 192px; margin: -96px 0 0 -96px; animation: bt-echo-pre .4s steps(4) both; } /* genau über der Münze (Bühnenmitte) */
+@keyframes bt-echo-pre { 0% { translate: 0 0; opacity: .9; } 100% { translate: 64px -12px; opacity: 0; } }
+#screen-battle .fx .echo.echo-dash { animation: bt-echo-dash .42s steps(6) both; }
+#screen-battle .fx .echo.echo-dash img { scale: -1 1; } /* fx-echo.png zieht die Spur links hinter sich her: gespiegelt, wenn es nach links unten rast */
+#screen-battle .fx .echo.echo-back { animation: bt-echo-dash .42s steps(6) reverse both; }
+@keyframes bt-echo-dash {
+  0% { left: var(--fx-enemy-x); top: var(--fx-enemy-y); scale: 1; opacity: 0; }
+  12% { opacity: .9; }
+  85% { left: var(--fx-me-x); top: calc(var(--fx-me-y) + (var(--i, 1) - 1) * 20px); scale: .55; opacity: .9; }
+  100% { left: var(--fx-me-x); top: calc(var(--fx-me-y) + (var(--i, 1) - 1) * 20px); scale: .45; opacity: 0; }
+}
+/* Tachionen-Halving: die Halving-Münze in Violett (Blitz wird gold), etwas nach rechts, damit sie nicht links aus der Bühne ragt */
+#screen-battle .fx-prop.thalving { translate: 36px 0; }
+#screen-battle .fx-prop.thalving > img { filter: hue-rotate(205deg) saturate(1.8) brightness(.8); }
+/* Bildschirm-Riss beim Aufprall: gezackte Linie (Ink-Rand, violettes Licht, heller Kern; liest sich auf Eis und Nacht) wächst in Stufen von oben nach unten, steht, verblasst */
+#screen-battle .fx .crack { position: absolute; inset: 0; z-index: 6; animation: bt-crack 1.4s steps(1) both; }
+#screen-battle .fx .crack svg { display: block; width: 100%; height: 100%; overflow: visible; }
+#screen-battle .fx .crack polyline { fill: none; vector-effect: non-scaling-stroke; stroke-linejoin: miter; }
+#screen-battle .fx .crack .k { stroke: var(--ink); stroke-width: 10px; }
+#screen-battle .fx .crack .v { stroke: var(--r-episch); stroke-width: 6px; }
+#screen-battle .fx .crack .p { stroke: var(--paper); stroke-width: 2px; }
+@keyframes bt-crack {
+  0% { clip-path: inset(0 0 100% 0); } 6% { clip-path: inset(0 0 62% 0); } 12% { clip-path: inset(0 0 28% 0); }
+  18%, 78% { clip-path: inset(0); opacity: 1; } 88% { clip-path: inset(0); opacity: .5; } 100% { clip-path: inset(0); opacity: 0; }
+}
+/* Kausalitätsbruch: Uhr (art/fx-clock.png) zwischen uns, wackelt rückwärts tickend, bläht sich und zerspringt bei 60 % in Splitter */
+#screen-battle .fx-prop.path-clock-burst { animation-name: bt-clock-burst; animation-timing-function: steps(1); left: calc((var(--fx-me-x) + var(--fx-enemy-x)) / 2); top: calc((var(--fx-enemy-y) + var(--fx-me-y)) / 2); }
+@keyframes bt-clock-burst {
+  0% { transform: scale(.4); opacity: 0; }
+  8% { transform: scale(1.1); opacity: 1; }
+  14% { transform: scale(1); }
+  20%, 36% { transform: rotate(-12deg); }
+  28%, 44% { transform: rotate(12deg); }
+  52% { transform: scale(1.2); opacity: 1; }
+  60%, 100% { transform: scale(1.4); opacity: 0; }
+}
+#screen-battle .fx .shards { position: absolute; left: calc((var(--fx-me-x) + var(--fx-enemy-x)) / 2); top: calc((var(--fx-enemy-y) + var(--fx-me-y)) / 2); z-index: 6; }
+#screen-battle .fx .shards i { position: absolute; width: 12px; height: 12px; margin: -6px; background: var(--paper); border: 2px solid var(--ink); animation: bt-mms .8s steps(8) forwards; }
+#screen-battle .fx .shards i:nth-child(3n) { background: var(--teal); }
+#screen-battle .fx .shards i:nth-child(3n + 1) { background: var(--r-episch); }
+/* Zeitschleife: helle Bandstreifen laufen nach oben durchs Bild (rückwärts), ein Spurstreifen wandert hoch; „◀◀" als Pixel-Dreiecke
+   oben rechts (links steht ggf. die Combo), unter der Gegner-Blase, solange sie steht */
+#screen-battle .fx .rewind {
+  position: absolute; inset: 0; z-index: 4;
+  background: repeating-linear-gradient(180deg, transparent 0 14px, rgba(244, 232, 200, .28) 14px 18px, transparent 18px 32px);
+  animation: bt-rewind-lines .3s steps(4) infinite;
+}
+@keyframes bt-rewind-lines { from { background-position: 0 0; } to { background-position: 0 -32px; } }
+#screen-battle .fx .rewind::after { content: ''; position: absolute; left: 0; right: 0; height: 12px; background: rgba(244, 232, 200, .45); animation: bt-track 1.4s steps(14) both; }
+@keyframes bt-track { from { top: 100%; } to { top: -12px; } }
+#screen-battle .fx .rewind .rew {
+  position: absolute; right: 12px; top: 10px; display: flex; gap: 4px;
+  filter: drop-shadow(2px 0 0 var(--ink)) drop-shadow(-2px 0 0 var(--ink)) drop-shadow(0 2px 0 var(--ink)) drop-shadow(0 -2px 0 var(--ink));
+  animation: bt-twinkle .5s steps(1) infinite;
+}
+#screen-battle.talking .fx .rewind .rew { top: max(10px, var(--say-clear, 10px)); }
+#screen-battle .fx .rewind .rew::before, #screen-battle .fx .rewind .rew::after {
+  content: ''; width: 16px; height: 28px; background: var(--paper);
+  clip-path: polygon(100% 0, 100% 100%, 75% 100%, 75% 85.71%, 50% 85.71%, 50% 71.43%, 25% 71.43%, 25% 57.14%, 0 57.14%, 0 42.86%, 25% 42.86%, 25% 28.57%, 50% 28.57%, 50% 14.29%, 75% 14.29%, 75% 0);
+}
 
 /* Spezial-Buttons: Papier; bereit = Bernstein-Pixelrahmen (wie button.primary) */
 #screen-battle .specials { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: none; }
@@ -415,7 +506,11 @@
   #screen-battle .enemy-sprite.rage-shake, #screen-battle .helpers.hop, #screen-battle .enemy-sprite.lunge,
   #screen-battle .helpers .helper, #screen-battle .enemy-helpers.hop, #screen-battle .enemy-helpers .helper, #screen-battle .stage .bg .moon,
   #screen-battle .stage.overheat .bg, #screen-battle .stage.blow .bg, #screen-battle .enemy-sprite.hide, #screen-battle .overlay .boss.ufo,
-  #screen-battle .enemy-say.pop { animation: none !important; }
+  #screen-battle .enemy-say.pop, #screen-battle .enemy-sprite.blink, #screen-battle .stage.negative .bg, #screen-battle .stage.negative .enemy-sprite,
+  #screen-battle .fighter.me.glitch, #screen-battle .stage.rewind .bg, #screen-battle .stage.rewind .enemy-sprite, #screen-battle .fx .echo,
+  #screen-battle .fx .crack, #screen-battle .fx .shards i, #screen-battle .fx .rewind, #screen-battle .fx .rewind::after,
+  #screen-battle .fx .rewind .rew { animation: none !important; }
+  #screen-battle .fx .echo, #screen-battle .fx .shards { display: none; } /* Riss, Streifen und „◀◀" stehen statisch */
   #screen-battle .stage.blow::before { display: none; }
   #screen-battle .enemy-sprite.hide { opacity: 0; } /* Bunker: einfach kurz weg */
   #screen-battle .fx .rush img { animation: none !important; left: calc(var(--fx-me-x) + 6% + var(--i, 0) * 60px); }

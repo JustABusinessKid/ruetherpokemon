@@ -1,13 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { emptySaveV3, migrate, buyItem, haunebuWin, startBeam, activeBeam, endBeam } from '../js/progress.js';
+import { emptySaveV3, migrate, haunebuWin, activeBeam, endBeam } from '../js/progress.js';
 import { checkAchievements } from '../js/quests.js';
 import { makeFighter, makeBoss, createBattle, tick, msToChargedWarn } from '../js/battle.js';
 import { CONST, ARENAS, BOSSES, RUETHER_BY_ID } from '../js/data.js';
 
-test('v7: neuer Spielstand hat Flugscheibe, Beam und haunebuWins', () => {
+// v8: Flugscheibe als Besitz entfällt (Beschwörung + 10-Minuten-Fenster, siehe v8.test.mjs). Hier bleibt,
+// was aus v7 weiter gilt: Beam-Prüfung bei der Migration, activeBeam-Grenze, endBeam.
+test('v7: neuer Spielstand hat Fenster, Beam und haunebuWins', () => {
   const s = emptySaveV3();
-  assert.equal(s.flugscheibe, false);
+  assert.equal(s.haunebuUntil, 0);
   assert.equal(s.beam, null);
   assert.equal(s.stats.haunebuWins, 0);
 });
@@ -15,77 +17,24 @@ test('v7: neuer Spielstand hat Flugscheibe, Beam und haunebuWins', () => {
 test('v7: Migration eines v6-Spielstands ohne die neuen Felder', () => {
   const v6 = { version: 3, box: [], team: [], sats: 42, stats: { catches: 5, arenaWins: 1 } };
   const s = migrate(v6);
-  assert.equal(s.flugscheibe, false);
+  assert.equal(s.haunebuUntil, 0);
   assert.equal(s.beam, null);
   assert.equal(s.stats.haunebuWins, 0);
   assert.equal(s.stats.catches, 5);
   assert.equal(s.sats, 42);
   // vorhandene Werte bleiben, kaputter Beam fliegt raus
-  const keep = migrate({ ...v6, flugscheibe: true, beam: { arenaId: 'keller', until: 123 }, stats: { haunebuWins: 2 } });
-  assert.equal(keep.flugscheibe, true);
+  const keep = migrate({ ...v6, beam: { arenaId: 'keller', until: 123 }, stats: { haunebuWins: 2 } });
   assert.deepEqual(keep.beam, { arenaId: 'keller', until: 123 });
   assert.equal(keep.stats.haunebuWins, 2);
   for (const beam of [{ arenaId: 'keller' }, { arenaId: 5, until: 1 }, { until: 1 }, 'x', 7]) {
     assert.equal(migrate({ ...v6, beam }).beam, null);
   }
-  assert.equal(migrate({ ...v6, flugscheibe: 'ja' }).flugscheibe, false);
-});
-
-test('v7: buyItem haunebu: Sats, Besitz, Beschwörung ohne Inventar', () => {
-  const s = emptySaveV3();
-  s.sats = 999;
-  assert.deepEqual(buyItem(s, 'haunebu', 0), { ok: false, reason: 'sats' });
-  assert.equal(s.sats, 999);
-  s.sats = 1200;
-  assert.deepEqual(buyItem(s, 'haunebu', 0), { ok: true, summon: true });
-  assert.equal(s.sats, 200);
-  assert.equal(s.items.haunebu, undefined);
-  s.flugscheibe = true;
-  s.sats = 5000;
-  assert.deepEqual(buyItem(s, 'haunebu', 0), { ok: false, reason: 'besitz' });
-  assert.equal(s.sats, 5000);
-  s.sats = 0; // Besitz geht vor Sats
-  assert.deepEqual(buyItem(s, 'haunebu', 0), { ok: false, reason: 'besitz' });
-});
-
-test('v7: haunebuWin gibt Flugscheibe, Sats und zählt', () => {
-  const s = emptySaveV3();
-  s.sats = 10;
-  assert.deepEqual(haunebuWin(s), { sats: CONST.HAUNEBU_WIN_SATS });
-  assert.equal(s.flugscheibe, true);
-  assert.equal(s.sats, 10 + CONST.HAUNEBU_WIN_SATS);
-  assert.equal(s.stats.haunebuWins, 1);
-  haunebuWin(s);
-  assert.equal(s.stats.haunebuWins, 2);
-});
-
-test('v7: startBeam: Fehlerfälle ohne Abzug', () => {
-  const s = emptySaveV3();
-  s.sats = 1000;
-  assert.deepEqual(startBeam(s, 'keller', 0), { ok: false, reason: 'keine' });
-  s.flugscheibe = true;
-  assert.deepEqual(startBeam(s, 'mond', 0), { ok: false, reason: 'arena' });
-  s.sats = CONST.HAUNEBU_BEAM_COST - 1;
-  assert.deepEqual(startBeam(s, 'keller', 0), { ok: false, reason: 'sats' });
-  assert.equal(s.sats, CONST.HAUNEBU_BEAM_COST - 1);
-  assert.equal(s.beam, null);
-});
-
-test('v7: startBeam zieht Sats ab, ein neuer Flug ersetzt den aktiven', () => {
-  const s = emptySaveV3();
-  s.flugscheibe = true;
-  s.sats = 700;
-  assert.deepEqual(startBeam(s, 'keller', 1000), { ok: true, until: 1000 + CONST.HAUNEBU_BEAM_MS });
-  assert.equal(s.sats, 400);
-  assert.deepEqual(s.beam, { arenaId: 'keller', until: 1000 + CONST.HAUNEBU_BEAM_MS });
-  assert.deepEqual(startBeam(s, 'pcsale', 5000), { ok: true, until: 5000 + CONST.HAUNEBU_BEAM_MS });
-  assert.equal(s.sats, 100);
-  assert.deepEqual(s.beam, { arenaId: 'pcsale', until: 5000 + CONST.HAUNEBU_BEAM_MS });
 });
 
 test('v7: activeBeam an der Grenze, endBeam räumt auf', () => {
   const s = emptySaveV3();
   assert.equal(activeBeam(s, 0), null);
+  haunebuWin(s, 0);
   s.beam = { arenaId: 'keller', until: 1000 };
   assert.deepEqual(activeBeam(s, 999), { arenaId: 'keller', until: 1000 });
   assert.equal(activeBeam(s, 1000), null);
@@ -99,16 +48,16 @@ test('v7: Erfolge keller und haunebu', () => {
   s.arenaLevels.keller = 1;
   assert.deepEqual(checkAchievements(s), []);
   s.arenaLevels.keller = 2;
-  s.flugscheibe = true;
+  s.stats.haunebuWins = 1; // v8: Erfolg hängt am Sieg, nicht mehr am Besitz
   assert.deepEqual(checkAchievements(s).map(a => a.id).sort(), ['haunebu', 'keller']);
 });
 
-test('v7: master3 braucht alle vier Arenen', () => {
-  assert.equal(ARENAS.length, 4);
+test('v7/v8: master3 braucht alle fünf Arenen (v8: mit Neuschwabenland)', () => {
+  assert.equal(ARENAS.length, 5);
   const s = emptySaveV3();
-  for (const id of ['worringen', 'huettenberg', 'pcsale']) s.arenaMastered[id] = true;
+  for (const id of ['worringen', 'huettenberg', 'pcsale', 'keller']) s.arenaMastered[id] = true;
   assert.ok(!checkAchievements(s).some(a => a.id === 'master3'));
-  s.arenaMastered.keller = true;
+  s.arenaMastered.neuschwabenland = true;
   assert.ok(checkAchievements(s).some(a => a.id === 'master3'));
 });
 

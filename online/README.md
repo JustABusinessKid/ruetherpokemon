@@ -12,7 +12,7 @@ Topic, Bus und Snapshot-URL stehen in `ONLINE` in `js/data.js`.
 ## Ablauf
 
 1. **Spiel (`js/online.js`)** lädt beim Start den Snapshot (Cache-Buster pro Minute), dann alle ntfy-Nachrichten seit `lastMsgTime` (30 s Überlappung). Danach pollt es, sobald app.js `fetchState()` aufruft (alle `STATE_POLL` auf Karte und Rangliste). Den Snapshot lädt es alle 15 Minuten neu.
-2. **Senden:** `sync` (Spielerstand) höchstens einmal pro Minute und nur bei Änderung. `arena` (Arena erobert) und `event` (Feed-Eintrag) gehen sofort raus. Fehler werden geschluckt, dann ist das Spiel eben offline.
+2. **Senden:** `sync` (Spielerstand) höchstens alle 5 Minuten und nur bei Änderung. `arena` (Arena erobert) und `event` (Feed-Eintrag) gehen sofort raus. Fehler werden geschluckt, dann ist das Spiel eben offline.
 3. **GitHub Action** (`.github/workflows/online-sync.yml`, alle 15 Minuten und per Hand über „Run workflow“) liest `state.json` aus `online-data`, holt die ntfy-Nachrichten seit `lastMsgTime`, prüft und merged sie mit `tools/online-sync.mjs` und commitet nur bei Änderungen als `github-actions[bot]`.
 4. Spiel und Action benutzen **dasselbe Modul** `js/online-merge.js` (reine Funktionen: `validate`, `merge`, `toAppState`). Deshalb sehen alle denselben Stand.
 
@@ -79,7 +79,7 @@ Danach einmal unter Actions „Online-Sync“ → „Run workflow“ starten.
 
 ## Grenzen
 
-- ntfy.sh ohne Konto drosselt pro IP. Das Spiel sendet `sync` deshalb höchstens einmal pro Minute.
+- ntfy.sh ohne Konto erlaubt **250 Nachrichten am Tag pro IP** (ein Haushalt im selben WLAN teilt sich das, `curl https://ntfy.sh/v1/account` zeigt den Verbrauch). Das Spiel sendet `sync` deshalb höchstens alle 5 Minuten (`SYNC_MIN_MS`), das sind höchstens 12 pro Stunde und Gerät; `arena` und `event` kommen dazu. Ist das Kontingent leer, gehen Nachrichten still verloren, bis ntfy wieder annimmt.
 - Das Topic ist öffentlich. Wer es kennt, kann mitlesen und eigene, gültig signierte Spieler anlegen. Für ein Spiel unter Freunden reicht das.
 - GitHub pausiert geplante Workflows nach 60 Tagen ohne Aktivität im Repo. Dann unter Actions wieder einschalten.
 - Läuft die Action länger als 12 h nicht, gehen die Nachrichten dazwischen verloren, weil ntfy sie nur 12 h hält.

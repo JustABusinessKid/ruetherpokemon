@@ -19,7 +19,7 @@ export function makeBoss(def, arenaLevel = 1) {
   const dmg = n => Math.floor(n * scale);
   const btc = Math.floor(def.btc * scale);
   return {
-    id: def.id, name: def.name, btc, maxBtc: btc, arenaLevel, rage: false,
+    id: def.id, name: def.name, btc, maxBtc: btc, arenaLevel, rage: false, duration: def.duration, // v8: eigene Kampfdauer (Tachionenbitcoin)
     fast: { ...def.fast, damage: dmg(def.fast.damage) },
     charged: def.charged.map(c => ({ ...c, damage: dmg(c.damage) })),
     chargedIndex: 0, fastEvery: def.fast.every, chargedEvery: CONST.CHARGED_EVERY,
@@ -28,7 +28,7 @@ export function makeBoss(def, arenaLevel = 1) {
   };
 }
 
-export function createBattle({ team, enemy, rng = Math.random, duration = CONST.BATTLE_DURATION }) {
+export function createBattle({ team, enemy, rng = Math.random, duration = enemy.duration || CONST.BATTLE_DURATION }) {
   return {
     team: structuredClone(team), active: 0, enemy: structuredClone(enemy),
     time: 0, duration, summons: [], enemySummons: [], tapCooldown: 0, over: false, won: null, reason: null, rng,
@@ -96,8 +96,8 @@ function rageStep(s, ev) {
   const e = s.enemy;
   if (e.rage || !alive(e) || e.btc > CONST.RAGE_AT * e.maxBtc) return;
   e.rage = true;
-  e.fastEvery = CONST.RAGE_FAST_EVERY;
-  e.chargedEvery = CONST.RAGE_CHARGED_EVERY;
+  e.fastEvery = Math.min(e.fastEvery, CONST.RAGE_FAST_EVERY); // v8: schnellere Bosse werden in der Wut nicht langsamer
+  e.chargedEvery = Math.min(e.chargedEvery, CONST.RAGE_CHARGED_EVERY);
   e.nextFastAt = s.time + e.fastEvery;
   e.nextChargedAt = Math.min(e.nextChargedAt, s.time + e.chargedEvery);
   ev.push({ type: 'rage' });

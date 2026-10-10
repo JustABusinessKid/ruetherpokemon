@@ -7,7 +7,7 @@ import {
   canonical, clean, validate, merge, toAppState, loadState, emptyState, readBus,
   newKeyJwk, signerFromJwk, makeMessage, FEED_MAX, MSG_MAX_BYTES,
 } from '../js/online-merge.js';
-import { createOnline, onlineConfig } from '../js/online.js';
+import { createOnline, onlineConfig, SYNC_MIN_MS } from '../js/online.js';
 import { runSync } from '../tools/online-sync.mjs';
 import { ONLINE, ARENAS } from '../js/data.js';
 
@@ -55,7 +55,7 @@ test('online: Schema wie die alte API', async () => {
   assert.equal(c.leader, null);
   assert.equal('token' in c, false);
   assert.deepEqual(clean('sync', { ...SYNC, leader: { ...LEADER, level: 99 } }).leader, { ...LEADER, level: 20 });
-  assert.deepEqual(clean('arena', { arenaId: 'keller', level: 9, leader: LEADER }), { arenaId: 'keller', level: 5, leader: LEADER });
+  assert.deepEqual(clean('arena', { arenaId: 'neuschwabenland', level: 9, leader: LEADER }), { arenaId: 'neuschwabenland', level: 5, leader: LEADER });
   assert.equal(clean('arena', { arenaId: 'mond', level: 1, leader: LEADER }), null);
   assert.equal(clean('arena', { arenaId: 'constructor', level: 1, leader: { id: 'toString', rarity: 'constructor', level: 1 } }), null, 'Prototyp-Schlüssel');
   assert.equal(clean('sync', { ...SYNC, avatar: '__proto__' }).avatar, 'christian');
@@ -233,7 +233,7 @@ test('online-Client: Fehler still → offline, Snapshot fehlt → nur Bus', asyn
   assert.equal(calls[1].url, 'https://bus.test/ruether-go-test-unit/json?poll=1&since=12h');
 });
 
-test('online-Client: sync höchstens alle 60 s und nur bei Änderung, arena/event sofort', async () => {
+test('online-Client: sync höchstens alle 5 Minuten und nur bei Änderung, arena/event sofort', async () => {
   mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() });
   try {
     const calls = fakeNet();
@@ -244,17 +244,21 @@ test('online-Client: sync höchstens alle 60 s und nur bei Änderung, arena/even
     assert.equal(posts().length, 1);
     await o.syncNow(); // unverändert
     p = { ...p, sats: 600 };
-    await o.syncNow(); // geändert, aber < 60 s → später
+    await o.syncNow(); // geändert, aber zu früh → später
     assert.equal(posts().length, 1);
     await o.postEvent('catch', 'hat einen legendären Micha gefangen!');
     await o.claimArena('pcsale', 1, LEADER);
     assert.deepEqual(posts().map(m => m.k), ['sync', 'event', 'arena']);
     p = { ...p, sats: 700 };
-    mock.timers.tick(60_000); // nachgereicht, mit dem dann aktuellen Stand
+    assert.equal(SYNC_MIN_MS, 5 * 60_000, '250 Nachrichten am Tag pro IP bei ntfy.sh');
+    mock.timers.tick(SYNC_MIN_MS - 1);
+    for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r));
+    assert.equal(posts().length, 3, 'vor Ablauf nichts');
+    mock.timers.tick(1); // nachgereicht, mit dem dann aktuellen Stand
     for (let i = 0; i < 20 && posts().length < 4; i++) await new Promise(r => setImmediate(r));
     assert.deepEqual(posts().map(m => m.k), ['sync', 'event', 'arena', 'sync']);
     assert.equal(posts()[3].d.sats, 700);
-    mock.timers.tick(120_000);
+    mock.timers.tick(2 * SYNC_MIN_MS);
     await o.syncNow(); // unverändert → nichts
     assert.equal(posts().length, 4);
   } finally {

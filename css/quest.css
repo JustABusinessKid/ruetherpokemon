@@ -1,0 +1,221 @@
+/* Haunebu-Quests (Spec §5.5): Vollbild-Kommando-Modus. Oben Ziel, Zeit, Alarm; Mitte Canvas (js/quest/view.js);
+   unten Team-Porträts, Kräfte, Pause/Abheben/Aufgeben. Pixel-Kneipe: harte Kanten, keine weichen Schatten. Keyframes q-*. */
+
+.q-screen { background: #0d1626; overscroll-behavior: none; }
+
+/* ---------- Kopf: Ziel, Zeit, Alarm ---------- */
+.q-top {
+  position: relative; z-index: 10; flex: none;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 12px;
+  padding: calc(6px + env(safe-area-inset-top)) 12px 6px;
+  border-bottom: 3px solid var(--ink);
+}
+.q-goal { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.q-goal-ico { flex: none; width: 24px; height: 24px; image-rendering: pixelated; }
+.q-goal-label { flex: 1; min-width: 0; font: 800 13px/1.2 var(--font-body); color: var(--paper); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.q-goal-n {
+  flex: none; padding: 2px 8px;
+  font: 700 18px/1.1 var(--font-pixel); font-variant-numeric: tabular-nums; color: var(--paper);
+  background: var(--ink); border: 2px solid var(--paper-2);
+}
+.q-goal-n.done { color: var(--ink); background: var(--gold); border-color: var(--ink); }
+.q-goal-n.pop { animation: q-pop .35s steps(3, end); }
+.q-time { font: 700 24px/1 var(--font-pixel); font-variant-numeric: tabular-nums; color: var(--paper); text-shadow: 2px 2px 0 var(--ink); }
+.q-time.low { color: #E0634C; animation: q-blink 1s steps(2, end) infinite; }
+.q-alarm { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; }
+.q-alarm > span { font: 800 11px/1 var(--font-body); color: var(--paper-2); letter-spacing: .06em; text-transform: uppercase; }
+.q-alarm .bar { flex: 1; height: 10px; }
+.q-alarm .fill { background-color: var(--red); transition: width .25s steps(4, end); }
+.q-alarm.full > span { color: #E0634C; }
+.q-alarm.full > span::after { content: ' · Vollalarm'; }
+.q-alarm.full .fill { animation: q-blink .5s steps(2, end) infinite; }
+
+/* ---------- Bühne: Canvas und Ebenen darüber ---------- */
+.q-stage { position: relative; flex: 1; min-height: 0; overflow: hidden; touch-action: none; }
+.q-cv { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; image-rendering: pixelated; }
+.q-edge { position: absolute; inset: 0; z-index: 2; pointer-events: none; border: 6px solid transparent; }
+.q-edge.pulse { animation: q-edge .9s steps(3, end); }
+.q-edge.full { animation: q-edge 1s steps(2, end) infinite; }
+.q-fx { position: absolute; inset: 0; z-index: 3; overflow: hidden; pointer-events: none; }
+
+.q-zoom { position: absolute; right: 8px; top: 8px; z-index: 4; display: flex; flex-direction: column; gap: 8px; }
+.q-zoom button { width: 40px; height: 40px; min-height: 0; padding: 0; font-size: 24px; border-width: 2px; box-shadow: var(--shadow-sm); }
+.q-zoom button::before { content: ''; position: absolute; inset: -4px; } /* Trefffläche 48 px */
+.q-zoom button { position: relative; }
+
+/* unter .q-fx (Banner, Familientreffen-Titel) und ohne Klicks: In der Pause sollen Befehle auf die Karte durchgehen */
+.q-paused {
+  position: absolute; left: 50%; top: 8px; z-index: 2; translate: -50% 0; pointer-events: none;
+  padding: 4px 10px; font: 700 14px/1.2 var(--font-pixel); color: var(--ink); white-space: nowrap;
+  background: var(--gold); border: 3px solid var(--ink); box-shadow: var(--shadow-sm);
+  animation: q-blink 1.6s steps(2, end) infinite;
+}
+.q-aim {
+  position: absolute; left: 8px; right: 60px; top: 8px; z-index: 5;
+  display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 8px;
+  color: var(--ink); background: var(--paper); border: 3px solid var(--ink); box-shadow: var(--shadow-sm);
+}
+.q-aim img { flex: none; width: 28px; height: 28px; }
+.q-aim span { flex: 1; min-width: 0; font: 800 13px/1.2 var(--font-body); }
+.q-aim button { flex: none; min-height: 40px; padding: 4px 10px; font-size: 14px; border-width: 2px; box-shadow: var(--shadow-sm); }
+.q-msg {
+  position: absolute; left: 12px; right: 12px; bottom: 10px; z-index: 5;
+  max-width: 360px; margin: 0 auto; padding: 8px 12px;
+  font: 800 14px/1.3 var(--font-body); color: var(--ink); text-align: center;
+  background: var(--paper); border: 3px solid var(--ink); box-shadow: var(--shadow);
+  pointer-events: none;
+}
+.q-msg.pop { animation: q-in .2s steps(3, end); }
+
+/* ---------- Kreismenü um den Rüther (Position setzt view.js per transform) ---------- */
+.q-ring { position: absolute; left: 0; top: 0; z-index: 6; width: 0; height: 0; }
+.q-ring-item {
+  position: absolute; width: 104px; min-height: 0; margin: -32px 0 0 -52px; padding: 0;
+  flex-direction: column; gap: 3px; background: none; border: 0; box-shadow: none;
+  animation: q-ring-in .18s steps(3, end) both;
+}
+.q-ring-item:not(:disabled):active { transform: translateY(2px); }
+.q-ring-ico {
+  position: relative; display: grid; place-items: center; width: 60px; height: 60px; overflow: hidden;
+  background: var(--paper); border: 3px solid var(--ink); box-shadow: 3px 3px 0 var(--ink);
+}
+.q-ring-ico > img { width: 44px; height: 44px; image-rendering: pixelated; }
+.q-ring-name {
+  max-width: 104px; padding: 1px 4px; text-align: center; overflow-wrap: anywhere; hyphens: manual; /* lange Namen trennen am weichen Trennstrich (engine.js) */
+  font: 800 11px/1.2 var(--font-body); color: var(--ink); background: var(--paper); border: 2px solid var(--ink);
+}
+.q-ring-item.stop .q-ring-ico { width: 44px; height: 44px; background: var(--paper-2); }
+.q-ring-item.stop .q-ring-ico i { width: 16px; height: 16px; background: var(--red); border: 2px solid var(--ink); }
+.q-ring-item.stop { margin-top: -24px; }
+
+/* Abklingzeit: harter Tortenausschnitt (kein weicher Verlauf) + Sekunden */
+.q-cd {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font: 700 20px/1 var(--font-pixel); color: var(--paper); text-shadow: 2px 2px 0 var(--ink);
+  background: conic-gradient(rgba(30, 42, 34, .72) calc(var(--cd, 0) * 1turn), transparent 0);
+  pointer-events: none;
+}
+.cool > img, .cool .q-ring-ico > img, .cool .q-fam { opacity: .55; }
+.q-fam { display: flex; gap: 1px; }
+.q-fam img { width: 18px; height: 18px; border: 2px solid var(--ink); background: var(--paper-2); image-rendering: auto; }
+.q-ring-ico .q-fam img { width: 26px; height: 26px; }
+
+/* ---------- Tutorial-Sprechblasen ---------- */
+.q-tut {
+  position: absolute; z-index: 7; width: min(260px, calc(100% - 16px));
+  display: flex; flex-direction: column; align-items: flex-end; gap: 6px; padding: 8px 10px;
+  color: var(--ink); background: var(--paper); border: 3px solid var(--ink); box-shadow: 4px 4px 0 var(--ink);
+  animation: q-in .25s steps(3, end) both;
+}
+.q-tut p { align-self: stretch; font: 800 14px/1.3 var(--font-body); }
+.q-tut button { min-height: 36px; padding: 2px 14px; font-size: 14px; border-width: 2px; box-shadow: var(--shadow-sm); }
+.q-tut::after { /* Pixel-Zipfel nach unten */
+  content: ''; position: absolute; top: 100%; left: 24px; width: 12px; height: 9px; background: var(--ink);
+  clip-path: polygon(0 0, 100% 0, 100% 34%, 67% 34%, 67% 67%, 34% 67%, 34% 100%, 0 100%);
+}
+.q-tut.at-team { left: 8px; bottom: 14px; }
+.q-tut.at-powers { right: 8px; bottom: 14px; }
+.q-tut.at-powers::after { left: auto; right: 24px; transform: scaleX(-1); }
+.q-tut.at-stage { left: 50%; top: 22%; translate: -50% 0; }
+.q-tut.at-stage::after { display: none; }
+
+/* ---------- Briefing und Abspann ---------- */
+.q-card {
+  position: absolute; left: 12px; right: 12px; top: 50%; z-index: 8; translate: 0 -50%;
+  max-width: 420px; max-height: calc(100% - 24px); margin: 0 auto; overflow: auto;
+  display: flex; flex-direction: column; gap: 8px; padding: 14px 16px;
+  font-size: 14px; line-height: 1.35;
+}
+.q-card h2 { margin: 0; font: 700 26px/1.05 var(--font-pixel); color: var(--ink); }
+.q-card-place { font: 800 12px/1.2 var(--font-body); color: var(--ink-soft); letter-spacing: .04em; text-transform: uppercase; }
+.q-card-var { padding: 6px 8px; background: var(--paper-2); border: 2px solid var(--ink); }
+.q-card-hint { font-weight: 800; }
+.q-card-meta { font: 700 15px/1.2 var(--font-pixel); color: var(--green-2); }
+.q-card-team { display: flex; gap: 8px; }
+.q-card-team img { width: 48px; height: 48px; background: var(--paper-2); border: 3px solid var(--rc, var(--r-normal)); outline: 2px solid var(--ink); }
+.q-card .q-go { align-self: stretch; margin-top: 4px; }
+
+.q-stamp {
+  position: absolute; inset: 0; z-index: 9;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px;
+  text-align: center; background: rgba(27, 43, 75, .6); cursor: pointer;
+}
+.q-stamp b {
+  padding: 6px 18px; rotate: -5deg;
+  font: 700 40px/1 var(--font-pixel); color: var(--gold);
+  background: var(--ink); border: 4px solid currentColor; box-shadow: 6px 6px 0 rgba(30, 42, 34, .6);
+  animation: q-stamp .4s steps(4, end) both;
+}
+.q-stamp.fail b, .q-stamp.abort b { color: #E0634C; }
+.q-stamp p { max-width: 320px; font: 800 15px/1.35 var(--font-body); color: var(--paper); text-shadow: 2px 2px 0 var(--ink); }
+.q-stamp span { font: 800 12px/1 var(--font-body); color: var(--paper-2); animation: q-blink 1.4s steps(2, end) infinite; }
+
+/* ---------- Fuß: Team, Kräfte, Knöpfe ---------- */
+.q-bottom {
+  position: relative; z-index: 10; flex: none;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  border-top: 3px solid var(--ink);
+}
+.q-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.q-team, .q-powers { display: flex; align-items: center; gap: 4px; }
+.q-por {
+  position: relative; width: 48px; height: 56px; min-height: 0; padding: 3px;
+  flex-direction: column; gap: 3px;
+  background: var(--paper-2); border-width: 2px; box-shadow: var(--shadow-sm);
+}
+.q-por img { width: 38px; height: 38px; background: var(--paper); border: 2px solid var(--rc, var(--r-normal)); outline: 1px solid var(--ink); image-rendering: auto; }
+.q-por img.r-selten, .q-card-team img.r-selten { --rc: var(--r-selten); }
+.q-por img.r-episch, .q-card-team img.r-episch { --rc: var(--r-episch); }
+.q-por img.r-legendaer, .q-card-team img.r-legendaer { --rc: var(--r-legendaer); }
+.q-por.on { background: var(--gold); box-shadow: 0 0 0 2px var(--gold), var(--shadow-sm); }
+.q-por.down img { filter: grayscale(1); opacity: .65; }
+.q-por.down::before { content: 'K.O.'; position: absolute; left: 50%; top: 14px; z-index: 1; translate: -50% 0; padding: 0 3px; font: 700 12px/14px var(--font-pixel); color: var(--paper); background: var(--red); border: 2px solid var(--ink); }
+.q-hp { display: block; width: 38px; height: 6px; background: var(--ink); border: 1px solid var(--ink); }
+.q-hp i { display: block; width: 100%; height: 100%; background: #5BB55A; transition: width .2s steps(3, end); }
+.q-hp i.low { background: var(--red); }
+.q-por.busy .q-hp { outline: 2px solid var(--gold); }
+.q-carry {
+  position: absolute; right: -5px; top: -5px; min-width: 20px; height: 20px; padding: 0 3px;
+  font: 700 14px/16px var(--font-pixel); color: var(--ink); text-align: center;
+  background: var(--gold); border: 2px solid var(--ink);
+}
+.q-carry.ps3 { font-size: 10px; background: var(--paper); }
+.q-all { width: 44px; height: 56px; min-height: 0; padding: 0; font-size: 13px; border-width: 2px; box-shadow: var(--shadow-sm); }
+.q-ab { position: relative; width: 50px; height: 50px; min-height: 0; padding: 0; overflow: hidden; border-width: 2px; box-shadow: var(--shadow-sm); }
+.q-ab > img { width: 38px; height: 38px; }
+.q-menu { height: 50px; min-height: 0; padding: 0 8px; font-size: 13px; border-width: 2px; box-shadow: var(--shadow-sm); }
+.q-powers-none { padding: 0 4px; font: 800 12px/1.2 var(--font-body); color: var(--paper-2); }
+.q-ctrl button { flex: 1 1 0; min-width: 0; min-height: 44px; padding: 4px 6px; font-size: 15px; }
+.q-pause.on { background: var(--gold); }
+.q-extract.ready { animation: q-ready 1s steps(2, end) infinite; }
+
+@media (max-width: 380px) {
+  .q-por { width: 44px; } .q-por img, .q-hp { width: 34px; } .q-por img { height: 34px; }
+  .q-all { width: 40px; } .q-ab { width: 46px; } .q-menu { padding: 0 6px; font-size: 12px; }
+}
+@media (max-height: 700px) {
+  .q-por { height: 50px; } .q-por img { height: 32px; width: 32px; } .q-hp { width: 32px; }
+  .q-all { height: 50px; } .q-ab, .q-menu { height: 46px; } .q-ab { width: 46px; }
+  .q-ctrl button { min-height: 40px; }
+}
+
+@keyframes q-blink { 50% { opacity: .35; } }
+@keyframes q-pop { 0% { scale: 1; } 40% { scale: 1.35; } 100% { scale: 1; } }
+@keyframes q-in { from { opacity: 0; translate: 0 8px; } }
+@keyframes q-ring-in { from { opacity: 0; scale: .4; } }
+@keyframes q-edge { 0%, 100% { border-color: transparent; } 30%, 70% { border-color: var(--red); } }
+@keyframes q-stamp { 0% { scale: 2.4; opacity: 0; } 70% { scale: .92; opacity: 1; } 100% { scale: 1; } }
+@keyframes q-ready { 50% { background-color: var(--gold); } }
+.q-tut.at-stage { animation-name: q-in-stage; }
+@keyframes q-in-stage { from { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .q-time.low, .q-alarm.full .fill, .q-edge.pulse, .q-paused, .q-extract.ready, .q-stamp span, .q-goal-n.pop, .q-msg.pop, .q-ring-item, .q-tut, .q-stamp b { animation: none !important; }
+  .q-edge.full { border-color: var(--red); }
+}
+
+/* Abspann: Bedienung gesperrt */
+.q-over .q-bottom, .q-over .q-zoom { pointer-events: none; }
+.q-over .q-bottom > .q-row { opacity: .5; }
+.q-fx .fx-dim { display: none; } /* Familientreffen-Banner: die Karte bleibt hell, die Helfer rennen sichtbar herein */

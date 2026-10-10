@@ -2,6 +2,7 @@
 // Leaflet-Adapter mit Folgen-Modus, Seltenheits-Markern, Arena-Leveln, Dosenbier-Stops und Namensschild des globalen Besitzers.
 // v6: Reichweitenkreis um den Spieler, Spawn-Marker in Reichweite „near" (hüpfen), außerhalb „far" (blass).
 // v7: Keller-Marker mit Treppen-Plakette, flyTo und liftPlayer für den Haunebu-Flug (js/flight.js, Styles in css/flight.css).
+// v8: wave() = Puls der Lockmodul-Welle, setLure() = Zoom 17 während des Lockmoduls (die Welle liegt eng um den Spieler).
 import { CONST } from './data.js';
 import { distance } from './geo.js';
 
@@ -40,8 +41,9 @@ const stopIcon = ready => L.divIcon({ className: 'stop-icon px-circle' + (ready 
 export function createMap({ el, arenas, onSpawnTap, onArenaTap, onStopTap, onFollowChange }) {
   const map = L.map(el, { zoomControl: false }).setView(HAGEN, 15);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
-  const pulse = L.marker(HAGEN, { icon: L.divIcon({ className: 'player-pulse', iconSize: [48, 48], iconAnchor: [24, 24] }), interactive: false });
-  const player = L.marker(HAGEN, { icon: L.divIcon({ className: 'player-dot px-circle', iconSize: [16, 16], iconAnchor: [8, 8] }), interactive: false });
+  // eigene Position immer über den Spawns (zIndexOffset 1000); nicht klickbar, Tipps gehen an die Gesichter darunter
+  const pulse = L.marker(HAGEN, { icon: L.divIcon({ className: 'player-pulse', iconSize: [48, 48], iconAnchor: [24, 24] }), interactive: false, zIndexOffset: 2000 });
+  const player = L.marker(HAGEN, { icon: L.divIcon({ className: 'player-dot px-circle', iconSize: [16, 16], iconAnchor: [8, 8] }), interactive: false, zIndexOffset: 2000 });
   const reachCircle = L.circle(HAGEN, { radius: CONST.CATCH_RANGE, className: 'reach-circle', weight: 2, dashArray: '6 6', fillOpacity: 0.06, interactive: false });
   const stopLayer = L.layerGroup().addTo(map);
   const spawnLayer = L.layerGroup().addTo(map);
@@ -53,6 +55,9 @@ export function createMap({ el, arenas, onSpawnTap, onArenaTap, onStopTap, onFol
   }
   let following = true;
   let centered = false;
+  let waveT = 0;
+  let lureZoom = false;
+  const zoom = () => (lureZoom ? 17 : 16);
   map.on('dragstart', () => { following = false; onFollowChange?.(false); });
 
   return {
@@ -60,12 +65,12 @@ export function createMap({ el, arenas, onSpawnTap, onArenaTap, onStopTap, onFol
       const ll = [pos.lat, pos.lon];
       player.setLatLng(ll); pulse.setLatLng(ll);
       if (!map.hasLayer(player)) { pulse.addTo(map); player.addTo(map); }
-      if (!centered) { map.setView(ll, 16); centered = true; }
+      if (!centered) { map.setView(ll, zoom()); centered = true; }
       else if (following) map.panTo(ll, { animate: true, duration: 0.5 });
     },
     follow(pos) {
       following = true; onFollowChange?.(true);
-      if (pos) { map.setView([pos.lat, pos.lon], 16); centered = true; }
+      if (pos) { map.setView([pos.lat, pos.lon], zoom()); centered = true; }
     },
     setSpawns(spawns) {
       spawnLayer.clearLayers();
@@ -89,6 +94,20 @@ export function createMap({ el, arenas, onSpawnTap, onArenaTap, onStopTap, onFol
       }
     },
     setArena(id, info) { arenaMarkers[id].setIcon(arenaIcon(info, id)); },
+    // v8 Lockmodul-Welle: ein Pixel-Ring läuft einmal vom Spieler nach außen (style.css .player-pulse.wave)
+    wave() {
+      const el = pulse.getElement();
+      if (!el) return;
+      el.classList.remove('wave'); void el.offsetWidth; el.classList.add('wave');
+      clearTimeout(waveT); waveT = setTimeout(() => el.classList.remove('wave'), 1400);
+    },
+    // v8: Lockmodul an/aus. Beim Wechsel zoomt die Karte, wenn sie dem Spieler folgt, auf 17 bzw. zurück auf 16;
+    // bei 16 decken sich die 4–8 Gesichter der Welle im 90-m-Ring (spawn.js lureWave).
+    setLure(on) {
+      if (on === lureZoom) return;
+      lureZoom = on;
+      if (following && map.hasLayer(player)) map.setView(player.getLatLng(), zoom(), { animate: !!el.clientWidth }); // verdeckt: ohne Animation
+    },
     invalidate() { map.invalidateSize(); },
     // Kamera-Flug mit Raus-/Reinzoomen. Folgen aus, sonst zieht das nächste GPS-Update die Karte zurück (follow() schaltet es wieder an).
     // Löst bei moveend auf, spätestens nach duration + 1 s.
@@ -99,8 +118,8 @@ export function createMap({ el, arenas, onSpawnTap, onArenaTap, onStopTap, onFol
         const done = () => { clearTimeout(t); map.off('moveend', done); resolve(); };
         try {
           const ll = [pos.lat, pos.lon];
-          if (!el.clientWidth) { map.setView(ll, 16, { animate: false }); return resolve(); } // Karte verdeckt: Leaflet rechnet sonst mit Größe 0
-          map.flyTo(ll, 16, { duration });
+          if (!el.clientWidth) { map.setView(ll, zoom(), { animate: false }); return resolve(); } // Karte verdeckt: Leaflet rechnet sonst mit Größe 0
+          map.flyTo(ll, zoom(), { duration });
         } catch { return resolve(); }
         map.on('moveend', done); // erst nach dem Start: flyTo stoppt ein laufendes panTo, und das feuert sofort moveend
         t = setTimeout(done, (duration + 1) * 1000);

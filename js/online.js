@@ -4,7 +4,9 @@ import { clean, emptyState, loadState, merge, readBus, busUrl, toAppState, newKe
 // Online-Welt über GitHub: Snapshot (Branch online-data) + Live-Bus ntfy.sh, Nachrichten pro Gerät signiert.
 // Alles best effort: Timeout, Fehler schlucken, available-Flag.
 const KEY_STORE = 'ruether-go-key';
-const SYNC_MIN_MS = 60_000; // sync höchstens einmal pro Minute
+// sync höchstens alle 5 Minuten: ntfy.sh erlaubt ohne Konto 250 Nachrichten am Tag pro IP (ein WLAN teilt sich das),
+// bleibt unter ONLINE_WINDOW_MS (10 min), „online jetzt“ hält also
+export const SYNC_MIN_MS = 5 * 60_000;
 const POLL_MIN_MS = 5000;   // Tab-Wechsel lösen keinen Bus-Sturm aus
 const SNAP_EVERY_MS = 15 * 60_000; // Snapshot neu laden (so oft läuft die Action): gleicht lokale Reihenfolge-Effekte aus
 const TEST_TOPIC = /^ruether-go-test-[\w-]{4,40}$/;

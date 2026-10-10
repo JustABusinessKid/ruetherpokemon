@@ -22,6 +22,7 @@
 <link rel="stylesheet" href="css/screens.css">
 <link rel="stylesheet" href="css/app.css">
 <link rel="stylesheet" href="css/flight.css">
+<link rel="stylesheet" href="css/quest.css">
 </head>
 <body>
 
@@ -104,6 +105,7 @@
     <button data-beam="huettenberg">Beamen: Hüttenbergstraße</button>
     <button data-beam="pcsale">Beamen: PC Sale</button>
     <button data-beam="keller">Beamen: Keller</button>
+    <button data-beam="neuschwabenland">Beamen: Neuschwabenland</button>
     <button id="dbg-gps">GPS wieder an</button>
     <button id="dbg-respawn">Spawns neu würfeln</button>
     <button id="dbg-stops">Fake-Stops</button>
@@ -112,7 +114,10 @@
     <button id="dbg-xp">+500 XP</button>
     <button id="dbg-legendary">Nächster Spawn legendär: aus</button>
     <button id="dbg-weakboss">Boss fast tot: aus</button>
-    <button id="dbg-haunebu">Flugscheibe schenken</button>
+    <button id="dbg-haunebu">Haunebu 10 Min</button>
+    <button id="dbg-master">Alle Arenen meistern</button>
+    <button id="dbg-quest">Quest starten</button>
+    <button id="dbg-lure">Lockmodul an</button>
     <button id="dbg-reset">Spielstand löschen</button>
     <button id="dbg-close">Schließen</button>
   </div>
@@ -177,11 +182,19 @@
 
 <section id="screen-quests" class="screen with-tabs">
   <header class="topbar wood"><img class="ico ico-lg" src="art/icon-quest.png" alt=""><h2>Quests</h2><button class="sats-chip" data-open="shop"><img class="ico" src="art/icon-coin.png" alt="">0</button></header>
-  <div class="quest-streak panel thin"></div>
-  <h3 class="section-title">Heute</h3>
-  <div class="quest-list"></div>
-  <p class="quest-reset hint"></p>
+  <div class="quests-scroll">
+    <h3 class="section-title">Haunebu-Quests</h3>
+    <div class="hq"></div>
+    <div class="quest-streak panel thin"></div>
+    <h3 class="section-title">Heute</h3>
+    <div class="quest-list"></div>
+    <p class="quest-reset hint"></p>
+  </div>
 </section>
+
+<section id="screen-questteam" class="screen"></section>
+<section id="screen-quest" class="screen"></section>
+<section id="screen-questresult" class="screen"></section>
 
 <section id="screen-leaderboard" class="screen with-tabs">
   <header class="topbar wood"><img class="ico ico-lg" src="art/icon-trophy.png" alt=""><h2>Rangliste</h2><span class="online-count pill">…</span><button class="sats-chip" data-open="shop"><img class="ico" src="art/icon-coin.png" alt="">0</button></header>
@@ -223,7 +236,7 @@
       <button class="import">Spielstand einfügen</button>
       <button class="reset danger">Spielstand löschen</button>
     </div>
-    <p class="hint version">Rüther GO v7</p>
+    <p class="hint version">Rüther GO v8</p>
   </div>
 </section>
 
@@ -316,7 +329,7 @@
       <div class="frame r-legendaer"><img class="victory-face" src="sprites/christian.png" alt=""><span class="shine"></span></div>
     </div>
     <h2>Du bist der Herrscher aller Rüthers.</h2>
-    <p>Alle Arenen gemeistert.</p>
+    <p>Alle Arenen gemeistert. Die Haunebu-Quests sind frei.</p>
     <p class="say"></p>
     <button class="back primary">Zurück zur Karte</button>
   </div>

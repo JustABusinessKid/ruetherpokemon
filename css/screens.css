@@ -109,6 +109,13 @@
 .shop-item .owned { display: flex; align-items: center; gap: 4px; margin-top: 4px; color: var(--green); font-weight: 800; }
 .shop-item .owned:empty { display: none; }
 .shop-item .buy { flex: none; min-width: 104px; gap: 4px; font-size: 18px; }
+/* v8 Haunebu: Beschwören + Preis, darunter der nächste Preis; im Fenster Teal mit Restzeit */
+.shop-item .price { flex: none; display: flex; flex-direction: column; align-items: stretch; gap: 4px; text-align: center; }
+.shop-item .buy.summon { flex-direction: column; gap: 0; padding: 4px 10px; font-variant-numeric: tabular-nums; }
+.shop-item .buy.summon > span { display: inline-flex; align-items: center; gap: 4px; }
+.shop-item .buy.summon > span:first-child { font-size: 14px; }
+.shop-item .buy.summon:disabled:not(.primary) { opacity: 1; background: var(--teal); }
+.shop-item .next { font-weight: 800; }
 .shop-item.bought { animation: sc-bought .6s steps(1, end); }
 @keyframes sc-bought { 0%, 40% { box-shadow: 0 0 0 4px var(--gold), var(--shadow); } 20%, 60%, 100% { box-shadow: inset 0 0 0 2px var(--paper-2), var(--shadow); } }
 
@@ -128,6 +135,8 @@
 .arena-note .status { color: var(--red); font-weight: 800; }
 .arena-body .fight { min-width: 200px; min-height: 52px; font-size: 20px; }
 .arena-body .beam { max-width: 343px; background: var(--teal); } /* v7: außer Reichweite mit der Flugscheibe hin */
+/* v8: Neuschwabenland – Eis-Bunker als Kulisse hinter dem ganzen Screen */
+#screen-arena[data-arena="neuschwabenland"] { background: var(--night) url(../art/bg-neuschwabenland.png) center / cover no-repeat; image-rendering: pixelated; box-shadow: inset 0 0 0 100vmax rgba(27, 43, 75, .5); }
 
 /* ---------- Weniger Bewegung: Fusion, Level-Up-Sterne, Kauf-Blitz, Atmen aus ---------- */
 @media (prefers-reduced-motion: reduce) {

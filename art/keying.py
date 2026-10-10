@@ -2,7 +2,7 @@
 
 Usage:
   python keying.py IN.png OUT.png [--key FF00FF] [--tol 90] [--size 256] [--margin 0.06]
-                                  [--sheet 4x4] [--nocrop]
+                                  [--sheet 4x4] [--nocrop] [--edge-despill 4]
 
 Pipeline: tolerance mask on the key color -> flood-fill from the four corners
 (connected background) -> any enclosed key-colored island above --min-island px
@@ -47,16 +47,21 @@ def components(m, w, h):
         info.append((size, border))
     return lab, info
 
-def despill(img, key):
+def despill(img, key, edge=0):
     """Pull key tint out of boundary pixels: channels that are high in the key but low
-    in the other key channel(s) get clamped toward the non-key channel (keeps 70% of the excess off)."""
+    in the other key channel(s) get clamped toward the non-key channel (keeps 70% of the excess off).
+    edge>0: only pixels within `edge` px of (semi)transparency (keeps green/teal subjects on a green key)."""
     kr, kg, kb = key
     hi = [c > 127 for c in key]                 # which channels the key is "high" in
     px = img.load(); w, h = img.size
+    near = None
+    if edge:
+        from PIL import ImageFilter
+        near = img.getchannel("A").point(lambda v: 255 if v < 255 else 0).filter(ImageFilter.MaxFilter(2 * edge + 1)).load()
     for y in range(h):
         for x in range(w):
             r, g, b, a = px[x, y]
-            if a == 0:
+            if a == 0 or (near and not near[x, y]):
                 continue
             ch = [r, g, b]
             lows = [ch[i] for i in range(3) if not hi[i]]
@@ -67,7 +72,7 @@ def despill(img, key):
                 px[x, y] = (ch[0], ch[1], ch[2], a)
     return img
 
-def key_out(img, key, tol, min_island=12, soft=40):
+def key_out(img, key, tol, min_island=12, soft=40, edge=0):
     img = img.convert("RGBA"); w, h = img.size
     px = list(img.getdata())
     m = key_mask(px, w, h, key, tol)
@@ -88,7 +93,7 @@ def key_out(img, key, tol, min_island=12, soft=40):
             else:
                 out.append((r, g, b, 255))
     img.putdata(out)
-    return despill(img, key)
+    return despill(img, key, edge)
 
 def fit_square(img, size, margin):
     bbox = img.getbbox()
@@ -117,9 +122,10 @@ def main():
     ap.add_argument("--size", type=int, default=256); ap.add_argument("--margin", type=float, default=0.06)
     ap.add_argument("--sheet", default=None, help="COLSxROWS: keep grid, resize cells to --size")
     ap.add_argument("--nocrop", action="store_true", help="keep full canvas, just resize to --size square")
+    ap.add_argument("--edge-despill", type=int, default=0, help="de-spill only N px around the cut (green key)")
     a = ap.parse_args()
     key = tuple(int(a.key[i:i + 2], 16) for i in (0, 2, 4))
-    img = key_out(Image.open(a.inp), key, a.tol)
+    img = key_out(Image.open(a.inp), key, a.tol, edge=a.edge_despill)
     if a.sheet:
         c, r = map(int, a.sheet.lower().split("x"))
         img = sheet(img, c, r, a.size)
@@ -140,6 +146,9 @@ def _selfcheck():
     assert out.getpixel((32, 32))[3] == 0, "enclosed hole not keyed"
     assert out.getpixel((16, 32))[3] == 255, "subject eaten"
     assert fit_square(out, 32, 0.1).size == (32, 32)
+    g = Image.new("RGB", (64, 64), (0, 255, 0)); ImageDraw.Draw(g).rectangle((8, 8, 56, 56), fill=(20, 60, 40))
+    gk = key_out(g, (0, 255, 0), 90, edge=2)
+    assert gk.getpixel((32, 32))[:3] == (20, 60, 40), "edge despill touched the interior"
     print("keying selfcheck ok")
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ import { hashrateText, isNarration } from './format.js';
 // mode 'arena' | 'wild' | 'haunebu'; wild = { id, rarity, name } (Gegner = wilder Rüther mit echtem Gesicht, kein „Nochmal").
 // 'haunebu' (v7): Beschwörung aus dem Shop gegen Hitler, ohne arena; Sieg = Flugscheibe erbeutet, kein „Nochmal".
 // Gegner-Helfer (v7b, Wolfsschanzen-Beschwörung): state.enemySummons → .enemy-helpers neben dem Boss (art/boss-<id>.png).
+// Tachionenbitcoin (v8, Neuschwabenland): eigene Kampfdauer enemy.duration (Timer, Intro), Pixel-Echos, Riss, Negativ, Zeitschleife.
 // onEnd({ won, retry, reason, activeIndex }) genau einmal pro Kampf: Overlay-Button oder Aufgeben (reason 'quit').
 // onEvent(e) für jedes Engine-Event, zusätzlich { type: 'combo', value } bei jeder Combo-Erhöhung.
 
@@ -59,11 +60,18 @@ const slow = ms => Math.round(ms * BOSS_SLOW);
 const LINE_MIN = 8000, LINE_SPREAD = 4000; // Gegner-Sprüche alle 8–12 s Spielzeit
 const SAY_MS = 3000; // so lange steht ein Spruch in der Gegner-Blase
 // Betäubung des eigenen Rüthers je Gegner-Attacke (fx) als Text; alles andere zeigt den Firmware-Balken der PS3
-const STUN_TEXT = { wild: 'sprachlos', fan: 'benebelt', ray: 'im Strahl' };
+const STUN_TEXT = { wild: 'sprachlos', fan: 'benebelt', ray: 'im Strahl', causality: 'aus der Zeit gefallen' };
 const BUNKER_MS = 1500; // = bt-bunker in css/battle.css
 const KRUPP_MS = 1500; // Krupp-Rede kommt alle 2,3 s (Wut 1,8 s): Pult, Wutblase und Sprechblase sind nach ~1,6 s weg
 const WOLF_MS = 1600; // Wolfsschanzen-Beschwörung: Banner + Freeze, Goebbels und Himmler rennen derweil über dem Dimmer herein
 const bubbleText = s => { const t = document.createElement('span'); t.className = 'bubble-text'; t.textContent = s; return t.outerHTML; };
+// Tachionenbitcoin (v8, Neuschwabenland): Pixel-Echos der Münze, Bildschirm-Riss, Zeitschleife
+const ECHO_ART = 'art/fx-echo.png'; // optional; fehlt es, ist das Echo eine getönte Kopie des Boss-Bilds
+const ECHO_LEAD = 300; // so lange vor der Warnung blitzt die Münze schon auf („Ich treff dich, bevor ich werfe.")
+const ECHO_DASH_MS = 420, ECHO_GAP = 70; // = bt-echo-dash in css/battle.css; 3 Echos gestaffelt
+const REWIND_MS = 1400; // Zeitschleife: so lange spult die Bühne zurück
+const CRACK_LINES = ['62,0 55,14 60,22 48,38 53,47 41,63 46,72 35,88 38,100', '48,38 30,44 22,40', '53,47 70,55 78,52', '41,63 28,70', '46,72 60,82 66,92'];
+const CRACK_SVG = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" shape-rendering="crispEdges">${['k', 'v', 'p'].map(c => CRACK_LINES.map(l => `<polyline class="${c}" points="${l}"/>`).join('')).join('')}</svg>`;
 
 export function createBattleScreen({ el, onEnd, onEvent }) {
   const $ = s => el.querySelector(s);
@@ -101,7 +109,11 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
   let input = freshInput(), dodgeDir = 'left', koPending = false, batchDelay = 0;
   let combo = 0, lastHitAt = -Infinity, stunTextAt = -Infinity;
   let pauseUntil = 0, heldBtc = null, nextLineAt = Infinity, sayTimer = 0, bossFx = '', bossHit = null;
+  // Spieler-Leiste wie heldBtc: zeigt Treffer erst beim Einschlag (meHoldUntil) und nach einem K.o. den alten Rüther,
+  // bis der neue hereinrutscht (shownMe); so passen Gesicht, Name, Balken und Knöpfe zusammen
+  let shownMe = null, meHoldUntil = 0;
   let rede = []; // laufende Krupp-Rede (Pult, Wutblase, Sprechblase): die nächste Rede baut sie ab
+  let echoAt = null, echoSrc = ECHO_ART; // Vor-Echo: für welchen Überlicht-Hash (nextFastAt) es schon geblitzt hat
   let ctx = {}; // { mode, arena, arenaLevel, reward, masteredAfter, wild }
   const timers = new Set();
   const pending = new Map(); // node -> { cls: timerId }: Neustart derselben Animation löscht den alten Entfern-Timer
@@ -179,6 +191,35 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
   function familyRush() {
     node('rush', 1600).innerHTML = ['christian', 'micha'].map((id, i) => `<img src="${sprite(id)}" alt="" style="--i:${i}">`).join('');
     return 760;
+  }
+  // Pixel-Echo der Tachionen-Münze (art/fx-echo.png, sonst das Boss-Bild violett-türkis getönt: .self); cls = Bahn in css/battle.css
+  function echo(cls, ms, i = 1) {
+    const d = node(`echo ${cls}`, ms);
+    d.style.setProperty('--i', i);
+    const img = Object.assign(document.createElement('img'), { src: echoSrc, alt: '' });
+    img.classList.toggle('self', echoSrc !== ECHO_ART);
+    img.addEventListener('error', () => {
+      if (img.classList.contains('self')) return;
+      echoSrc = bossArt(state.enemy.id); // einmal fehlgeschlagen: alle weiteren Echos gleich aus dem Boss-Bild
+      img.classList.add('self'); img.src = echoSrc;
+    });
+    d.appendChild(img);
+  }
+  // Splitter der zerspringenden Uhr: 10 Pixel-Quadrate fliegen auseinander (Keyframes bt-mms)
+  function shards() {
+    node('shards', 900).innerHTML = Array.from({ length: 10 }, (_, i) => {
+      const a = (i / 10) * 2 * Math.PI + 0.3;
+      return `<i style="--dx:${Math.round(Math.cos(a) * 110)}px;--dy:${Math.round(Math.sin(a) * 90)}px"></i>`;
+    }).join('');
+  }
+  // Tachionenbitcoin: die Münze blitzt schon vor der Warnung zum Überlicht-Hash einmal auf und ein Echo löst sich (Spec v8 §2)
+  function preEcho() {
+    const e = state.enemy, t = state.time;
+    if (e.fast?.fx !== 'tachyon' || e.warning || e.status.stunUntil > t || e.nextChargedAt <= e.nextFastAt) return;
+    if (echoAt === e.nextFastAt || t < e.nextFastAt - e.fast.warn - ECHO_LEAD) return;
+    echoAt = e.nextFastAt;
+    anim(enemySprite, 'blink', 240);
+    echo('echo-pre', 400);
   }
   // Combo: schnelle Treffer mit < COMBO_WINDOW Abstand (Spielzeit), Anzeige ab ×2, ab ×10 „hot"
   function comboHit() {
@@ -341,6 +382,30 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
       return slow(500);
     },
     bunker() { anim(enemySprite, 'hide', BUNKER_MS); sheet('smoke', 'enemy', { size: 176 }); return Math.round(BUNKER_MS * 0.75); }, // Heilung, wenn er wieder auftaucht
+    // Tachionenbitcoin (v8, Neuschwabenland). Überlicht-Hash: 3 Pixel-Echos rasen gestaffelt auf mich (das Vor-Echo kam schon, preEcho)
+    tachyon() {
+      anim(enemySprite, 'blink', 240);
+      for (let i = 0; i < 3; i++) later(() => echo('echo-dash', ECHO_DASH_MS, i), i * ECHO_GAP);
+      return 2 * ECHO_GAP + Math.round(ECHO_DASH_MS * 0.85);
+    },
+    thalving() { // riesige Halving-Münze in Violett fällt auf mich, beim Aufprall reißt der Bildschirm
+      const ms = slow(900), hit = Math.round(ms * 0.72); // drop-on-me schlägt bei 72 % auf
+      prop('halving', 'drop-on-me', { ms, size: 240 }).el.classList.add('thalving');
+      later(() => { node('crack', 1400).innerHTML = CRACK_SVG; }, hit);
+      return hit;
+    },
+    causality() { // Uhr zwischen uns tickt rückwärts und zerspringt; Bühne flackert negativ, meine Leiste glitcht (Betäubung, Gift: Engine)
+      const ms = slow(900), hit = Math.round(ms * 0.6); // = Zerspringen in bt-clock-burst
+      prop('clock', 'clock-burst', { ms, size: 128 });
+      later(() => { shards(); anim(stage, 'negative', 700); anim(mePanel, 'glitch', 900); }, hit);
+      return hit;
+    },
+    timeloop() { // Bühne spult zurück (Bandstreifen, ◀◀ in Pixeln), die Echos fliegen rückwärts in die Münze, dann heilt sie
+      anim(stage, 'rewind', REWIND_MS);
+      node('rewind', REWIND_MS).innerHTML = '<span class="rew"></span>';
+      for (let i = 0; i < 3; i++) later(() => echo('echo-back', ECHO_DASH_MS, i), 200 + i * 150);
+      return REWIND_MS - 300;
+    },
     // Wilder Rüther: Rempler = er springt nach vorn; Lade-Attacke = sein Requisit mit seinem Gesicht fliegt zu dir
     'wild-fast'() { anim(enemySprite, 'lunge', 450); return 220; },
     wild(atk) {
@@ -398,6 +463,10 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
       case 'enemyAttack': {
         bossFx = e.attack.fx; bossHit = e.fighter; // eine Betäubung danach im selben Schritt gehört zu dieser Attacke
         batchDelay = run(BOSS_FX, e.attack, e.fighter);
+        if (batchDelay > 0) { // Balken, BTC und Status (Gift, betäubt) erst beim Einschlag
+          const until = meHoldUntil = performance.now() + batchDelay;
+          later(() => { if (meHoldUntil === until) meHoldUntil = 0; render(); }, batchDelay); // render: nach KO läuft die Schleife nicht mehr
+        }
         const ray = e.attack.fx === 'ray', at = ray ? 'beside' : 'me'; // im Strahl hängt mein echtes Gesicht am Anker: kein Einschlag, Zahl daneben
         if (e.damage > 0) later(() => {
           if (e.dodged) { num(`-${e.damage}`, at); return; }
@@ -442,19 +511,20 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
         sfx.play('rage'); haptic([30, 30, 30, 30, 80]);
         break;
       case 'faint': // KO erst, wenn der auslösende Boss-Angriff eingeschlagen ist
-        koPending = true;
+        koPending = true; shownMe = e.fighter;
         later(() => { meSprite.classList.add('ko'); text(`${e.fighter.name} ist pleite!`, 'me'); }, batchDelay);
         break;
       case 'switch': {
-        const f = e.fighter;
+        const f = e.fighter, ko = koPending, gone = shownMe;
         later(() => {
           meSprite.className = 'sprite';
           meSprite.src = sprite(f.id);
           setFrame(f);
           anim(meSprite, 'slide-in', 500);
           text(`${f.name}, du bist dran!`, 'me');
-        }, koPending ? batchDelay + 1000 : 0); // ko (900 ms) fertig, „ist pleite!" blendet schon aus
-        buildSpecials();
+          if (ko && shownMe === gone) { shownMe = null; buildSpecials(); render(); } // erst jetzt Leiste und Knöpfe des neuen
+        }, ko ? batchDelay + 1000 : 0); // ko (900 ms) fertig, „ist pleite!" blendet schon aus
+        if (!ko) buildSpecials();
         break;
       }
       case 'win':
@@ -541,12 +611,14 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     setText(p.querySelector('.status'), st);
   }
   function render() {
-    const t = state.time, e = state.enemy, me = state.team[state.active], frozen = paused();
+    const t = state.time, e = state.enemy, me = shownMe || state.team[state.active], frozen = paused();
     const eBtc = heldBtc ?? e.btc;
     panel(enemyPanel, e, t, eBtc);
     setText(enemyBtcV, `${eBtc} / ${e.maxBtc} BTC`);
-    panel(mePanel, me, t);
-    setText(meBtcV, `${me.btc} / ${me.maxBtc} BTC`);
+    if (performance.now() >= meHoldUntil) {
+      panel(mePanel, me, t);
+      setText(meBtcV, `${me.btc} / ${me.maxBtc} BTC`);
+    }
     setText(meHashV, hashrateText(me.power));
     setText(miningV, String(me.energy));
     setWidth(energyFill, (100 * me.energy) / CONST.MAX_ENERGY);
@@ -568,12 +640,12 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     const stunnedMe = me.status.stunUntil > t;
     specials.querySelectorAll('.special').forEach((b, i) => {
       const a = me.attacks[i];
-      const ok = !state.over && !frozen && !stunnedMe && me.energy >= a.cost && !(a.once && me.used[a.name]);
+      const ok = !shownMe && !state.over && !frozen && !stunnedMe && me.energy >= a.cost && !(a.once && me.used[a.name]);
       if (b.disabled === ok) b.disabled = !ok;
       b.classList.toggle('ready', ok);
     });
     const swap = specials.querySelector('.swap');
-    if (swap) swap.disabled = state.over || frozen || !state.team.some((f, i) => i !== state.active && f.btc > 0);
+    if (swap) swap.disabled = !!shownMe || state.over || frozen || !state.team.some((f, i) => i !== state.active && f.btc > 0);
   }
 
   // ---------- Schleife ----------
@@ -608,6 +680,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
       if (paused()) break;
     }
     batchDelay = 0; koPending = false;
+    if (!state.over && !paused()) preEcho();
     if (!state.over && !paused() && state.time >= nextLineAt) speak();
     render();
     raf = state.over ? 0 : requestAnimationFrame(loop);
@@ -622,8 +695,10 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
   function showIntro(then) {
     const me = state.team[state.active], boss = state.enemy, w = ctx.wild, h = ctx.mode === 'haunebu';
     setText(intro.querySelector('.intro-arena'), w ? 'Wilder Rüther' : h ? 'Haunebu-Landeplatz' : ctx.arena?.name || 'Arena');
+    // eigene Kampfdauer des Bosses (Tachionenbitcoin: enemy.duration) steht mit im Intro
+    const secs = !w && state.duration !== CONST.BATTLE_DURATION ? ` · ${Math.round(state.duration / 1000)} s` : '';
     setText(intro.querySelector('.intro-level'), w ? `${RARITY_BY_ID[w.rarity]?.name || 'Normal'} · Lv. ${boss.level || 1}`
-      : h ? 'Beschwörung' : `Arena Lv. ${ctx.arenaLevel}${ctx.masteredAfter ? ' · Meisterkampf' : ''}`);
+      : (h ? 'Beschwörung' : `Arena Lv. ${ctx.arenaLevel}${ctx.masteredAfter ? ' · Meisterkampf' : ''}`) + secs);
     intro.querySelector('.intro-me').src = sprite(me.id);
     introBoss.src = w ? sprite(w.id) : bossArt(boss.id);
     introBoss.className = w ? `intro-boss sprite face r-${w.rarity}` : 'intro-boss sprite';
@@ -698,7 +773,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     setText(overlay.querySelector('.done'), won || w || h ? 'Weiter' : 'Karte');
     if (h) { // Sieg: Flugscheibe erbeutet, Hitlers Abgang als Notiz; sonst ist er mit ihr weg und die Beschwörung kostet neu
       setText(overlay.querySelector('.title'), won ? 'Reichsflugscheibe erbeutet!' : 'Verloren');
-      setText(overlay.querySelector('.sub'), won ? 'Die Haunebu gehört jetzt dir. Flieg damit zu jeder Arena.' : 'Hitler ist mit der Flugscheibe abgehauen. Beschwör sie neu.');
+      setText(overlay.querySelector('.sub'), won ? `Die Haunebu gehört dir für ${CONST.HAUNEBU_USE_MS / 60000} Minuten: freie Flüge zu jeder Arena, nach Neuschwabenland oder zu einer Quest.` : 'Hitler ist mit der Flugscheibe abgehauen. Beschwör sie neu.');
       const line = won ? pickLine(boss.id, 'defeat') : '';
       setText(overlay.querySelector('.arena-note'), line ? `„${line}“` : '');
     } else if (w) { // Sieg = gefangen, sonst haut er ab; dazu sein Spruch
@@ -757,11 +832,11 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     fx.innerHTML = ''; bgEl.innerHTML = ''; helpers.innerHTML = ''; helpers.className = 'helpers hidden';
     enemyHelpers.innerHTML = ''; enemyHelpers.className = 'enemy-helpers hidden';
     rede.forEach(p => p.stop()); rede = [];
-    flash.className = 'flash'; stage.classList.remove('rage', 'quake-s', 'quake-m', 'quake-l', 'overheat', 'blow', 'side-hits', 'aside');
+    flash.className = 'flash'; stage.classList.remove('rage', 'quake-s', 'quake-m', 'quake-l', 'overheat', 'blow', 'side-hits', 'aside', 'negative', 'rewind');
     enemySprite.className = 'enemy-sprite sprite'; meSprite.className = 'sprite';
-    specials.classList.remove('shake-x'); enemyPanel.classList.remove('glow'); mePanel.classList.remove('glow');
-    resetCombo(); stunTextAt = -Infinity;
-    pauseUntil = 0; heldBtc = null; nextLineAt = Infinity; sayTimer = 0; bossFx = ''; bossHit = null;
+    specials.classList.remove('shake-x'); enemyPanel.classList.remove('glow'); mePanel.classList.remove('glow', 'glitch');
+    resetCombo(); stunTextAt = -Infinity; echoAt = null;
+    pauseUntil = 0; heldBtc = null; shownMe = null; meHoldUntil = 0; nextLineAt = Infinity; sayTimer = 0; bossFx = ''; bossHit = null;
     sw.classList.add('hidden'); overlay.classList.add('hidden'); intro.classList.add('hidden'); hideSay();
     overlay.querySelector('.confetti').innerHTML = '';
     down = null; input = freshInput();
@@ -770,7 +845,8 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
   function start({ team, enemy, rng = Math.random, mode = 'arena', arena = null, arenaLevel = 1, reward = 0, masteredAfter = false, wild = null, shownLine = '' }) {
     stop();
     const isWild = mode === 'wild';
-    state = createBattle({ team, enemy, rng, duration: isWild ? CONST.WILD_DURATION : undefined });
+    // Kampfdauer: Wildkampf 60 s, sonst die des Bosses (makeBoss übernimmt def.duration), ohne eigene die Engine-Vorgabe
+    state = createBattle({ team, enemy, rng, duration: isWild ? CONST.WILD_DURATION : enemy.duration || undefined });
     const w = isWild ? { id: enemy.id, rarity: enemy.rarity || 'normal', name: enemy.name, ...wild } : null;
     ctx = { mode, arena, arenaLevel, reward, masteredAfter, wild: w, shownLine };
     ended = false; koPending = false; batchDelay = 0;
@@ -784,7 +860,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     setFrame(me);
     anim(meSprite, 'slide-in', 500);
     buildSpecials();
-    render(); // Timer steht auf 90 bzw. 60, bis das Intro vorbei ist
+    render(); // Timer steht auf der vollen Kampfdauer (90, Wildkampf 60, Tachionen 120), bis das Intro vorbei ist
     window.addEventListener('keydown', onKey);
     showIntro(begin);
   }

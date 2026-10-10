@@ -1,5 +1,5 @@
 import { CONST, QUESTS, ACHIEVEMENTS, RUETHERS, ARENAS } from './data.js';
-import { dexCount, DEX_TOTAL } from './progress.js';
+import { dexCount, DEX_TOTAL, QUEST_SATS } from './progress.js';
 
 export const dayKey = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -89,7 +89,10 @@ const COND = {
   trainer10: s => (s.trainerLevel || 1) >= 10,
   fusion1: s => (s.stats.fusions || 0) >= 1,
   keller: s => (s.arenaLevels.keller || 1) >= 2,
-  haunebu: s => !!s.flugscheibe,
+  haunebu: s => (s.stats.haunebuWins || 0) >= 1,
+  tachionen: s => (s.arenaLevels.neuschwabenland || 1) >= 2,
+  quest1: s => Object.values(s.questLog || {}).some(q => q.done),
+  quest_all: s => Object.keys(QUEST_SATS).every(id => s.questLog?.[id]?.done),
 };
 // Prüft alle Erfolge, schaltet neue frei (+Sats), gibt die neuen zurück
 export function checkAchievements(save, now = 1) {

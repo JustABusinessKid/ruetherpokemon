@@ -74,6 +74,9 @@ p { margin: 0; }
 .player-pulse { pointer-events: none; }
 .player-pulse::before { content: ''; position: absolute; inset: 0; background: var(--teal); clip-path: var(--px-ring); animation: map-pulse 1.5s steps(3, end) infinite; }
 @keyframes map-pulse { 0% { transform: scale(.4); opacity: 1; } 100% { transform: scale(1.3); opacity: .2; } }
+/* v8 Lockmodul-Welle (map.js wave): ein Bernstein-Pixelring läuft einmal bis an den Rand des Spawn-Rings */
+.player-pulse.wave::after { content: ''; position: absolute; left: 50%; top: 50%; width: 192px; height: 192px; margin: -96px 0 0 -96px; background: var(--amber); clip-path: var(--px-ring); animation: map-wave 1.2s steps(6, end) forwards; }
+@keyframes map-wave { 0% { transform: scale(.12); opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
 
 /* Spawn: Gesicht im Seltenheitsrahmen. Kein position: relative auf .spawn-icon/.arena-icon (Leaflet positioniert absolut). */
 .spawn-icon img.face { position: relative; display: block; width: 48px; height: 48px; border: 3px solid var(--r-normal); background: var(--ink); box-shadow: 0 0 0 2px var(--ink), 4px 4px 0 2px rgba(30, 42, 34, .45); }
@@ -145,5 +148,6 @@ p { margin: 0; }
 /* ---------- Weniger Bewegung: keine Schmuck-Schleifen ---------- */
 @media (prefers-reduced-motion: reduce) {
   .frame .shine, .frame.r-legendaer, .spawn-icon img.face, .spawn-icon .star, .player-pulse::before, .victory-king { animation: none !important; }
+  .player-pulse.wave::after { animation-timing-function: steps(2, end); }
   .frame.r-episch .shine, .frame.r-legendaer .shine { opacity: 1; }
 }

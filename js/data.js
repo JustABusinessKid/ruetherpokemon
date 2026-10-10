@@ -87,15 +87,23 @@ export const CONST = {
   FEED_LEVELS: 2,          // Füttern: ein Duplikat desselben Rüthers gibt +2 Level
   SELL_MULT: 2,            // Verkaufen: 2 × Fang-Sats der Seltenheit
   CINEMATIC_MS: 1500,      // Standard-Freeze einer Spezial-Sequenz
-  // v7: Haunebu-Reichsflugscheibe
-  HAUNEBU_BEAM_COST: 300,  // ein Flug zu einer Arena
-  HAUNEBU_BEAM_MS: 600_000, // so lange stehst du dort (10 Minuten), dann fliegt sie dich zurück
-  HAUNEBU_WIN_SATS: 500,   // Sieg gegen Hitler: Flugscheibe + 500 Sats
+  // v7/v8: Haunebu-Reichsflugscheibe
+  HAUNEBU_BEAM_COST: 0,    // v8: Flüge sind im Nutzungsfenster frei, die Kosten stecken in der Beschwörung
+  HAUNEBU_BEAM_MS: 600_000, // v7-Wert, v8 nutzt HAUNEBU_USE_MS
+  HAUNEBU_USE_MS: 600_000, // v8: nach jedem Sieg über Hitler 10 Minuten nutzbar, danach neu beschwören
+  HAUNEBU_SUMMON_BASE: 5000, // v8: erste Beschwörung
+  HAUNEBU_SUMMON_STEP: 1000, // jede weitere Beschwörung +1000
+  HAUNEBU_SUMMON_MAX: 8000,  // gedeckelt bei 8000
+  HAUNEBU_WIN_SATS: 500,   // Sieg gegen Hitler: 10 Minuten Flugscheibe + 500 Sats
   XP_HAUNEBU: 500,
+  // v8: Lockmodul – alle LURE_INTERVAL komplett neue Rüther direkt in Fangreichweite
+  LURE_RING: [12, 90],
+  // v8: Quests (Kommando-Modus)
+  QUEST_XP: 400,
 };
 
 export const API_BASE = null; // Higgsfield-Backend abgeschaltet (2026-10-10)
-// Online-Welt über GitHub: Live-Nachrichten über ntfy.sh (signiert), dauerhafter Stand im Branch online-data (GitHub Action)
+// v8: Online-Welt über GitHub: Live-Nachrichten über ntfy.sh (signiert), dauerhafter Stand im Branch online-data (GitHub Action)
 export const ONLINE = {
   topic: 'ruether-go-8b419c181681af1d',
   bus: 'https://ntfy.sh',
@@ -148,6 +156,9 @@ export const ACHIEVEMENTS = [
   { id: 'fusion1', name: 'Alchemist', desc: 'Mache deine erste Fusion', icon: '⚗️' },
   { id: 'keller', name: 'Kellerkind', desc: 'Besiege die Bitcoin-Heizung im Keller', icon: '🔥' },
   { id: 'haunebu', name: 'Reichsflugscheibe', desc: 'Besiege Adolf Hitler und erbeute die Haunebu', icon: '🛸' },
+  { id: 'tachionen', name: 'Schneller als das Licht', desc: 'Besiege den Tachionenbitcoin in Neuschwabenland', icon: '⚡' },
+  { id: 'quest1', name: 'Kommando', desc: 'Schließe deine erste Haunebu-Quest ab', icon: '🎯' },
+  { id: 'quest_all', name: 'Kommando-Legende', desc: 'Schließe jede Haunebu-Quest einmal ab', icon: '🏆' },
 ];
 
 export const RARITIES = [
@@ -159,10 +170,10 @@ export const RARITIES = [
 export const RARITY_BY_ID = Object.fromEntries(RARITIES.map(r => [r.id, r]));
 
 export const SHOP = [
-  { id: 'lockmodul', name: 'Lockmodul', icon: '🧲', cost: 300, desc: '5 Minuten lang doppelt so viele Rüthers, alle 20 Sekunden neue.' },
+  { id: 'lockmodul', name: 'Lockmodul', icon: '🧲', cost: 300, desc: '5 Minuten lang alle 20 Sekunden 4 bis 8 komplett neue Rüthers direkt bei dir, alle in Fangreichweite.' },
   { id: 'supercoin', name: 'Super-Münze', icon: '🪙', cost: 40, desc: 'Ein Wurf mit +20 % Fangchance. Wird beim Treffer verbraucht.' },
-  // v7: Kauf startet sofort den Kampf gegen Hitler (kein Inventar). Sieg = save.flugscheibe, danach nicht mehr kaufbar.
-  { id: 'haunebu', name: 'Haunebu-Reichsflugscheibe', icon: '🛸', cost: 1000, desc: 'Beschwört die Flugscheibe. Adolf Hitler steigt aus und will sie behalten. Besieg ihn, dann fliegt sie dich für 300 Sats 10 Minuten zu jeder Arena.' },
+  // Kauf startet sofort den Kampf gegen Hitler (kein Inventar). Sieg = 10 Minuten Haunebu (save.haunebuUntil), Preis steigt je Beschwörung.
+  { id: 'haunebu', name: 'Haunebu-Reichsflugscheibe', icon: '🛸', cost: 5000, desc: 'Beschwört die Flugscheibe. Adolf Hitler steigt aus und will sie behalten. Besieg ihn, dann gehört sie dir 10 Minuten: freie Flüge zu jeder Arena, nach Neuschwabenland und zu Quests. Jede Beschwörung kostet 1000 Sats mehr (höchstens 8000).' },
 ];
 
 export const ARENAS = [
@@ -171,6 +182,8 @@ export const ARENAS = [
   { id: 'pcsale', name: 'PC Sale', address: 'Augustastraße 1, 58089 Hagen', lat: 51.3589214, lon: 7.4631893, boss: 'ps3' },
   // v7: Keller unter der Rütherschanze, 25 m südlich / 15 m östlich versetzt, damit die Marker nicht übereinander liegen
   { id: 'keller', name: 'Keller der Rütherschanze', address: 'Langeler Weg 23, 50769 Köln (Keller)', lat: 51.0629174, lon: 6.8724671, boss: 'heizung' },
+  // v8: nur per Haunebu erreichbar (liegt in der Antarktis)
+  { id: 'neuschwabenland', name: 'Geheime Festung Neuschwabenland', address: 'Neuschwabenland, Antarktis', lat: -72.0, lon: 5.0, boss: 'tachionen', haunebuOnly: true },
 ];
 
 // spawn: 'anywhere' oder die id der Arena, um die der Rüther auftaucht.
@@ -265,6 +278,16 @@ export const BOSSES = {
       { name: 'Ab in den Bunker', damage: 0, warn: 1200, heal: 60, fx: 'bunker' },
     ],
   },
+  // v8: Endgegner in Neuschwabenland, mit Abstand der stärkste Gegner. duration = eigene Kampfdauer.
+  tachionen: {
+    id: 'tachionen', name: 'Tachionenbitcoin', btc: 1900, duration: 120_000,
+    fast: { name: 'Überlicht-Hash', damage: 34, every: 1650, warn: 450, fx: 'tachyon' },
+    charged: [
+      { name: 'Tachionen-Halving', damage: 120, warn: 1000, fx: 'thalving' },
+      { name: 'Kausalitätsbruch', damage: 30, warn: 1000, stun: 2000, poison: { perSec: 6, ms: 6000 }, fx: 'causality' },
+      { name: 'Zeitschleife', damage: 0, warn: 1200, heal: 150, fx: 'timeloop' },
+    ],
+  },
 };
 
 export const RUETHER_BY_ID = Object.fromEntries(RUETHERS.map(r => [r.id, r]));
@@ -309,6 +332,10 @@ export const LINES = {
   heizung: {
     appear: ['*brummt mit 3000 Watt*', 'Im Keller hat es 38 Grad. Gemütlich.', 'Ich heize das ganze Haus. Mit Bitcoin.'],
     fight: ['Abwärme ist auch Rendite.', 'Aufguss mit Dosenbier!', 'Plus 70 Grad, wie bei Christian.', 'Die Stromrechnung geht an Hildegard.', 'Wer friert, hat zu wenig Hashrate.'],
+  },
+  tachionen: {
+    appear: ['Ich war schon da, bevor du kamst.', 'Mein Kurs steigt, bevor Christian kauft.'],
+    fight: ['Plus 70 Prozent? Hab ich gestern schon gemacht.', 'Schneller als das Licht. Und als dein Internet.', 'Dein Block ist schon vorgestern gefallen.', 'Ich treff dich, bevor ich werfe.'],
   },
   // Untergang-Meme: Hitler als tobender Verlierer. Keine Parolen, keine Symbole (siehe Spec v7 §0).
   hitler: {
