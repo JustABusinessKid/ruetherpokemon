@@ -94,7 +94,7 @@ export const CONST = {
   XP_HAUNEBU: 500,
 };
 
-export const API_BASE = 'https://ruether-go.higgsfield.app';
+export const API_BASE = null; // Higgsfield-Backend abgeschaltet (2026-10-10): Online-Welt aus, Spiel läuft offline
 export const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
 // Ausweich-Server, der Reihe nach; die öffentlichen Instanzen sind oft überlastet (504)
 export const OVERPASS_URLS = [OVERPASS_URL, 'https://z.overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
