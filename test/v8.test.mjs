@@ -5,9 +5,6 @@ import {
   questsUnlocked, questResult, QUEST_SATS,
 } from '../js/progress.js';
 import { checkAchievements, seededRng } from '../js/quests.js';
-import { lureWave } from '../js/spawn.js';
-import { lureZoom, lureRoom } from '../js/map.js';
-import { distance, offsetPoint } from '../js/geo.js';
 import { makeFighter, makeBoss, createBattle, tick } from '../js/battle.js';
 import { CONST, ARENAS, BOSSES, RUETHERS, RUETHER_BY_ID } from '../js/data.js';
 
@@ -145,114 +142,7 @@ test('v8: Wut beschleunigt schnelle Angriffe, macht sie nie langsamer', () => {
   assert.equal(s.enemy.fastEvery, 1000);
 });
 
-// ---------- §3 Lockmodul-Welle ----------
-// rng mit fester Folge, danach bleibt der letzte Wert (wie spawn.test.mjs)
-const seq = (...v) => { let i = 0; return () => v[Math.min(i++, v.length - 1)]; };
-const HAGEN = { lat: 51.37, lon: 7.48 }; // weit weg von allen Arenen
-const PCSALE = ARENAS.find(a => a.id === 'pcsale');
-
-test('v8: lureWave: alles neu, 4–8 Stück, alle im Lock-Ring um den Spieler', () => {
-  const old = { id: 'alt', ruetherId: 'viktor', ...offsetPoint(HAGEN, 30, 0), expires: 9e12, rarity: 'normal' };
-  for (const r of [0, 0.37, 0.99]) {
-    const list = lureWave({ player: HAGEN, ruethers: RUETHERS, arenas: ARENAS, now: 1000, rng: seq(r, 0.21, 0.73, 0.5), featured: null });
-    assert.ok(list.length >= CONST.LURE_SPAWN_MIN && list.length <= CONST.LURE_SPAWN_MAX, `got ${list.length}`);
-    assert.ok(!list.some(s => s.id === old.id));
-    for (const s of list) {
-      const d = distance(HAGEN, s);
-      assert.ok(d >= CONST.LURE_RING[0] - 1 && d <= CONST.LURE_RING[1] + 1, `got ${d}`);
-      assert.ok(d <= CONST.CATCH_RANGE, 'in Fangreichweite');
-      assert.equal(s.expires, 1000 + CONST.SPAWN_LIFETIME);
-      assert.ok(['christian', 'viktor'].includes(s.ruetherId), 'ortsgebundene nur in ihrer Zone');
-      assert.ok(s.rarity);
-    }
-  }
-  assert.equal(lureWave({ player: HAGEN, ruethers: RUETHERS, arenas: ARENAS, now: 0, rng: seq(0) }).length, CONST.LURE_SPAWN_MIN);
-  assert.equal(lureWave({ player: HAGEN, ruethers: RUETHERS, arenas: ARENAS, now: 0, rng: seq(0.999) }).length, CONST.LURE_SPAWN_MAX);
-});
-
-test('v8: lureWave verteilt die Welle: eigene Winkel-Sektoren, zwei Ringe, Mindestabstand, nicht auf dem Spieler', () => {
-  const M = 111320, cosLat = Math.cos((HAGEN.lat * Math.PI) / 180);
-  for (let i = 0; i < 200; i++) {
-    const list = lureWave({ player: HAGEN, ruethers: RUETHERS, arenas: ARENAS, now: i, rng: seededRng(i + 7) });
-    const n = list.length;
-    for (const s of list) assert.ok(distance(HAGEN, s) >= 44, 'innen bleibt der Spieler-Punkt frei');
-    // Mindestabstand: 44 m ≈ 59 px bei Zoom 17 (map.setLure), die 48-px-Gesichter decken sich nicht
-    for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) assert.ok(distance(list[a], list[b]) >= 44, `zu eng: ${distance(list[a], list[b])}`);
-    const ang = list.map(s => Math.atan2((s.lon - HAGEN.lon) * M * cosLat, (s.lat - HAGEN.lat) * M)).sort((a, b) => a - b);
-    const gaps = ang.map((a, k) => (k ? a - ang[k - 1] : a + 2 * Math.PI - ang[n - 1]));
-    assert.ok(Math.min(...gaps) >= (0.4 / n) * 2 * Math.PI - 1e-6, `Klumpen: ${Math.min(...gaps)}`);
-  }
-});
-
-test('v8: lureWave behält den offenen Spawn, ohne Position nur ihn', () => {
-  const keep = { id: 'offen', ruetherId: 'viktor', ...offsetPoint(HAGEN, 400, 0), expires: 5, rarity: 'episch' };
-  const list = lureWave({ player: HAGEN, ruethers: RUETHERS, arenas: ARENAS, now: 1000, rng: seq(0.5, 0.2), keep });
-  assert.equal(list[0], keep);
-  assert.equal(list.filter(s => s.id === 'offen').length, 1);
-  assert.ok(list.length - 1 >= CONST.LURE_SPAWN_MIN);
-  assert.deepEqual(lureWave({ player: null, ruethers: RUETHERS, arenas: ARENAS, now: 0, rng: seq(0.5), keep }), [keep]);
-  assert.deepEqual(lureWave({ player: null, ruethers: RUETHERS, arenas: ARENAS, now: 0, rng: seq(0.5) }), []);
-});
-
-test('v8: lureWave: am PC Sale kann Micha kommen, Rüther des Tages häufiger', () => {
-  const near = offsetPoint(PCSALE, 100, 0);
-  const ids = new Set();
-  for (let i = 0; i < 40; i++) {
-    for (const s of lureWave({ player: near, ruethers: RUETHERS, arenas: ARENAS, now: i, rng: seededRng(i + 1) })) {
-      ids.add(s.ruetherId);
-      assert.ok(distance(near, s) <= CONST.LURE_RING[1] + 1, 'auch Micha direkt beim Spieler');
-    }
-  }
-  assert.deepEqual([...ids].sort(), ['christian', 'micha', 'viktor']);
-  const feat = lureWave({ player: HAGEN, ruethers: RUETHERS, arenas: ARENAS, now: 0, rng: seq(0, 0.3), featured: 'viktor' });
-  assert.ok(feat.every(s => s.ruetherId === 'viktor'));
-});
-
-// Bildschirm-Pixel relativ zum Spieler in der Kartenmitte bei lureZoom (Karte genordet, y nach unten)
-const toPx = (pos, p, side) => {
-  const m = (156543 * Math.cos((pos.lat * Math.PI) / 180)) / 2 ** lureZoom(pos.lat, side);
-  const dE = Math.sign(p.lon - pos.lon) * distance({ lat: pos.lat, lon: p.lon }, pos), dN = Math.sign(p.lat - pos.lat) * distance({ lat: p.lat, lon: pos.lon }, pos);
-  return [dE / m, -dN / m];
-};
-// zwei achsenparallele Rechtecke (Mitte, halbe Kantenlänge) überlappen
-const hit = ([ax, ay], ah, [bx, by], bh) => Math.abs(ax - bx) < ah + bh && Math.abs(ay - by) < ah + bh;
-
-test('v8: lureWave an Worringen/Keller: kein Gesicht auf Arena-Schild, Besitzer-Foto, Keller-Plakette oder anderem Gesicht', () => {
-  const W = ARENAS.find(a => a.id === 'worringen'), K = ARENAS.find(a => a.id === 'keller');
-  for (const [at, side] of [[W, 375], [W, 336], [W, 390], [K, 375], [K, 390], [PCSALE, 375]]) { // 336: Karte bei 375×667 mit Haunebu-Chip
-    const pos = offsetPoint(at, 40, 0); // so landet die Haunebu (app.js land)
-    const room = lureRoom(pos, ARENAS, side);
-    let few = 0;
-    for (let i = 0; i < 300; i++) {
-      const list = lureWave({ player: pos, ruethers: RUETHERS, arenas: ARENAS, now: i, rng: seededRng(Math.imul(i + 3, 2654435761)), ...room });
-      if (list.length < CONST.LURE_SPAWN_MIN) few++;
-      assert.ok(list.length >= 2, `nur ${list.length}`);
-      for (const s of list) {
-        for (const a of ARENAS) {
-          const [x, y] = toPx(pos, a, side), c = a.id === 'keller' ? [x + 44, y + 12] : [x, y]; // Keller-Schild rechts versetzt (map.js)
-          assert.ok(!hit(toPx(pos, s, side), 24, c, 34), `Gesicht auf ${a.id} bei ${at.id}/${side}`);
-        }
-        for (const t of list) if (t !== s) assert.ok(distance(s, t) >= 44 && !hit(toPx(pos, s, side), 26, toPx(pos, t, side), 26), `Gesichter decken sich bei ${at.id}/${side}`);
-      }
-    }
-    assert.ok(few < 60, `zu oft unter ${CONST.LURE_SPAWN_MIN}: ${few}/300`);
-  }
-});
-
-test('v8: lureWave: neue Welle hält Abstand zum offenen Spawn und bleibt unter keinem Knopf', () => {
-  const side = 375, fab = { x: 187.5 - 16 - 24, y: 220 - 84 - 24, h: 24 }; // Haunebu-Knopf, Karte 375×440
-  const room = lureRoom(HAGEN, ARENAS, side, [fab]);
-  for (let i = 0; i < 300; i++) {
-    const keep = { id: 'offen', ruetherId: 'viktor', ...offsetPoint(HAGEN, 48 * Math.cos(i), 48 * Math.sin(i)), expires: 9e12, rarity: 'normal' };
-    const list = lureWave({ player: HAGEN, ruethers: RUETHERS, arenas: ARENAS, now: i, rng: seededRng(Math.imul(i + 11, 2654435761)), keep, ...room });
-    assert.equal(list[0], keep);
-    assert.ok(list.length - 1 >= CONST.LURE_SPAWN_MIN - 1, `nur ${list.length - 1}`);
-    for (const s of list.slice(1)) {
-      assert.ok(distance(s, keep) >= 44 && !hit(toPx(HAGEN, s, side), 26, toPx(HAGEN, keep, side), 26), `auf dem offenen Spawn: ${distance(s, keep)}`);
-      assert.ok(!hit(toPx(HAGEN, s, side), 26, [fab.x, fab.y], fab.h), 'unter dem Haunebu-Knopf');
-    }
-  }
-});
+// ---------- §3 Lockmodul-Welle: v9 macht sie additiv, Tests in test/v9.test.mjs ----------
 
 // ---------- §5 Quests: Freischaltung, Belohnung, Log ----------
 test('v8: questsUnlocked braucht alle fünf Arenen gemeistert', () => {
@@ -266,17 +156,17 @@ test('v8: questsUnlocked braucht alle fünf Arenen gemeistert', () => {
 
 test('v8: questResult Raub: 300 je Münze + 1000 Abschluss, Bestwert', () => {
   const s = emptySaveV3();
-  assert.deepEqual(questResult(s, 'tachionenraub', 'success', 5), { sats: 2500, xp: CONST.QUEST_XP, best: 5, newBest: true, firstDone: true });
+  assert.deepEqual(questResult(s, 'tachionenraub', 'success', 5), { sats: 2500, xp: CONST.QUEST_XP, best: 5, newBest: true, firstDone: true, fine: 0 });
   assert.equal(s.sats, 2500);
-  assert.deepEqual(s.questLog.tachionenraub, { best: 5, done: true });
-  assert.deepEqual(questResult(s, 'tachionenraub', 'success', 3), { sats: 1900, xp: CONST.QUEST_XP, best: 5, newBest: false, firstDone: false });
-  assert.deepEqual(s.questLog.tachionenraub, { best: 5, done: true });
+  assert.deepEqual(s.questLog.tachionenraub, { best: 5, done: true, wins: 1, kieser: 0, fines: 0, clean: false });
+  assert.deepEqual(questResult(s, 'tachionenraub', 'success', 3), { sats: 1900, xp: CONST.QUEST_XP, best: 5, newBest: false, firstDone: false, fine: 0 });
+  assert.deepEqual(s.questLog.tachionenraub, { best: 5, done: true, wins: 2, kieser: 0, fines: 0, clean: false });
   // Misserfolg: 10 % der Münz-Sats, kein Abschluss
   const f = emptySaveV3();
-  assert.deepEqual(questResult(f, 'tachionenraub', 'fail', 2), { sats: 60, xp: CONST.QUEST_XP / 10, best: 2, newBest: true, firstDone: false });
-  assert.deepEqual(f.questLog.tachionenraub, { best: 2, done: false });
+  assert.deepEqual(questResult(f, 'tachionenraub', 'fail', 2), { sats: 60, xp: CONST.QUEST_XP / 10, best: 2, newBest: true, firstDone: false, fine: 0 });
+  assert.deepEqual(f.questLog.tachionenraub, { best: 2, done: false, wins: 0, kieser: 0, fines: 0, clean: false });
   assert.equal(questResult(f, 'tachionenraub', 'abort', 0).sats, 0);
-  assert.deepEqual(f.questLog.tachionenraub, { best: 2, done: false });
+  assert.deepEqual(f.questLog.tachionenraub, { best: 2, done: false, wins: 0, kieser: 0, fines: 0, clean: false });
 });
 
 test('v8: questResult Sabotage, PS3, Keller (+1000 ohne Alarm), Misserfolg 10 %', () => {
@@ -287,12 +177,13 @@ test('v8: questResult Sabotage, PS3, Keller (+1000 ohne Alarm), Misserfolg 10 %'
   assert.equal(questResult(s, 'keller', 'success', 1, true).sats, 3000);
   assert.equal(s.sats, 10_000);
   assert.equal(questResult(s, 'hangar', 'fail', 2).sats, 250);
-  assert.equal(questResult(s, 'keller', 'abort', 0, true).sats, 200);
+  assert.equal(questResult(s, 'keller', 'abort', 1, true).sats, 200);
+  assert.deepEqual([questResult(s, 'keller', 'abort', 0, true).sats, questResult(s, 'hangar', 'fail', 0).xp], [0, 0], 'ohne Fortschritt kein Trost');
   assert.equal(s.questLog.hangar.done, true, 'Misserfolg nimmt den Abschluss nicht weg');
   assert.equal(questResult(s, 'mond', 'success', 9), null);
   assert.equal(s.questLog.mond, undefined);
   assert.equal(questResult(emptySaveV3(), 'ps3', 'fail', -3).best, 0);
-  assert.deepEqual(Object.keys(QUEST_SATS).sort(), ['hangar', 'keller', 'ps3', 'tachionenraub']);
+  assert.deepEqual(Object.keys(QUEST_SATS).sort(), ['bruch', 'camping', 'hangar', 'keller', 'ps3', 'tachionenraub']); // v9: + Camping, Bruch
 });
 
 test('v8: Erfolge haunebu, tachionen, quest1, quest_all', () => {
@@ -309,6 +200,9 @@ test('v8: Erfolge haunebu, tachionen, quest1, quest_all', () => {
   for (const id of ['tachionenraub', 'ps3']) questResult(s, id, 'success', 3);
   assert.deepEqual(checkAchievements(s), []);
   questResult(s, 'keller', 'success', 1);
+  assert.deepEqual(checkAchievements(s), [], 'v9: quest_all braucht auch Camping und Bruch');
+  questResult(s, 'camping', 'success', 3);
+  questResult(s, 'bruch', 'success', 3);
   assert.deepEqual(checkAchievements(s).map(a => a.id), ['quest_all']);
   // gemeisterte Arena zählt weiter (Level bleibt 5)
   const m = emptySaveV3();
@@ -317,70 +211,81 @@ test('v8: Erfolge haunebu, tachionen, quest1, quest_all', () => {
 });
 
 // ---------- §2 Balance: Tachionenbitcoin mit der echten Engine ----------
-// Gutes Spiel: 4 Tipps/s (Abklingzeit), 70 % der Warnungen ausgewichen, Spezial-Attacke bei vollem Mining,
-// Teamwechsel bei K.o. macht die Engine. Alle 10 Dreier-Teams aus den 5 Rüthern, je SEEDS Kämpfe.
-const SEEDS = 6;
+// Spielermodell: normal = 3 Tipps/s und 50 % der Warnungen ausgewichen, gut = 3,5 Tipps/s und 70 %.
+// Spezial-Attacke bei vollem Mining, Teamwechsel bei K.o. macht die Engine. Alle 10 Dreier-Teams aus den
+// 5 Rüthern, je SEEDS Kämpfe mit festen Seeds (deterministisch).
+const SEEDS = 60;
 const TEAMS = [];
 for (let a = 0; a < 5; a++) for (let b = a + 1; b < 5; b++) for (let c = b + 1; c < 5; c++) TEAMS.push([a, b, c].map(i => RUETHERS[i].id));
+const NORMAL = { taps: 3, dodge: 0.5, name: 'normal' }, GOOD = { taps: 3.5, dodge: 0.7, name: 'gut' };
 function bestSpecial(me) {
   let best;
   me.attacks.forEach((a, i) => { if (me.energy >= a.cost && !(a.once && me.used[a.name]) && (best == null || a.cost > me.attacks[best].cost)) best = i; });
   return best;
 }
-function simBattle(def, arenaLevel, ids, inst, { dodge = 0.7, tapMs = 250, seed = 1 } = {}) {
-  const rng = seededRng(seed);
+function simBattle(def, arenaLevel, ids, inst, { taps, dodge }, seed) {
+  const rng = seededRng(seed), tapMs = 1000 / taps;
   const s = createBattle({ team: ids.map(id => makeFighter(RUETHER_BY_ID[id], { uid: id, ...inst })), enemy: makeBoss(def, arenaLevel), rng });
-  let dodgeNext = false, nextTap = 0;
+  let dodgeNext = false, nextTap = tapMs;
   while (!s.over) {
     const me = s.team[s.active], inp = {};
-    if (s.time >= nextTap) inp.taps = 1;
+    if (s.time + 50 >= nextTap) inp.taps = 1;
     if (dodgeNext) { inp.dodge = true; dodgeNext = false; }
     if (me.energy >= CONST.MAX_ENERGY) inp.special = bestSpecial(me);
     const ev = tick(s, 50, inp);
-    if (ev.some(e => e.type === 'fast')) nextTap = s.time + tapMs - 50;
+    // Takt halten; nach einer Betäubung neu ansetzen statt nachzuholen
+    if (ev.some(e => e.type === 'fast')) nextTap = (s.time - nextTap < tapMs ? nextTap : s.time) + tapMs;
     if (ev.some(e => e.type === 'warn')) dodgeNext = rng() < dodge;
   }
   return s.won;
 }
-function winRate(def, arenaLevel, inst, opts) {
+function winRate(def, arenaLevel, inst, play) {
   let w = 0;
-  for (const ids of TEAMS) for (let i = 1; i <= SEEDS; i++) w += simBattle(def, arenaLevel, ids, inst, { ...opts, seed: i * 7919 + 13 }) ? 1 : 0;
+  for (const ids of TEAMS) for (let i = 1; i <= SEEDS; i++) w += simBattle(def, arenaLevel, ids, inst, play, i * 7919 + 13) ? 1 : 0;
   return w / (TEAMS.length * SEEDS);
 }
 const T = BOSSES.tachionen;
-const SEL15 = { rarity: 'selten', level: 15 }, EPI15 = { rarity: 'episch', level: 15 }, LEG20 = { rarity: 'legendaer', level: 20 }, NOR10 = { rarity: 'normal', level: 10 };
-// Ergebnis der Simulation (Anteil gewonnener Kämpfe über alle 10 Teams; 6 bzw. 30 Seeds je Team):
-//   selten Lv15 auf Lv1 0,63/0,74 · episch Lv15 auf Lv1 0,97/0,97 · legendär Lv20 auf Lv5 0,57/0,52,
-//   dabei mit 40 % Ausweichen 0,07/0,09, mit 2,5 statt 4 Tipps/s 0,00/0,13 · normal Lv10 auf Lv5 0/0.
-//   Gewinner auf Lv5 sind Teams mit Micha (Wallet-Drain heilt), ohne ihn reicht es nicht.
-
-test('v8 Balance: Lv. 1 mit drei Lv.-15-Rüthern (selten/episch) und gutem Ausweichen gewinnbar', () => {
-  const selten = winRate(T, 1, SEL15), episch = winRate(T, 1, EPI15);
-  assert.ok(selten >= 0.5, `selten ${selten}`);
-  assert.ok(episch >= 0.9, `episch ${episch}`);
-});
-
-test('v8 Balance: Lv. 5 mit drei Lv.-20-Legendären nur mit sehr gutem Spiel', () => {
-  const good = winRate(T, 5, LEG20);
-  assert.ok(good >= 0.4 && good <= 0.8, `gutes Spiel ${good}`);
-  const dodge = winRate(T, 5, LEG20, { dodge: 0.4 }), slow = winRate(T, 5, LEG20, { tapMs: 400 });
-  assert.ok(dodge <= 0.2, `40 % Ausweichen ${dodge}`);
-  assert.ok(slow <= 0.2, `2,5 Tipps/s ${slow}`);
-});
-
-test('v8 Balance: Lv. 5 mit drei Lv.-10-Normalen nicht gewinnbar', () => {
-  assert.equal(winRate(T, 5, NOR10), 0);
-});
-
-test('v8 Balance: mit Abstand der stärkste Boss', () => {
-  const others = Object.values(BOSSES).filter(b => b.id !== 'tachionen');
-  for (const b of others) {
-    assert.ok(makeBoss(T, 1).maxBtc > 1.5 * makeBoss(b, 5).maxBtc, `${b.id}: BTC`);
-    assert.ok(T.fast.damage / T.fast.every > makeBoss(b, 5).fast.damage / b.fast.every, `${b.id}: Schaden/s der schnellen Angriffe`);
-    // Teams, die jeden anderen Boss auf Lv. 5 schlagen, tun sich schon mit dem Tachionenbitcoin auf Lv. 1 bzw. 2 schwer
-    assert.ok(winRate(b, 5, SEL15) >= 0.9, `${b.id} Lv. 5 selten`);
-    assert.ok(winRate(b, 5, NOR10) >= 0.8, `${b.id} Lv. 5 normal`);
+const R = (rarity, level) => ({ rarity, level });
+const checkRates = rows => {
+  for (const [lvl, inst, play, min, max] of rows) {
+    const r = winRate(T, lvl, inst, play);
+    assert.ok(r >= min && r <= max, `Arena-Lv. ${lvl}, ${inst.rarity} Lv. ${inst.level}, ${play.name}: ${r} nicht in [${min}, ${max}]`);
   }
-  assert.ok(winRate(T, 1, SEL15) < 0.9, 'Tachionen Lv. 1 selten');
-  assert.ok(winRate(T, 2, NOR10) <= 0.2, 'Tachionen Lv. 2 normal');
+};
+// Ergebnis mit SEEDS = 60 (Anteil gewonnener Kämpfe über alle 10 Teams):
+//   Lv1 selten12 gut 0,97 · normal 0,62 · Lv2 selten15 gut 0,90 · episch15 normal 0,80 · Lv3 episch16 gut 0,94
+//   Lv4 episch18 gut 0,77 · legendär18 normal 0,73 · Lv5 legendär20 gut 0,94 · normal 0,54
+//   Hürde: Lv1 normal8 normal 0,02 · Lv5 episch15 normal 0,05 · episch15 gut auf Lv1–5: 1,00 0,99 0,91 0,58 0,44
+// checkRates: [Arena-Level, Team, Spiel, Siegquote mindestens, höchstens]
+
+test('Tachionen Balance: auf jedem Arena-Level fair spielbar', () => {
+  checkRates([
+    [1, R('selten', 12), GOOD, 0.65, 1], [1, R('selten', 12), NORMAL, 0.35, 1],
+    [2, R('selten', 15), GOOD, 0.6, 1], [2, R('episch', 15), NORMAL, 0.5, 1],
+    [3, R('episch', 16), GOOD, 0.55, 1],
+    [4, R('episch', 18), GOOD, 0.55, 1], [4, R('legendaer', 18), NORMAL, 0.45, 1],
+    [5, R('legendaer', 20), GOOD, 0.6, 1], [5, R('legendaer', 20), NORMAL, 0.35, 1],
+  ]);
+});
+
+test('Tachionen Balance: bleibt eine echte Hürde', () => {
+  checkRates([[1, R('normal', 8), NORMAL, 0, 0.15], [5, R('episch', 15), NORMAL, 0, 0.2]]);
+  // saubere Steigerung: dasselbe Team gewinnt mit jedem Level seltener
+  const rates = [1, 2, 3, 4, 5].map(l => winRate(T, l, R('episch', 15), GOOD));
+  for (let l = 1; l < 5; l++) assert.ok(rates[l] <= rates[l - 1], `episch Lv. 15, gut: ${rates.join(' ')}`);
+  assert.ok(rates[0] - rates[4] >= 0.3, `episch Lv. 15, gut: ${rates.join(' ')}`);
+});
+
+test('Tachionen Balance: auf jedem Level mit Abstand der stärkste Arena-Boss', () => {
+  // Schaden/s: schneller Angriff + Lade-Attacken im Wechsel (alle CHARGED_EVERY), Gift voll gerechnet
+  const fastDps = b => b.fast.damage * 1000 / b.fast.every;
+  const dps = b => fastDps(b) + b.charged.reduce((s, c) => s + c.damage + (c.poison ? c.poison.perSec * c.poison.ms / 1000 : 0), 0) / b.charged.length * 1000 / CONST.CHARGED_EVERY;
+  const others = ARENAS.map(a => BOSSES[a.boss]).filter(b => b.id !== 'tachionen');
+  assert.deepEqual(others.map(b => b.id).sort(), ['heizung', 'ps3', 'satoshi', 'schanze']);
+  for (let l = 1; l <= CONST.ARENA_LEVELS; l++) {
+    const t = makeBoss(T, l), o = others.map(b => makeBoss(b, l));
+    assert.ok(t.maxBtc >= 1.4 * Math.max(...o.map(b => b.maxBtc)), `Lv. ${l}: BTC`);
+    assert.ok(fastDps(t) >= 1.2 * Math.max(...o.map(fastDps)), `Lv. ${l}: Schaden/s schneller Angriff`);
+    assert.ok(dps(t) >= 1.2 * Math.max(...o.map(dps)), `Lv. ${l}: Schaden/s gesamt`);
+  }
 });

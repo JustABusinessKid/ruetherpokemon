@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { findPath, castRay, lineOfSight } from '../js/quest/path.js';
 import { createQuest, tick, canExtract, questSummary, visibleCone, abilitiesFor, abilityTargets, ABILITIES, ENEMY_TYPES, tileAt } from '../js/quest/engine.js';
-import { MISSIONS, MISSION_BY_ID } from '../js/quest/missions.js';
+import { MISSIONS, MISSION_BY_ID, buildSetup } from '../js/quest/missions.js';
 import { makeFighter } from '../js/battle.js';
 import { RUETHERS, RUETHER_BY_ID } from '../js/data.js';
 import { seededRng } from '../js/quests.js';
@@ -472,7 +472,12 @@ test('extract: erst mit Ziel und allen Stehenden auf P; Liegengelassene kosten W
   assert.equal(end.result, 'success');
   assert.equal(end.reason, 'extract');
   assert.equal(end.text, 'ok');
-  assert.deepEqual({ ...end.summary }, { result: 'success', reason: 'extract', missionId: 'test', variantId: 'v', score: 1, objective: { done: 2, total: 2, min: 1 }, timeMs: st.time, alarmFree: true, delivered: 2, leftBehind: 1 });
+  assert.deepEqual({ ...end.summary }, {
+    result: 'success', reason: 'extract', missionId: 'test', layoutId: null, variantId: 'v', mirror: false, setup: { layoutId: null, variantId: 'v', mirror: false, seed: 0 },
+    score: 1, objective: { done: 2, total: 2, min: 1 }, timeMs: st.time, alarmFree: true, delivered: 2, leftBehind: 1, kieser: 0, fine: 0,
+  });
+  assert.equal(end.fine, 0);
+  assert.equal(end.kieser, 0);
   assert.equal(c.down, false);
   assert.deepEqual(tick(st, 50, [{ type: 'move', unit: 0, to: { x: 5, y: 3 } }]), []); // vorbei
 });
@@ -535,78 +540,60 @@ test('Pause: tick mit dt 0 nimmt Befehle an, die Zeit steht', () => {
   assert.notDeepEqual(s2.units[0].goal, s2.units[1].goal);
 });
 
-// ---------- Missionen ----------
+// ---------- Missionen (v9: Layouts × Varianten × Spiegelung über buildSetup) ----------
 
-test('Missionen: 4 Stück, verschiedene Ziele, je 2–3 Varianten, Karten nach Legende', () => {
-  assert.ok(MISSIONS.length >= 4);
-  assert.deepEqual(new Set(MISSIONS.map(m => m.objective.type)), new Set(['steal', 'sabotage', 'fetch', 'unplug']));
-  for (const id of ['tachionenraub', 'hangar', 'ps3', 'keller']) assert.ok(MISSION_BY_ID[id], id);
-  for (const m of MISSIONS) {
-    assert.ok(m.variants.length >= 2 && m.variants.length <= 3, m.id);
-    assert.ok(m.name && m.place && m.intro && m.hint && m.texts.success && m.texts.fail && m.objective.label && m.theme);
-    assert.ok(Number.isFinite(m.lat) && Number.isFinite(m.lon));
-    const h = m.map.length, w = m.map[0].length;
-    assert.ok(w >= 26 && w <= 34 && h >= 18 && h <= 24, `${m.id} ${w}x${h}`);
-    for (const [y, row] of m.map.entries()) {
-      assert.equal(row.length, w, `${m.id} Zeile ${y}`);
-      assert.match(row, /^[#.DLPCSXK~]+$/);
-      if (y === 0 || y === h - 1) assert.match(row, /^#+$/);
-      else assert.ok(row[0] === '#' && row[w - 1] === '#');
-    }
-    assert.ok(m.map.join('').includes('L'), `${m.id} braucht L-Türen`);
-    assert.ok((m.map.join('').match(/P/g) || []).length >= 3);
-    assert.ok(new Set(m.variants.map(v => v.id)).size === m.variants.length);
-  }
-  assert.equal(MISSION_BY_ID.tachionenraub.objective.min, 3);
-  assert.deepEqual(MISSIONS.map(m => m.timeMs / 1000), [360, 360, 300, 300]);
-});
-
+// Alle Kombinationen; seed fest, damit Patrouillen-Versatz und Beute reproduzierbar sind
+const combos = (seed = 7) => MISSIONS.flatMap(m => m.layouts.flatMap(l => l.variants.flatMap(v => [false, true].map(mirror => ({
+  m, tag: `${m.id}/${l.id}/${v.id}${mirror ? '/gespiegelt' : ''}`, setup: { layoutId: l.id, variantId: v.id, mirror, seed },
+})))));
+const teamFor = (m, ids) => (m.solo ? [m.solo, ...ids] : ids).map(F);
 const passClosed = st => (x, y) => '.DPX~'.includes(st.tiles[y * st.w + x]);
-const passOpen = st => (x, y) => '.DPX~L'.includes(st.tiles[y * st.w + x]);
 
-test('jede Mission und Variante ist lösbar: Weg von P zu jedem Ziel ohne L-Türen, Gegner sinnvoll gesetzt', () => {
-  const team = ['christian', 'micha', 'viktor'].map(F);
-  for (const m of MISSIONS) {
-    let shortcut = false;
-    for (const v of m.variants) {
-      const st = createQuest({ mission: m, variant: v.id, team });
-      const tag = `${m.id}/${v.id}`;
-      const p = st.pads[4] || st.pads[0];
-      const goals = st.objs;
-      assert.ok(goals.length >= 1, tag);
-      if (m.objective.type === 'sabotage') assert.equal(goals.length, 4, tag);
-      if (m.objective.type === 'steal') assert.ok(st.objective.total >= 10, tag);
-      for (const o of goals) {
-        const closed = findPath(st.w, st.h, passClosed(st), p.x, p.y, o.x, o.y, 1.5);
-        assert.ok(closed, `${tag}: ${o.kind}@${o.x},${o.y} ohne L unerreichbar`);
-        const open = findPath(st.w, st.h, passOpen(st), p.x, p.y, o.x, o.y, 1.5);
-        if (open.length < closed.length) shortcut = true;
-      }
-      assert.ok(passClosed(st)(st.gate.x, st.gate.y), `${tag}: Tor`);
-      assert.ok(v.desc && v.name, tag);
-      for (const e of st.enemies) {
-        const ex = Math.floor(e.x), ey = Math.floor(e.y);
-        assert.ok(ENEMY_TYPES[e.type], tag);
-        assert.ok(passClosed(st)(ex, ey), `${tag}: Gegner ${e.i} in der Wand`);
-        for (const w of e.patrol) assert.ok(findPath(st.w, st.h, passClosed(st), ex, ey, w.x, w.y), `${tag}: Wegpunkt ${w.x},${w.y}`);
-      }
-    }
-    assert.ok(shortcut, `${m.id}: keine L-Tür ist eine Abkürzung`);
+test('Missionen: Engine kennt jede Kachel und jeden Gegnertyp, Zustand trägt setup, layoutId und mirror', () => {
+  for (const { m, tag, setup } of combos()) {
+    const st = createQuest({ mission: m, setup, team: teamFor(m, ['christian', 'micha', 'viktor']), rng: seededRng(1) });
+    assert.match(st.tiles.join(''), /^[#.DLPCSKV~BWT]+$/, tag);
+    for (const e of st.enemies) assert.ok(ENEMY_TYPES[e.type], `${tag}: ${e.type}`);
+    assert.deepEqual(st.setup, setup, tag);
+    assert.equal(st.layoutId, setup.layoutId);
+    assert.equal(st.mirror, setup.mirror);
+    assert.equal(st.timeLimit, m.timeMs ?? null, tag);
+    assert.equal(st.units.length, m.solo ? 1 : 3, tag);
+    if (m.solo) assert.equal(st.units[0].id, m.solo, tag);
+    for (const u of st.units) assert.equal(tileAt(st, u.x, u.y), 'P', tag);
+    const kind = { steal: 'vault', sabotage: 'sabotage', fetch: 'item', unplug: 'plug', valve: 'valve', ignite: 'tree' }[m.objective.type];
+    const n = st.objs.filter(o => o.kind === kind).length;
+    assert.ok(n >= 1, tag);
+    if (m.objective.type === 'steal') assert.ok(st.objective.total >= st.objective.min + 2, tag);
+    else assert.equal(st.objective.total, ['sabotage', 'valve', 'ignite'].includes(m.objective.type) ? n : 1, tag);
   }
 });
 
-test('jede Variante: 30 s auf der Plattform warten bleibt unentdeckt, Patrouillen laufen', () => {
-  const team = ['christian', 'hildegard', 'ramona'].map(F);
-  for (const m of MISSIONS) for (const v of m.variants) {
-    const st = createQuest({ mission: m, variant: v.id, team, rng: seededRng(3) });
+test('jede Kombination lösbar (Engine-Zustand): Weg von P zu jedem Ziel ohne L-Türen, Tor und Wegpunkte erreichbar', () => {
+  for (const { m, tag, setup } of combos()) {
+    const st = createQuest({ mission: m, setup, team: teamFor(m, ['christian']), rng: seededRng(1) });
+    const p = st.spots[0];
+    for (const o of st.objs) assert.ok(findPath(st.w, st.h, passClosed(st), p.x, p.y, o.x, o.y, 1.5), `${tag}: ${o.kind}@${o.x},${o.y} ohne L unerreichbar`);
+    assert.ok(passClosed(st)(st.gate.x, st.gate.y), `${tag}: Tor`);
+    for (const e of st.enemies) {
+      const ex = Math.floor(e.x), ey = Math.floor(e.y);
+      assert.ok(passClosed(st)(ex, ey), `${tag}: Gegner ${e.i} in der Wand`);
+      for (const w of e.patrol) assert.ok(findPath(st.w, st.h, passClosed(st), ex, ey, w.x, w.y), `${tag}: Wegpunkt ${w.x},${w.y}`);
+    }
+  }
+});
+
+test('jede Kombination: 30 s auf der Plattform warten bleibt unentdeckt, Patrouillen laufen', () => {
+  for (const { m, tag, setup } of combos(3)) {
+    const st = createQuest({ mission: m, setup, team: teamFor(m, ['christian', 'hildegard', 'ramona']), rng: seededRng(3) });
     const start = st.enemies.map(e => [e.x, e.y]);
     const ev = run(st, 30_000);
-    assert.ok(!has(ev, 'suspicious') && !has(ev, 'alert'), `${m.id}/${v.id}`);
-    assert.ok(st.enemies.some((e, i) => e.x !== start[i][0] || e.y !== start[i][1]), `${m.id}/${v.id} niemand läuft`);
+    assert.ok(!has(ev, 'suspicious') && !has(ev, 'alert') && !has(ev, 'kieser') && !has(ev, 'caught'), tag);
+    assert.ok(st.enemies.some((e, i) => e.x !== start[i][0] || e.y !== start[i][1]), `${tag} niemand läuft`);
   }
 });
 
-test('Varianten: deterministisch mit festem rng, verschiedene Seeds geben verschiedene Varianten', () => {
+test('Setup: gleicher Seed = gleicher Zustand und Ablauf, verschiedene Seeds würfeln Layouts/Varianten/Spiegelung', () => {
   const team = ['christian', 'micha', 'viktor'].map(F);
   const play = seed => {
     const st = createQuest({ mission: 'tachionenraub', team, rng: seededRng(seed) });
@@ -616,23 +603,50 @@ test('Varianten: deterministisch mit festem rng, verschiedene Seeds geben versch
         : i === 120 ? [ab(0, 'beer', { x: 14.5, y: 8.5 })] : [];
       log.push(...tick(st, 50, cmds));
     }
-    return { v: st.variantId, log: JSON.stringify(log), units: JSON.stringify(st.units), enemies: JSON.stringify(st.enemies), alarm: st.alarm };
+    return { setup: st.setup, log: JSON.stringify(log), units: JSON.stringify(st.units), enemies: JSON.stringify(st.enemies), alarm: st.alarm };
   };
   assert.deepEqual(play(5), play(5));
   const seen = new Set();
-  for (let s = 1; s <= 30; s++) seen.add(createQuest({ mission: 'hangar', team, rng: seededRng(s * 2654435761) }).variantId);
-  assert.ok(seen.size >= 2);
+  for (let s = 1; s <= 60; s++) { const st = createQuest({ mission: 'hangar', team, rng: seededRng(s * 2654435761) }); seen.add(`${st.layoutId}/${st.variantId}/${st.mirror}`); }
+  assert.ok(seen.size >= 4, [...seen].join(' '));
+  // gleiches setup, anderer rng: gleicher Startzustand
+  const l = MISSION_BY_ID.hangar.layouts[0], setup = { layoutId: l.id, variantId: l.variants[1].id, mirror: true, seed: 77 };
+  const snap = st => JSON.stringify([st.tiles, st.objs, st.enemies, st.units, st.gate]);
+  assert.equal(snap(createQuest({ mission: 'hangar', setup, team, rng: seededRng(1) })), snap(createQuest({ mission: 'hangar', setup, team, rng: seededRng(2) })));
   assert.throws(() => createQuest({ mission: 'gibtsnicht', team }));
   assert.throws(() => createQuest({ mission: 'hangar', variant: 'gibtsnicht', team }));
+  assert.throws(() => createQuest({ mission: 'hangar', setup: { layoutId: 'gibtsnicht' }, team }));
+});
+
+test('Spiegeln: Zustand ist das waagerechte Spiegelbild, Ende meldet setup', () => {
+  const m = MISSION_BY_ID.tachionenraub, l = m.layouts[0], team = ['christian', 'ramona'].map(F);
+  const a = createQuest({ mission: m, setup: { layoutId: l.id, variantId: 'schicht', mirror: false, seed: 4 }, team });
+  const b = createQuest({ mission: m, setup: { layoutId: l.id, variantId: 'schicht', mirror: true, seed: 4 }, team });
+  const rows = st => Array.from({ length: st.h }, (_, y) => st.tiles.slice(y * st.w, (y + 1) * st.w).join(''));
+  assert.deepEqual(rows(b), rows(a).map(r => [...r].reverse().join('')));
+  assert.deepEqual(b.gate, { x: a.w - 1 - a.gate.x, y: a.gate.y });
+  assert.deepEqual(b.objs.map(o => `${o.x},${o.y}:${o.coins}`).sort(), a.objs.map(o => `${a.w - 1 - o.x},${o.y}:${o.coins}`).sort());
+  for (const [i, e] of a.enemies.entries()) assert.ok(Math.abs(b.enemies[i].x - (a.w - e.x)) < 1e-9 && b.enemies[i].y === e.y);
+  const end = find(tick(b, 50, [{ type: 'abort' }]), 'end');
+  assert.deepEqual(end.summary.setup, { layoutId: l.id, variantId: 'schicht', mirror: true, seed: 4 });
+  assert.deepEqual(end.setup, end.summary.setup);
+  assert.equal(end.summary.layoutId, l.id);
+  assert.equal(end.summary.mirror, true);
+  // Kompatibilität: variant ohne setup = Layout dieser Variante, ungespiegelt
+  const c = createQuest({ mission: 'hangar', variant: 'nacht', team, rng: seededRng(2) });
+  assert.equal(c.layoutId, 'halle');
+  assert.equal(c.mirror, false);
 });
 
 test('Zustand: Rüther auf der Plattform mit echten ids, Objekte und Türen gelesen', () => {
-  const st = createQuest({ mission: 'tachionenraub', variant: 'schicht', team: ['christian', 'ramona'].map(F) });
+  const setup = { layoutId: 'tresor', variantId: 'schicht', mirror: false, seed: 1 };
+  const st = createQuest({ mission: 'tachionenraub', setup, team: ['christian', 'ramona'].map(F) });
+  const built = buildSetup(MISSION_BY_ID.tachionenraub, setup);
   assert.deepEqual(st.units.map(u => u.id), ['christian', 'ramona']);
   for (const u of st.units) { assert.equal(tileAt(st, u.x, u.y), 'P'); assert.equal(u.hp, u.maxHp); }
   assert.equal(st.objs.filter(o => o.kind === 'vault').length, 8);
+  for (const o of st.objs) assert.equal(o.coins, built.coins[`${o.x},${o.y}`]);
   assert.equal(st.objs.find(o => o.x === 29 && o.y === 13).coins, 0);
-  assert.equal(st.objs.find(o => o.x === 22 && o.y === 17).coins, 3);
   assert.ok(st.doors.some(d => d.locked) && st.doors.some(d => !d.locked));
   assert.equal(st.objective.min, 3);
   assert.equal(st.timeLimit, 360_000);
@@ -746,4 +760,400 @@ test('Gegnerschaden wächst mit der Teamstärke (Ø maxBtc × power / 100)', () 
   const hit = find(run(st, 1500), 'hit', h => h.from === 'enemy');
   assert.equal(hit.damage, Math.round(ENEMY_TYPES.pinguin.dps * c.maxBtc * c.power / 100));
   assert.ok(hit.damage >= 40);
+});
+
+// ---------- v9: neue Kacheln, Ziele, Bernd, Ranger, Dackel, Platzwart ----------
+
+test('Kacheln V/B/W/T: nicht begehbar; W und V lassen Sicht durch, B und T nicht; Würfe ins Wasser ja, auf Bäume nein', () => {
+  const MAP = ['############', '#PPP.W.....#', '#....W.....#', '#....T.....#', '#....V.....#', '#....B.....#', '############'];
+  const st = Q(MAP, []);
+  assert.ok(has(tick(st, 0, [{ type: 'move', unit: 0, to: { x: 8, y: 2 } }]), 'fail', f => f.reason === 'path'));
+  for (const [y, seen] of [[1, true], [3, false], [4, true], [5, false]]) {
+    const s = Q(MAP, [{ type: 'pinguin', at: [8, y], dir: 180 }]);
+    place(s.units[0], 4, y);
+    run(s, 400);
+    assert.equal(s.enemies[0].suspicion > 0, seen, `Zeile ${y} (${MAP[y][5]})`);
+  }
+  place(st.units[0], 4, 2);
+  assert.ok(!has(tick(st, 0, [ab(0, 'beer', { x: 5.5, y: 1.5 })]), 'fail'));
+  const s2 = Q(MAP, []);
+  place(s2.units[0], 4, 2);
+  assert.ok(has(tick(s2, 0, [ab(0, 'beer', { x: 5.5, y: 3.5 })]), 'fail', f => f.reason === 'target'));
+});
+
+const CAMP = [
+  '####################',
+  '#PPP..........V....#',
+  '#PPP...............#',
+  '#PPP...............#',
+  '#..................#',
+  '#........V.........#',
+  '#..................#',
+  '#..............V...#',
+  '#..................#',
+  '####################',
+];
+const campOpts = { team: ['viktor'], solo: 'viktor', timeMs: null, objective: { type: 'valve', label: 'Wasser' } };
+
+test('Wasseranschlüsse: 4 s je Anschluss von nebenan, Ziel 3/3, dann abheben; keine Zeitgrenze', () => {
+  const st = Q(CAMP, [], campOpts);
+  const v = st.units[0];
+  assert.equal(st.timeLimit, null);
+  assert.deepEqual([st.objective.total, st.objective.min], [3, 3]);
+  const valves = st.objs.filter(o => o.kind === 'valve');
+  let ev = [];
+  for (const o of valves) {
+    place(v, o.x, o.y + 1);
+    ev = run(st, 3900, [{ type: 'interact', unit: 0, obj: o.id }]);
+    assert.equal(find(ev, 'interactStart').ms, 4000);
+    assert.equal(o.done, false);
+    ev = run(st, 200);
+    const e = find(ev, 'valve');
+    assert.deepEqual([e.obj, e.total], [o.id, 3]);
+  }
+  assert.equal(find(ev, 'valve').done, 3);
+  assert.ok(has(ev, 'objective', o => o.reached && o.kind === 'valve'));
+  assert.ok(has(tick(st, 0, [{ type: 'interact', unit: 0, obj: valves[0].id }]), 'fail', f => f.reason === 'done'));
+  run(st, 700_000); // Zeit spielt keine Rolle
+  assert.equal(st.over, false);
+  place(v, 2, 2);
+  assert.equal(find(tick(st, 50, [{ type: 'extract' }]), 'end').result, 'success');
+});
+
+test('Solo: nur der Solo-Rüther spielt; liegt er, ist die Mission gescheitert', () => {
+  const st = Q(CAMP, [], { ...campOpts, team: ['christian', 'viktor', 'micha'] });
+  assert.deepEqual(st.units.map(u => u.id), ['viktor']);
+  st.units[0].down = true;
+  const end = find(tick(st, 50), 'end');
+  assert.deepEqual([end.result, end.reason], ['fail', 'allDown']);
+  assert.ok(end.text.startsWith('Viktor liegt flach'), end.text);
+});
+
+const angDiffT = (a, b) => { const d = (b - a) % (2 * Math.PI); return d > Math.PI ? d - 2 * Math.PI : d < -Math.PI ? d + 2 * Math.PI : d; };
+
+test('Bernd: Kaffee alle 20–30 s für 5 s (Kegel aus, vorbeischleichen), danach 10 s koffeiniert: Sicht ×1,3, Kegel ×1,2, Tempo ×1,5', () => {
+  const st = Q(ROOM, [{ type: 'bernd', at: [10, 4], dir: 180 }], { team: ['viktor'] });
+  const e = st.enemies[0], v = st.units[0], C = ENEMY_TYPES.bernd.coffee;
+  place(v, 17, 8);
+  assert.ok(e.coffeeAt >= 20_000 && e.coffeeAt <= 30_000, `${e.coffeeAt}`);
+  assert.ok(Math.abs(coneLen(st, 0) - 6) < 1e-6);
+  let ev = run(st, Math.ceil(e.coffeeAt / 50) * 50);
+  const c = find(ev, 'coffee');
+  assert.deepEqual([c.phase, c.ms, c.enemy], ['start', 5000, 0]);
+  assert.ok(ENEMY_TYPES.bernd.lines.coffee.includes(c.say));
+  const t0 = st.time;
+  assert.ok(e.coffeeAt >= t0 + 20_000 - 50 && e.coffeeAt <= t0 + 30_000, 'nächster Kaffee 20–30 s nach diesem');
+  assert.equal(e.state, 'coffee');
+  assert.deepEqual(visibleCone(st, 0), []);
+  place(v, 9, 4); // direkt vor ihm
+  ev = run(st, 4000);
+  assert.equal(e.suspicion, 0);
+  assert.ok(!has(ev, 'suspicious'));
+  place(v, 17, 8);
+  ev = run(st, 1100);
+  assert.ok(has(ev, 'coffee', x => x.phase === 'end'));
+  assert.equal(find(ev, 'caffeinated').ms, C.boost);
+  assert.equal(e.state, 'patrol');
+  assert.ok(Math.abs(coneLen(st, 0) - 6 * 1.3) < 1e-6);
+  const pts = visibleCone(st, 0).slice(1), spread = Math.abs(angDiffT(Math.atan2(pts[0].y - e.y, pts[0].x - e.x), Math.atan2(pts.at(-1).y - e.y, pts.at(-1).x - e.x)));
+  assert.ok(Math.abs(spread - 70 * 1.2 * Math.PI / 180) < 0.02, `${spread}`);
+  run(st, 10_000);
+  assert.ok(Math.abs(coneLen(st, 0) - 6) < 1e-6);
+  // Tempo: koffeiniert 1,5-mal so schnell auf der Runde
+  const pace = buzz => {
+    const s = Q(ROOM, [{ type: 'bernd', at: [2, 8], dir: 0, patrol: [[2, 8], [18, 8]] }], { team: ['viktor'] });
+    const b = s.enemies[0];
+    b.coffeeAt = Infinity;
+    if (buzz) b.buzzUntil = Infinity;
+    tick(s, 50);
+    const x0 = b.x;
+    tick(s, 1000);
+    return b.x - x0;
+  };
+  assert.ok(Math.abs(pace(false) - 2.3) < 1e-6 && Math.abs(pace(true) - 2.3 * 1.5) < 1e-6, `${pace(false)} ${pace(true)}`);
+});
+
+test('Bernd erwischt Viktor: kieser-Event, Pause bis resume, dann Plattform mit voller HP, Bernd zurück auf Anfang, alle ruhig, Ziele bleiben', () => {
+  const st = Q(CAMP, [{ type: 'bernd', at: [12, 3], dir: 180, patrol: [[12, 3, 1000], [12, 7, 1000]] }, { type: 'camper', at: [17, 5], dir: 180 }], campOpts);
+  const v = st.units[0], b = st.enemies[0], cp = st.enemies[1];
+  st.objs[0].done = true;
+  v.hp = 3;
+  place(v, 11, 3);
+  b.coffeeAt = Infinity;
+  Object.assign(cp, { state: 'investigate', target: { x: 11.5, y: 3.5 }, until: 0 });
+  st.alarm = 0.6;
+  let ev = run(st, 1000);
+  const k = find(ev, 'kieser');
+  assert.deepEqual([k.unit, k.enemy, k.count], [0, 0, 1]);
+  assert.equal(ev.filter(x => x.type === 'kieser').length, 1);
+  assert.equal(st.paused, 'kieser');
+  assert.equal(st.kieser, 1);
+  // Pause: Zeit steht, Befehle außer resume/abort werden ignoriert
+  const t0 = st.time, x0 = v.x;
+  assert.deepEqual(run(st, 2000, [{ type: 'move', unit: 0, to: { x: 5, y: 5 } }]), []);
+  assert.equal(st.time, t0);
+  assert.equal(v.x, x0);
+  ev = tick(st, 0, [{ type: 'resume' }]);
+  const r = find(ev, 'resumed');
+  assert.deepEqual([r.reason, r.unit], ['kieser', 0]);
+  assert.equal(st.paused, null);
+  assert.equal(tileAt(st, v.x, v.y), 'P');
+  assert.equal(v.hp, v.maxHp);
+  assert.equal(v.down, false);
+  assert.deepEqual([b.x, b.y, b.wp, b.state, b.suspicion], [12.5, 3.5, 0, 'patrol', 0]);
+  assert.equal(cp.state, 'patrol');
+  assert.equal(st.alarm, 0);
+  assert.equal(st.objs[0].done, true, 'abgedrehter Anschluss bleibt zu');
+  run(st, 100);
+  assert.ok(st.time > t0, 'nach resume läuft die Zeit weiter');
+  // zweites Mal: alarmierter Bernd läuft hin und greift zu
+  place(v, 8, 6);
+  Object.assign(b, { state: 'alert', lastSeen: { x: v.x, y: v.y }, suspicion: 1 });
+  ev = run(st, 4000);
+  assert.equal(find(ev, 'kieser').count, 2);
+  tick(st, 0, [{ type: 'resume' }]);
+  place(v, 2, 2);
+  for (const o of st.objs) o.done = true;
+  tick(st, 50);
+  ev = run(st, 100, [{ type: 'extract' }]);
+  const end = find(ev, 'end');
+  assert.equal(end.result, 'success');
+  assert.equal(end.kieser, 2);
+  assert.equal(end.summary.kieser, 2);
+  // Aufgeben geht auch während der Pause
+  const s2 = Q(CAMP, [{ type: 'bernd', at: [12, 3], dir: 180 }], campOpts);
+  place(s2.units[0], 11, 3);
+  s2.enemies[0].coffeeAt = Infinity;
+  run(s2, 1000);
+  assert.equal(s2.paused, 'kieser');
+  assert.equal(find(tick(s2, 50, [{ type: 'abort' }]), 'end').result, 'abort');
+  // Debug „Bernd ruft“: {type:'catch'} = der erste Fänger erwischt Einheit 0 sofort; ohne Fänger nichts
+  const s3 = Q(CAMP, [{ type: 'camper', at: [17, 5], dir: 180 }, { type: 'bernd', at: [12, 7], dir: 0 }], campOpts);
+  const k3 = find(tick(s3, 50, [{ type: 'catch' }]), 'kieser');
+  assert.deepEqual([k3.enemy, k3.unit, k3.count, s3.paused], [1, 0, 1, 'kieser']);
+  assert.ok(!has(tick(Q(CAMP, [{ type: 'camper', at: [17, 5], dir: 180 }], campOpts), 50, [{ type: 'catch' }]), 'kieser'));
+});
+
+test('Ranger erwischt: caught {by, unit, fine}, sofort Ende fail/caught mit 10.000 Strafe', () => {
+  const st = Q(ROOM, [{ type: 'ranger', at: [10, 4], dir: 180 }], { team: ['christian', 'micha'] });
+  place(st.units[0], 9, 4);
+  const ev = run(st, 1500);
+  const c = find(ev, 'caught'), end = find(ev, 'end');
+  assert.deepEqual([c.by, c.unit, c.fine], [0, 0, 10_000]);
+  assert.ok(ev.indexOf(end) > ev.indexOf(c));
+  assert.deepEqual([end.result, end.reason, end.fine], ['fail', 'caught', 10_000]);
+  assert.equal(end.summary.fine, 10_000);
+  assert.ok(end.text.includes('teuer'), end.text);
+  assert.equal(st.over, true);
+  assert.ok(!has(ev, 'hit', h => h.from === 'enemy'), 'Ranger schlagen nicht');
+  // alarmierter Ranger aus der Ferne
+  const s2 = Q(ROOM, [{ type: 'ranger', at: [15, 4], dir: 180 }], { team: ['christian'] });
+  place(s2.units[0], 8, 4);
+  Object.assign(s2.enemies[0], { state: 'alert', lastSeen: { x: 8.5, y: 4.5 }, suspicion: 1 });
+  assert.equal(find(run(s2, 6000), 'end').reason, 'caught');
+  // ohne Erwischen: keine Strafe
+  const s3 = Q(ROOM, [], { team: ['christian'] });
+  assert.equal(find(tick(s3, 50, [{ type: 'abort' }]), 'end').fine, 0);
+});
+
+test('Feuer: 3 s anzünden, Baum brennt dauerhaft; Ranger in 10 Kacheln bemerken es nach 5 s und laufen löschen', () => {
+  const MAP = [
+    '##############################',
+    '#PPP.........................#',
+    '#PPP.........................#',
+    '#PPP.........................#',
+    '#.....B..................B...#',
+    '#............................#',
+    '#............................#',
+    '#............................#',
+    '#............................#',
+    '##############################',
+  ];
+  const st = Q(MAP, [{ type: 'ranger', at: [14, 8], dir: 0 }, { type: 'ranger', at: [27, 8], dir: 0 }], { team: ['christian'], objective: { type: 'ignite', min: 1, label: 'Feuer' } });
+  const c = st.units[0], [near, far] = st.enemies, tree = st.objs.find(o => o.x === 6);
+  assert.equal(st.objective.total, 2);
+  place(c, 5, 4);
+  let ev = run(st, 2900, [{ type: 'interact', unit: 0, obj: tree.id }]);
+  assert.equal(find(ev, 'interactStart').ms, 3000);
+  ev = run(st, 200);
+  const ig = find(ev, 'ignite');
+  assert.deepEqual([ig.obj, ig.done, ig.total], [tree.id, 1, 2]);
+  assert.equal(tree.done, true);
+  assert.ok(has(ev, 'objective', o => o.reached));
+  place(c, 28, 1);
+  const lit = tree.litAt;
+  ev = run(st, 4700);
+  assert.ok(!has(ev, 'fireSpotted'), 'erst nach 5 s');
+  ev = run(st, 400);
+  const fs = find(ev, 'fireSpotted');
+  assert.ok(st.time - lit >= 5000);
+  assert.deepEqual([fs.obj, fs.enemies], [tree.id, [0]]);
+  assert.ok(ENEMY_TYPES.ranger.lines.fire.includes(fs.say));
+  assert.deepEqual([near.state, near.reason], ['distracted', 'fire']);
+  assert.equal(far.state, 'patrol');
+  run(st, 5000);
+  assert.ok(Math.hypot(near.x - 6.5, near.y - 4.5) < 1.6, 'steht am Baum');
+  assert.deepEqual([near.state, near.reason, near.path.length], ['distracted', 'fire', 0]);
+  ev = run(st, 8000);
+  assert.ok(has(ev, 'calm', x => x.enemy === 0));
+  assert.equal(near.state, 'patrol');
+  assert.equal(tree.done, true, 'brennt weiter');
+  assert.ok(!has(run(st, 10_000), 'fireSpotted'), 'nur einmal bemerkt');
+});
+
+test('Dackel bellt bei Sichtung: Kollegen in 6 Kacheln kommen zum Hund; Platzwart pfeift: Alarm +0,5', () => {
+  const st = Q(ROOM, [{ type: 'dackel', at: [10, 4], dir: 180 }, { type: 'camper', at: [15, 4], dir: 0 }, { type: 'camper', at: [17, 8], dir: 0 }]);
+  place(st.units[0], 8, 4);
+  const ev = run(st, 1000);
+  const b = find(ev, 'bark');
+  assert.deepEqual([b.enemy, b.r, b.enemies, b.say], [0, 6, [1], 'WAU!']);
+  assert.ok(['distracted', 'investigate'].includes(st.enemies[1].state)); // erst Bellen, dann evtl. Alarmruf
+  assert.equal(st.enemies[2].state, 'patrol');
+  assert.ok(['suspicious', 'alert'].includes(st.enemies[0].state));
+  assert.ok(!has(ev, 'noise'), 'Bellen ist ein eigenes Event');
+  const s2 = Q(ROOM, [{ type: 'platzwart', at: [5, 4], dir: 0 }]);
+  place(s2.units[0], 8, 4);
+  const e2 = run(s2, 3000);
+  const w = find(e2, 'whistle');
+  assert.equal(w.enemy, 0);
+  assert.ok(Math.abs(w.alarm - 0.5) < 1e-9);
+  assert.ok(Math.abs(find(e2, 'alert').alarm - 0.5) < 1e-9);
+});
+
+test('Neue Gegnertypen: Werte laut Spec, Sprüche und Sprite', () => {
+  const want = { bernd: [6, 70], camper: [5, 90, 2.2], dackel: [3, 120, 3.6], platzwart: [6, 70, 2.4], ranger: [8, 50, 2.3] };
+  for (const [id, [sight, angle, speed]] of Object.entries(want)) {
+    const T = ENEMY_TYPES[id];
+    assert.deepEqual([T.sight, T.angle], [sight, angle], id);
+    if (speed) assert.equal(T.speed, speed, id);
+    assert.equal(T.sprite, `q-${id}`);
+    for (const k of ['sus', 'alert', 'calm', 'wake']) assert.ok(T.lines[k]?.length, `${id}.${k}`);
+  }
+  assert.deepEqual(ENEMY_TYPES.bernd.coffee, { every: [20_000, 30_000], ms: 5000, boost: 10_000, speed: 1.5, sight: 1.3, angle: 1.2 });
+  assert.ok(ENEMY_TYPES.bernd.lines.coffee.length);
+  assert.equal(ENEMY_TYPES.bernd.catches, 'kieser');
+  assert.deepEqual([ENEMY_TYPES.ranger.catches, ENEMY_TYPES.ranger.fine], ['caught', 10_000]);
+  assert.equal(ENEMY_TYPES.platzwart.whistle, 0.5);
+  assert.equal(ENEMY_TYPES.dackel.bark, true);
+});
+
+// Spec (Sebi): Stefan redet nur über seine Kieser-Breite oder Bulletproof Coffee, nie über Geruch oder Duschen
+test('Stefans Sprüche: Engine-Lines und Kieser-Cutscene ohne Duschen und Geruch', () => {
+  const bad = /dusch|riech|stink|unrasiert/i;
+  const lines = [...Object.values(ENEMY_TYPES.bernd.lines).flat(), ...MISSION_BY_ID.camping.texts.kieser.filter(([who]) => who === 'bernd').map(([, t]) => t)];
+  assert.ok(lines.length >= 10);
+  for (const t of lines) assert.ok(!bad.test(t), t);
+  assert.ok(MISSION_BY_ID.camping.texts.kieser.some(([who, t]) => who === 'viktor' && /duschen/.test(t))); // Viktors eigener Spruch darf bleiben
+});
+
+// Große Karte 64×48: Wände mit Lücken, Bäume, Wasser, Deckung; 16 Wachen auf langen Runden
+function bigQuest(n = 16) {
+  const W = 64, H = 48, rows = [];
+  for (let y = 0; y < H; y++) {
+    let r = '';
+    for (let x = 0; x < W; x++) {
+      r += x === 0 || y === 0 || x === W - 1 || y === H - 1 ? '#'
+        : x >= 2 && x <= 4 && y >= 2 && y <= 4 ? 'P'
+          : x % 8 === 0 && y > 6 && y % 6 !== 3 ? '#'
+            : y === 30 && x > 20 && x < 40 ? 'W'
+              : x % 11 === 5 && y % 7 === 2 ? 'T'
+                : x % 9 === 4 && y % 5 === 1 ? '~' : '.';
+    }
+    rows.push(r);
+  }
+  rows[40] = rows[40].slice(0, 50) + 'V' + rows[40].slice(51);
+  const free = (x, y) => '.~'.includes(rows[y][x]);
+  const rng = seededRng(11), pick = () => { for (;;) { const x = 1 + Math.floor(rng() * 62), y = 8 + Math.floor(rng() * 39); if (free(x, y)) return [x, y]; } };
+  const types = ['camper', 'dackel', 'platzwart'];
+  const enemies = Array.from({ length: n }, (_, i) => { const a = pick(); return { type: types[i % 3], at: a, dir: 0, patrol: [a, pick(), pick(), pick()] }; });
+  return Q(rows, enemies, { team: ['christian', 'micha', 'viktor'], gate: [60, 45], timeMs: null, objective: { type: 'valve', label: 'V' }, reinforce: 'camper' });
+}
+
+test('Leistung große Karte 64×48, 16 Wachen: 1000 Ticks unter 400 ms, auch wenn alle jagen', () => {
+  const st = bigQuest();
+  const t0 = performance.now();
+  for (let i = 0; i < 1000; i++) {
+    const cmds = i === 0 ? [{ type: 'move', unit: 0, to: { x: 60, y: 44 } }, { type: 'move', unit: 1, to: { x: 30, y: 40 } }, { type: 'move', unit: 2, to: { x: 58, y: 3 } }] : [];
+    tick(st, 50, cmds);
+    for (let k = 0; k < st.enemies.length; k++) visibleCone(st, k);
+  }
+  const ms = performance.now() - t0;
+  assert.ok(ms < 400, `Patrouille: ${ms.toFixed(0)} ms`);
+  // alle Wachen alarmiert, Rüther unverwüstlich: Jagd-Wege alle 500 ms über die ganze Karte
+  const s2 = bigQuest();
+  for (const u of s2.units) u.hp = u.maxHp = 1e9;
+  for (const e of s2.enemies) Object.assign(e, { state: 'alert', suspicion: 1, lastSeen: { x: 3.5, y: 3.5 } });
+  const t1 = performance.now();
+  for (let i = 0; i < 1000; i++) {
+    tick(s2, 50, i === 0 ? [{ type: 'move', unit: 0, to: { x: 60, y: 44 } }, { type: 'move', unit: 1, to: { x: 30, y: 40 } }] : []);
+    for (let k = 0; k < s2.enemies.length; k++) visibleCone(s2, k);
+  }
+  const ms2 = performance.now() - t1;
+  assert.ok(ms2 < 400, `Jagd: ${ms2.toFixed(0)} ms`);
+  assert.equal(s2.over, false);
+});
+
+test('Camping und Bruch (echte Karten): solo Viktor ohne Zeit, Bernd trinkt Kaffee; Bruch mit Rangern; je 1000 Ticks unter 400 ms', { skip: !(MISSION_BY_ID.camping && MISSION_BY_ID.bruch) && 'Missionen fehlen noch' }, () => {
+  for (const id of ['camping', 'bruch']) {
+    const m = MISSION_BY_ID[id];
+    for (const l of m.layouts) for (const mirror of [false, true]) {
+      const tag = `${id}/${l.id}${mirror ? '/gespiegelt' : ''}`;
+      const st = createQuest({ mission: m, setup: { layoutId: l.id, variantId: l.variants[0].id, mirror, seed: 5 }, team: ['christian', 'viktor', 'micha'].map(F), rng: seededRng(5) });
+      if (id === 'camping') {
+        assert.deepEqual(st.units.map(u => u.id), ['viktor'], tag);
+        assert.equal(st.timeLimit, null);
+        assert.equal(st.objective.total, 3);
+        assert.ok(st.w >= 64 && st.h >= 48, tag);
+      } else assert.equal(st.objective.type, 'ignite');
+      const far = st.objs.reduce((a, o) => (Math.hypot(o.x - st.spots[0].x, o.y - st.spots[0].y) > Math.hypot(a.x - st.spots[0].x, a.y - st.spots[0].y) ? o : a));
+      const t0 = performance.now(), ev = [];
+      for (let i = 0; i < 1000; i++) {
+        const cmds = i === 0 ? st.units.map(u => ({ type: 'interact', unit: u.i, obj: far.id })) : [];
+        ev.push(...tick(st, 50, cmds));
+        if (st.paused) tick(st, 0, [{ type: 'resume' }]);
+        for (let k = 0; k < st.enemies.length; k++) visibleCone(st, k);
+      }
+      const ms = performance.now() - t0;
+      assert.ok(ms < 400, `${tag}: ${ms.toFixed(0)} ms`);
+      if (id === 'camping') assert.ok(has(ev, 'coffee', c => c.phase === 'start'), `${tag}: Bernd trinkt keinen Kaffee`);
+    }
+  }
+});
+
+test('Fixes Runde 1: Stefan heißt sichtbar Stefan und ist nach resume wieder heil; M&Ms nicht ins Wasser; getrennte Ziel-Kacheln für Rüther und Ranger', () => {
+  // kein sichtbares „Bernd“ (ids wie 'bernd' bleiben)
+  assert.equal(ENEMY_TYPES.bernd.name, 'Stefan');
+  for (const T of Object.values(ENEMY_TYPES)) for (const l of Object.values(T.lines).flat()) assert.ok(!l.includes('Bernd'), l);
+  for (const m of MISSIONS) {
+    const vis = [m.name, m.place, m.intro, m.hint, ...Object.values(m.texts).flat(2), ...m.layouts.flatMap(l => [l.name, ...l.variants.flatMap(v => [v.name, v.desc])])];
+    for (const s of vis) assert.ok(typeof s !== 'string' || !s.includes('Bernd'), `${m.id}: ${s}`);
+  }
+  // Viktor wehrt sich vor dem Zugriff (defend vor hunt): nach resume hat Stefan wieder volle HP
+  const c = Q(CAMP, [{ type: 'bernd', at: [12, 3], dir: 180 }], campOpts), b = c.enemies[0];
+  for (let n = 0; n < 3; n++) {
+    place(c.units[0], 11, 3);
+    Object.assign(b, { x: 12.5, y: 3.5, coffeeAt: Infinity, state: 'alert', lastSeen: { x: 11.5, y: 3.5 }, suspicion: 1 });
+    assert.ok(has(run(c, 500), 'kieser'), `Fang ${n + 1}`);
+    tick(c, 0, [{ type: 'resume' }]);
+    assert.equal(b.hp, b.maxHp, `Fang ${n + 1}`);
+  }
+  // M&Ms: Ziel im Wasser ist ungültig (keiner käme hin), daneben an Land geht
+  const w = Q(['############', '#PPP.......#', '#....WW....#', '#..........#', '############'], [], { team: ['ramona'] });
+  place(w.units[0], 4, 1);
+  assert.ok(has(tick(w, 0, [ab(0, 'mms', { x: 5.5, y: 2.5 })]), 'fail', f => f.reason === 'target'));
+  assert.ok(!has(tick(w, 0, [ab(0, 'mms', { x: 5.5, y: 3.5 })]), 'fail'));
+  // Rüther auf dem Weg zu einer Absicht hält seine Ziel-Kachel frei
+  const r = Q(['##########', '#PPP.....#', '#........#', '#......V.#', '##########'], [], { team: ['christian', 'hildegard'], objective: { type: 'valve', label: 'W' } });
+  tick(r, 0, [{ type: 'interact', unit: 0, obj: 0 }]);
+  const end0 = r.units[0].path.at(-1);
+  tick(r, 0, [{ type: 'move', unit: 1, to: { x: end0.x + 0.5, y: end0.y + 0.5 } }]);
+  assert.ok(r.units[1].goal && (r.units[1].goal.x !== end0.x || r.units[1].goal.y !== end0.y), 'nicht auf dieselbe Kachel');
+  // drei Ranger von derselben Seite löschen von drei verschiedenen Kacheln
+  const f = Q(['####################', '#PPP...............#', '#..................#', '#.........B........#', '#..................#', '#..................#', '####################'],
+    [{ type: 'ranger', at: [16, 3], dir: 0 }, { type: 'ranger', at: [17, 3], dir: 0 }, { type: 'ranger', at: [16, 4], dir: 0 }], { team: ['christian'], objective: { type: 'ignite', min: 1, label: 'F' } });
+  Object.assign(f.objs[0], { done: true, litAt: -5000 }); // brennt schon 5 s
+  assert.deepEqual(find(run(f, 100), 'fireSpotted').enemies, [0, 1, 2]);
+  run(f, 5000);
+  assert.ok(f.enemies.every(e => e.reason === 'fire' && !e.path.length && Math.hypot(e.x - 10.5, e.y - 3.5) < 1.6), 'alle am Baum');
+  assert.equal(new Set(f.enemies.map(e => `${Math.floor(e.x)},${Math.floor(e.y)}`)).size, 3);
 });

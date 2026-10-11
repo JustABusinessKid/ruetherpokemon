@@ -116,6 +116,8 @@
 .shop-item .buy.summon > span:first-child { font-size: 14px; }
 .shop-item .buy.summon:disabled:not(.primary) { opacity: 1; background: var(--teal); }
 .shop-item .next { font-weight: 800; }
+/* v9: im Haunebu-Fenster „Im Einsatz · noch 7:41" über dem Verlängern-Knopf */
+.shop-item .hb-on { max-width: 104px; padding: 2px 4px; font: 700 13px/1.2 var(--font-pixel); font-variant-numeric: tabular-nums; background: var(--teal); border: 2px solid var(--ink); }
 .shop-item.bought { animation: sc-bought .6s steps(1, end); }
 @keyframes sc-bought { 0%, 40% { box-shadow: 0 0 0 4px var(--gold), var(--shadow); } 20%, 60%, 100% { box-shadow: inset 0 0 0 2px var(--paper-2), var(--shadow); } }
 

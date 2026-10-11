@@ -1,7 +1,7 @@
 import { CONST, RUETHERS, RUETHER_BY_ID, BOSSES, ARENAS, ARENA_BY_ID, RARITY_BY_ID, pickLine } from './data.js';
 import * as storage from './storage.js';
 import { createLocator, distance, offsetPoint } from './geo.js';
-import { updateSpawns, lureWave } from './spawn.js';
+import { updateSpawns, lureWave, lureTrim } from './spawn.js';
 import { createMap } from './map.js';
 import { createCatchScreen } from './catch.js';
 import {
@@ -14,7 +14,7 @@ import { makeFighter, makeBoss } from './battle.js';
 import {
   catchReward, arenaWin, arenaReward, arenaScale, powerUp, buyItem, lureActive, dexCount, DEX_TOTAL, addXp, fuse, migrate,
   pickFood, feed, sell, sellDuplicates, levelUpUids, haunebuWin, startBeam, activeBeam, endBeam,
-  haunebuActive, consumeHaunebu, questsUnlocked, questResult,
+  haunebuActive, extendHaunebu, questsUnlocked, questResult, fighterStats,
 } from './progress.js';
 import { playSummon, playBeam, playReturn } from './flight.js';
 import { makeWild } from './wild.js';
@@ -27,7 +27,7 @@ import { setScreen, toast, popup, onTab, setTabBadge, esc, ico } from './ui.js';
 import { createOnboarding } from './onboarding.js';
 import { sfx, haptic, setHapticsEnabled } from './audio.js';
 import { createOnline, onlineConfig } from './online.js';
-import { MISSIONS, MISSION_BY_ID, pickVariant } from './quest/missions.js';
+import { MISSIONS, MISSION_BY_ID, pickSetup } from './quest/missions.js';
 
 const $ = s => document.querySelector(s);
 window.addEventListener('error', () => { const p = document.querySelector('#splash p'); if (p) p.textContent = 'Fehler beim Laden. Bitte Seite neu laden.'; }, { once: true });
@@ -108,7 +108,7 @@ function updateBanners() {
   const left = (save.lureUntil || 0) - Date.now();
   lure.classList.toggle('hidden', left <= 0);
   const wave = nextWaveAt - Date.now();
-  if (left > 0) lure.lastChild.textContent = `Lockmodul: ${clock(left)}${wave > 0 ? ` · neue Welle in ${Math.ceil(wave / 1000)} s` : ''}`;
+  if (left > 0) lure.lastChild.textContent = `Lockmodul ${clock(left)}${wave > 0 && nextWaveAt < save.lureUntil ? ` · nächste Welle ${clock(wave)}` : ''}`;
   $('#hour-banner').classList.toggle('hidden', !isHappyHour());
   $('#hour-banner').lastChild.textContent = `Rüther-Stunde bis ${CONST.HOUR_END}:00 · doppelte Spawns, 50 % mehr Sats`;
   const f = featuredRuether(today);
@@ -218,26 +218,37 @@ $('#btn-locate').addEventListener('click', () => map.follow(pos));
 
 // ---------- Spawns ----------
 let spawnTimer = null, nextWaveAt = 0;
-function refreshSpawns() {
+// wave: Kauf/Debug erzwingt eine Lockmodul-Welle. Sonst kommt sie, wenn sie fällig ist (Timer, erste Ortung) oder wenn im
+// Umkreis SPAWN_FORGET nichts mehr liegt (Flug, Landen, Beamen); Gehen startet während des Lockmoduls keine Extra-Welle.
+function refreshSpawns(wave = false) {
   const now = Date.now(), lure = lureActive(save, now);
-  map.setLure(lure);
-  if (lure) {
-    // v8 §3: Lockmodul-Welle, alles neu direkt um dich; nur der gerade offene Spawn (Fang-Screen, Wildkampf) bleibt
+  const live = s => s.expires > now && (!pos || distance(pos, s) <= CONST.SPAWN_FORGET); // nicht abgelaufen, nicht vergessen
+  const waveNow = lure && (wave || now >= nextWaveAt || (!!pos && !spawns.some(live)));
+  if (waveNow) {
+    // v9 §1: Die Welle kommt dazu, die alten bleiben. Höchstens LURE_MAX, die ältesten fallen raus, nie der gerade offene
+    // Spawn (Fang-Screen, Wildkampf)
     const keep = current === 'screen-catch' ? openSpawn : fight?.spawn || null;
     // Gesichter nicht aufeinander, nicht auf Arena-Schilder (Besitzer-Foto) und nicht unter Haunebu- oder Folge-Knopf
     const room = map.lureRoom(pos, [$('#btn-haunebu'), $('#btn-locate')]);
-    spawns = lureWave({ player: pos, ruethers: RUETHERS, arenas: ARENAS, now, rng: Math.random, keep, featured: featuredRuether(today), ...room });
-    if (debugLegendary && spawns.length > (keep ? 1 : 0)) spawns[spawns.length - 1].rarity = 'legendaer';
-    if (pos) { map.wave(); if (current === 'screen-map') sfx.play('wave'); }
-  } else {
+    const old = lureTrim({ spawns, player: pos, now, keep });
+    const fresh = lureWave({ player: pos, ruethers: RUETHERS, arenas: ARENAS, now, rng: Math.random, spawns: old, featured: featuredRuether(today), ...room });
+    if (debugLegendary && fresh.length) fresh.at(-1).rarity = 'legendaer';
+    spawns = [...old, ...fresh];
+    nextWaveAt = pos ? now + CONST.LURE_INTERVAL : 0; // ohne Ortung kommt die Welle beim ersten Fix
+    if (fresh.length) { map.wave(); if (current === 'screen-map') sfx.play('wave'); }
+  } else if (!lure) {
     spawns = updateSpawns({ spawns, player: pos, arenas: ARENAS, ruethers: RUETHERS, now, rng: Math.random, lure: isHappyHour(), forceRarity: debugLegendary ? 'legendaer' : null, featured: featuredRuether(today) });
-  }
-  if (debugLegendary) { debugLegendary = false; $('#dbg-legendary').textContent = 'Nächster Spawn legendär: aus'; }
+    nextWaveAt = 0;
+  } else spawns = spawns.filter(live);
+  // Lock-Zoom bleibt, solange noch Wellen-Gesichter liegen (leben länger als das Lockmodul, bei Zoom 16 decken sie sich)
+  map.setLure(lure || spawns.filter(s => s.lure).length > 1);
+  if (debugLegendary && (waveNow || !lure)) { debugLegendary = false; $('#dbg-legendary').textContent = 'Nächster Spawn legendär: aus'; }
   map.setSpawns(spawns);
   lastSpawnPos = pos;
-  nextWaveAt = lure ? now + CONST.LURE_INTERVAL : 0;
   clearTimeout(spawnTimer);
-  spawnTimer = setTimeout(refreshSpawns, lure ? CONST.LURE_INTERVAL : CONST.SPAWN_INTERVAL);
+  // Lockmodul: nächste Welle bzw. sein Ende (dann wieder normale Spawns); +50 ms, damit der Timer nicht knapp davor feuert
+  const due = lure ? Math.min(nextWaveAt || now + CONST.LURE_INTERVAL, save.lureUntil) - now + 50 : CONST.SPAWN_INTERVAL;
+  spawnTimer = setTimeout(refreshSpawns, due);
 }
 spawnTimer = setTimeout(refreshSpawns, CONST.SPAWN_INTERVAL);
 
@@ -351,9 +362,10 @@ const dex = createDexScreen({ el: $('#screen-dex'), onBack() { show('screen-coll
 const shop = createShopScreen({
   el: $('#screen-shop'),
   onBuy(id) {
+    if (id === 'haunebu-extend') return extendFlight(); // Fenster inzwischen zu: Hinweis, keine Beschwörung
     if (id === 'haunebu') return buyHaunebu();
     const res = buyItem(save, id, Date.now());
-    if (res.ok) { sfx.play('coin'); persist(); toast(id === 'lockmodul' ? `Lockmodul aktiv! Alle ${CONST.LURE_INTERVAL / 1000} s neue Rüther direkt bei dir.` : 'Super-Münze gekauft', { icon: id === 'lockmodul' ? 'beer' : 'coin' }); if (id === 'lockmodul') refreshSpawns(); }
+    if (res.ok) { sfx.play('coin'); persist(); toast(id === 'lockmodul' ? `Lockmodul aktiv! Jede Minute ${CONST.LURE_WAVE} neue Rüther direkt bei dir.` : 'Super-Münze gekauft', { icon: id === 'lockmodul' ? 'beer' : 'coin' }); if (id === 'lockmodul') refreshSpawns(true); }
     else toast('Nicht genug Sats.');
     return res;
   },
@@ -554,6 +566,16 @@ function endHaunebu({ won }) {
   if (won) toast(`Haunebu erbeutet: +${fmt(CONST.HAUNEBU_WIN_SATS)} Sats. ${CONST.HAUNEBU_USE_MS / 60000} Minuten freie Flüge, Knopf unten rechts auf der Karte.`, { icon: 'haunebu', kind: 'sats' });
   show('screen-map');
 }
+// v9 §1: Gehört sie dir schon, verlängert der Shop- bzw. Chip-Knopf um 10 Minuten für 5.000 Sats, ohne Hitler-Kampf
+const extendLabel = `+${CONST.HAUNEBU_EXTEND_MS / 60000} Min · ${fmt(CONST.HAUNEBU_EXTEND_COST)}`;
+function extendFlight() {
+  const res = extendHaunebu(save, Date.now());
+  if (!res.ok) { toast(res.reason === 'sats' ? `Nicht genug Sats. Verlängern kostet ${fmt(CONST.HAUNEBU_EXTEND_COST)}.` : 'Die Haunebu ist nicht im Einsatz.'); return res; }
+  sfx.play('coin');
+  persist(); // zieht Countdown-Chip und Beam-Zeit nach (beamTick)
+  toast(`Haunebu verlängert: noch ${clock(res.until - Date.now())}`, { icon: 'haunebu' });
+  return res;
+}
 
 // Flugziel wählen: Neuschwabenland zuerst (nur per Haunebu), dann alle Arenen mit Entfernung zur echten Position (homePos)
 async function pickBeamTarget() {
@@ -570,9 +592,10 @@ async function pickBeamTarget() {
   const id = await popup({
     title: 'Wohin fliegen?',
     html: `<div class="beam-list">${rows}</div><p class="sub">Flüge sind frei, so oft du willst. Noch <span class="hb-left" data-until="${save.haunebuUntil}">${clock(save.haunebuUntil - Date.now())}</span>, dann fliegt dich die Haunebu zurück.</p>`,
-    buttons: [{ label: 'Abbrechen' }],
+    buttons: [{ label: 'Abbrechen' }, { label: extendLabel }],
   });
-  if (ARENA_BY_ID[id]) beamTo(ARENA_BY_ID[id]);
+  if (id === 1) extendFlight();
+  else if (ARENA_BY_ID[id]) beamTo(ARENA_BY_ID[id]);
 }
 // Hinfliegen: speichern (Heimatort bleibt beim Weiterspringen), Animation, dann Fake-Position wie beim Debug-Beamen
 async function beamTo(a) {
@@ -589,7 +612,7 @@ async function beamTo(a) {
 }
 function land(a) {
   const p = offsetPoint(a, 40, 0);
-  locator.setFake(p); map.follow(p); refreshSpawns(); refreshStops(true);
+  map.follow(p); locator.setFake(p); refreshSpawns(); refreshStops(true); // erst folgen: die Lockmodul-Welle meidet dann die Knöpfe
 }
 // Zurück zur echten Ortung; ohne GPS ist der Spieler danach nirgends (wie „GPS wieder an")
 function gpsBack() {
@@ -609,9 +632,9 @@ async function returnHome() {
   map.follow(locator.current);
   toast('Die Haunebu hat dich zurückgebracht.', { icon: 'haunebu' });
 }
-// Jede Sekunde (updateBanners): Knopf und Countdown-Chip nur im Fenster, Toast + Haptik bei 1:00 und am Ende;
-// Fenster zu → Rückflug, aber nicht mitten im Kampf, Fang, Stop, Siegesscreen oder in der Team-Wahl
-const BEAM_WAIT = ['screen-battle', 'screen-catch', 'screen-stop', 'screen-victory', 'screen-questteam'];
+// Jede Sekunde (updateBanners): Knopf und Countdown-Chip nur im Fenster, Toast + Haptik bei 1:00 und am Ende (nicht während
+// einer Quest, die läuft weiter); Fenster zu → Rückflug, aber nicht mitten im Kampf, Fang, Stop, Siegesscreen, Team-Wahl oder Quest
+const BEAM_WAIT = ['screen-battle', 'screen-catch', 'screen-stop', 'screen-victory', 'screen-questteam', 'screen-quest', 'screen-questresult'];
 let haunebuWasActive = haunebuActive(save, Date.now()), haunebuWarned = 0;
 function beamTick() {
   const now = Date.now(), active = haunebuActive(save, now), left = (save.haunebuUntil || 0) - now, chip = $('#beam-chip');
@@ -619,11 +642,11 @@ function beamTick() {
   chip.classList.toggle('hidden', !active);
   if (active) chip.querySelector('.beam-left').textContent = clock(left);
   document.querySelectorAll('#popup .hb-left[data-until]').forEach(n => { n.textContent = clock(n.dataset.until - now); }); // offene Flug-Popups zählen mit
-  if (active && left <= 60_000 && haunebuWarned !== save.haunebuUntil) {
+  if (active && left <= 60_000 && haunebuWarned !== save.haunebuUntil && !questRun) {
     haunebuWarned = save.haunebuUntil;
     toast('Noch 1 Minute mit der Haunebu.', { icon: 'haunebu' }); haptic([40, 60, 40]);
   }
-  if (haunebuWasActive && !active) { toast('Die Haunebu fliegt zurück zu Hitler.', { icon: 'haunebu' }); haptic([80, 40, 80, 40, 80]); }
+  if (haunebuWasActive && !active && !questRun) { toast('Die Haunebu fliegt zurück zu Hitler.', { icon: 'haunebu' }); haptic([80, 40, 80, 40, 80]); }
   haunebuWasActive = active;
   if (!activeBeam(save, now) && save.beam && !BEAM_WAIT.includes(current)) returnHome();
 }
@@ -634,19 +657,24 @@ $('#beam-chip').addEventListener('click', async () => {
   const i = await popup({
     title: 'Haunebu-Flug',
     html: `<p>Noch <span class="hb-left" data-until="${b.until}">${clock(b.until - Date.now())}</span> am Ziel: ${esc(ARENA_BY_ID[b.arenaId]?.name || 'Arena')}.</p><p class="sub">Bis dahin fliegst du über den Haunebu-Knopf frei weiter.</p>`,
-    buttons: [{ label: 'Bleiben' }, { label: 'Nach Hause', primary: true }],
+    buttons: [{ label: 'Bleiben' }, { label: extendLabel }, { label: 'Nach Hause', primary: true }],
   });
-  if (i === 1) returnHome();
+  if (i === 1) extendFlight();
+  if (i === 2) returnHome();
 });
 
-// ---------- v8: Haunebu-Quests (Spec §5.1) ----------
-// Tab → Mission → Team-Wahl → „Abflug" (verbraucht die Haunebu, playBeam) → Quest-Screen → Ergebnis → playReturn.
-// questRun = { mission, variant, insts, home, beamed, ended }; solange bewegt GPS die Karte nicht.
+// ---------- v8/v9: Haunebu-Quests (Spec v8 §5.1, v9 §1–§4) ----------
+// Tab → Mission → Team-Wahl (solo: entfällt) → „Abflug" (playBeam) → Quest-Screen → Ergebnis → Rückflug.
+// v9: Die Quest verbraucht die Haunebu nicht. Ein laufender Arena-Flug bleibt in save.beam stehen (BEAM_WAIT hält den
+// Rückflug an, Neuladen landet wieder an der Arena) und geht danach weiter, solange das Fenster offen ist; sonst nach Hause.
+// questRun = { mission, setup, insts, home, beam: { arenaId, from } | null, ended, kieser (Debug) }; solange bewegt GPS die Karte nicht.
 const questTeam = createQuestTeamScreen({ el: $('#screen-questteam'), onStart: launchQuest, onBack() { show('screen-quests'); } });
 const questResultScreen = createQuestResultScreen({ el: $('#screen-questresult'), onDone: questHome });
 let questScreen = null, questView = null;
 // Der Quest-Modus (js/quest/view.js) lädt erst beim ersten Abflug
 const loadQuestView = () => (questView ||= import('./quest/view.js').catch(e => { questView = null; throw e; }));
+// v9 §3: Solo-Missionen nehmen das stärkste Exemplar dieses Rüthers
+const soloInst = id => save.box.filter(i => i.id === id).sort((a, b) => fighterStats(RUETHER_BY_ID[b.id], b).btc - fighterStats(RUETHER_BY_ID[a.id], a).btc)[0] || null;
 async function openQuest(id) {
   const m = MISSION_BY_ID[id];
   if (!m || !questsUnlocked(save)) return;
@@ -656,53 +684,64 @@ async function openQuest(id) {
     return;
   }
   sfx.play('click');
+  if (m.solo) return launchQuest(m.id, []); // Team-Wahl entfällt, das Briefing zeigt der Quest-Screen
   questTeam.show(save, m);
   show('screen-questteam');
 }
-async function launchQuest(id, uids) {
-  const mission = MISSION_BY_ID[id], insts = uids.map(instById).filter(Boolean);
+// opts.setup: feste Karte (Debug), sonst gewürfelt; opts.kieser: Debug „Stefan ruft" direkt nach dem Start
+async function launchQuest(id, uids, { setup = null, kieser = false } = {}) {
+  const mission = MISSION_BY_ID[id];
   if (!mission || questRun || flying) return;
+  const insts = mission.solo ? [soloInst(mission.solo)].filter(Boolean) : uids.map(instById).filter(Boolean);
   if (!haunebuActive(save, Date.now())) { toast('Die Haunebu ist weg. Beschwöre sie neu.', { icon: 'haunebu' }); return show('screen-quests'); }
-  if (!insts.length) return toast('Nimm mindestens einen Rüther mit.');
+  if (!insts.length) return toast(mission.solo ? `Fang erst ${RUETHER_BY_ID[mission.solo].name}.` : 'Nimm mindestens einen Rüther mit.');
   flying = true; // sperrt schon beim Laden: Doppeltipp auf „Abflug" startet sonst zwei Flüge
   let view;
   try { view = await loadQuestView(); } catch (e) { flying = false; console.warn('Quest-Modus', e); return toast('Der Quest-Modus lädt nicht. Bitte Seite neu laden.'); }
   questScreen ||= view.createQuestScreen({ el: $('#screen-quest'), onEnd: endQuest });
-  // Ein laufender Flug endet hier (sonst holt beamTick dich aus der Quest); zurück geht es zum echten Heimatort
-  questRun = { mission, variant: pickVariant(mission, Math.random), insts, home: homePos || save.beam?.from || pos, beamed: !!save.beam };
-  if (save.beam) endBeam(save);
-  consumeHaunebu(save, Date.now());
-  haunebuWasActive = false; // die Quest hat sie verbraucht: kein „fliegt zurück zu Hitler"
-  persist();
+  const b = save.beam;
+  questRun = { mission, setup: setup || pickSetup(mission, Math.random), insts, home: homePos || b?.from || pos, beam: b ? { arenaId: b.arenaId, from: b.from } : null, kieser };
   show('screen-map');
   await playBeam(document.body, { map, to: mission, label: mission.place }).catch(() => {});
   flying = false;
   show('screen-quest');
-  questScreen.start({ mission, variant: questRun.variant, team: insts, fighters: insts.map(i => makeFighter(RUETHER_BY_ID[i.id], i)), rng: Math.random });
+  await questScreen.start({ mission, setup: questRun.setup, team: insts, fighters: insts.map(i => makeFighter(RUETHER_BY_ID[i.id], i)), rng: Math.random });
+  if (questRun?.kieser && current === 'screen-quest') { // Debug „Stefan ruft": Briefing zu, dann holt Stefan Viktor sofort
+    $('#screen-quest .q-go')?.click();
+    questScreen.send?.({ type: 'catch' });
+  }
 }
-// onEnd({ result, missionId, score, objective, timeMs, alarmFree }): verbuchen, Ergebnis-Screen
+// onEnd({ result, missionId, score, objective, timeMs, alarmFree, setup, kieser, fine, … }): verbuchen, Ergebnis-Screen
 function endQuest(summary) {
   const run = questRun;
   if (!run || run.ended) return;
   run.ended = true;
-  const reward = questResult(save, run.mission.id, summary.result, summary.score, summary.alarmFree);
+  const reward = questResult(save, run.mission.id, summary.result, summary.score, summary.alarmFree, { kieser: summary.kieser, fine: summary.fine });
   if (reward) gainXp(reward.xp);
   if (reward?.firstDone) online.postEvent('quest', `hat die Haunebu-Quest „${run.mission.name}“ geschafft!`);
   afterChange();
-  questResultScreen.show({ mission: run.mission, variant: run.variant, summary, reward, team: run.insts });
+  questResultScreen.show({ mission: run.mission, setup: summary.setup || run.setup, summary, reward, team: run.insts });
   show('screen-questresult');
 }
 async function questHome() {
   const run = questRun;
   if (!run?.ended || flying) return;
   show('screen-map');
+  const now = Date.now(), open = haunebuActive(save, now), b = activeBeam(save, now), arena = b ? ARENA_BY_ID[b.arenaId] : null;
+  if (!arena && save.beam) { endBeam(save); persist(); } // Fenster zu: der Arena-Flug endet, es geht nach Hause
   flying = true;
-  if (run.home) await playReturn(document.body, { map, to: run.home }).catch(() => {});
+  if (arena) await playBeam(document.body, { map, to: arena, label: arena.name }).catch(() => {});
+  else if (run.home) await playReturn(document.body, { map, to: run.home }).catch(() => {});
   flying = false;
   questRun = null;
-  if (run.beamed) gpsBack(); // war vorher per Haunebu an einer Arena: zurück zur echten Ortung
-  map.follow(locator.current || run.home);
-  toast('Die Haunebu hat euch nach Hause gebracht und fliegt zurück zu Hitler.', { icon: 'haunebu' });
+  if (arena) land(arena);
+  else {
+    if (run.beam) gpsBack(); // war vorher per Haunebu an einer Arena: zurück zur echten Ortung
+    map.follow(locator.current || run.home);
+  }
+  const left = clock(save.haunebuUntil - Date.now());
+  toast(arena ? `Zurück: ${arena.name} · noch ${left}` : open ? `Die Haunebu hat euch nach Hause gebracht. Sie bleibt noch ${left}.`
+    : 'Die Haunebu hat euch nach Hause gebracht und fliegt zurück zu Hitler.', { icon: 'haunebu' });
 }
 
 // ---------- Onboarding ----------
@@ -760,19 +799,27 @@ $('#dbg-master').addEventListener('click', () => {
   for (const a of ARENAS) { save.arenaMastered[a.id] = true; save.arenaLevels[a.id] = CONST.ARENA_LEVELS; }
   afterChange(); toast('Alle Arenen gemeistert');
 });
-// Quest starten: nächste Mission der Reihe nach, mit aktuellem Team, Haunebu notfalls geschenkt
-let dbgQuest = 0;
-const dbgQuestLabel = () => { $('#dbg-quest').textContent = `Quest starten: ${MISSIONS[dbgQuest].name}`; };
-dbgQuestLabel();
-$('#dbg-quest').addEventListener('click', () => {
-  const m = MISSIONS[dbgQuest], uids = teamInstances().map(i => i.uid);
-  if (!uids.length) return toast('Stell erst ein Team auf.');
-  dbgQuest = (dbgQuest + 1) % MISSIONS.length; dbgQuestLabel();
+// v9 §8: Quest starten mit Auswahl Mission, Karte (Layout) und Spiegelung, sonst gewürfelt; mit aktuellem Team (solo: der Rüther
+// der Mission), Haunebu notfalls geschenkt. „Stefan ruft": Camping starten und sofort die Kieser-Cutscene auslösen.
+const dbgMission = $('#dbg-mission'), dbgLayout = $('#dbg-layout'), dbgMirror = $('#dbg-mirror');
+dbgMission.innerHTML = MISSIONS.map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
+const dbgLayouts = () => { dbgLayout.innerHTML = '<option value="">Karte: Zufall</option>' + MISSION_BY_ID[dbgMission.value].layouts.map(l => `<option value="${l.id}">${esc(l.name)}</option>`).join(''); };
+dbgMission.addEventListener('change', dbgLayouts);
+dbgLayouts();
+function dbgQuest(id, kieser = false) {
+  const m = MISSION_BY_ID[id], uids = teamInstances().map(i => i.uid);
+  if (!m.solo && !uids.length) return toast('Stell erst ein Team auf.');
+  if (m.solo && !soloInst(m.solo)) return toast(`Fang erst ${RUETHER_BY_ID[m.solo].name}.`);
   if (!haunebuActive(save, Date.now())) save.haunebuUntil = Date.now() + CONST.HAUNEBU_USE_MS;
-  launchQuest(m.id, uids);
-});
-$('#dbg-lure').addEventListener('click', () => { save.lureUntil = Date.now() + CONST.LURE_MS; persist(); refreshSpawns(); toast('Lockmodul an'); });
-$('#dbg-respawn').addEventListener('click', () => { spawns = []; refreshSpawns(); toast('Spawns neu'); });
+  const setup = pickSetup(m, Math.random), l = m.layouts.find(x => x.id === dbgLayout.value);
+  if (l && l.id !== setup.layoutId) Object.assign(setup, { layoutId: l.id, variantId: l.variants[Math.floor(Math.random() * l.variants.length)].id });
+  if (dbgMirror.value) setup.mirror = dbgMirror.value === '1';
+  launchQuest(m.id, uids, { setup, kieser });
+}
+$('#dbg-quest').addEventListener('click', () => dbgQuest(dbgMission.value));
+$('#dbg-bernd').addEventListener('click', () => dbgQuest('camping', true));
+$('#dbg-lure').addEventListener('click', () => { save.lureUntil = Date.now() + CONST.LURE_MS; persist(); refreshSpawns(true); toast('Lockmodul an'); });
+$('#dbg-respawn').addEventListener('click', () => { spawns = []; refreshSpawns(true); toast('Spawns neu'); });
 $('#dbg-stops').addEventListener('click', () => { if (!pos) return toast('Keine Ortung.'); stopSeq++; stops = fakeStops(pos, Math.random); renderStops(); toast('3 Fake-Stops'); });
 $('#dbg-catchall').addEventListener('click', () => { for (const r of RUETHERS) if (!save.box.some(i => i.id === r.id)) catchReward(save, r.id, 'normal', Date.now()); afterChange(); toast('Alle gefangen'); });
 $('#dbg-sats').addEventListener('click', () => { save.sats += 1000; persist(); toast('+1000 Sats', { kind: 'sats' }); });

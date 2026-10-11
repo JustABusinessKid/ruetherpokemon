@@ -2,9 +2,11 @@
 // Raster in Kacheln, Positionen als Fließkomma (Kachelmitte = x+0.5), Richtungen in Radiant (0 = Osten, π/2 = Süden), Zeiten in ms.
 // tick() mutiert den Zustand und liefert Events für die Darstellung (Positionen, Ziele, Dauern für Animationen).
 import { findPath, castRay, lineOfSight } from './path.js';
-import { MISSION_BY_ID, pickVariant } from './missions.js';
+import { MISSION_BY_ID, pickSetup, buildSetup } from './missions.js';
 
-// Gegner-Typen (Spec §5.3). sight/angle: Kegel in Kacheln/Grad, speed Kacheln/s, dps Nahkampf pro s.
+// Gegner-Typen (Spec §5.3, v9 §2.1). sight/angle: Kegel in Kacheln/Grad, speed Kacheln/s, dps Nahkampf pro s.
+// coffee: Kaffeepause (Kegel aus) und danach koffeiniert; catches: 'kieser' (Pause + Cutscene) | 'caught' (sofort Ende mit fine);
+// bark: Sichtung macht Geräusch; whistle: Alarm-Schritt; fire: bemerkt brennende Bäume und läuft löschen.
 export const ENEMY_TYPES = {
   pinguin: {
     name: 'Wachpinguin', sight: 5, angle: 90, speed: 2.2, hp: 60, dps: 6, sprite: 'q-pinguin',
@@ -26,6 +28,27 @@ export const ENEMY_TYPES = {
     name: 'Ladendetektiv', sight: 6, angle: 80, speed: 2.8, hp: 70, dps: 7, sprite: 'q-detektiv',
     lines: { sus: ['Moment mal, Freundchen ...', 'Hab ich dich nicht schon mal gesehen?'], alert: ['Taschenkontrolle! SOFORT!', 'Halt! Der Kassenbon!'], calm: ['Nur ein Kunde. Kauft eh nix.', 'Ich behalt dich im Auge.'], wake: ['Wer hat das Licht ausgemacht?'] },
   },
+  bernd: {
+    name: 'Stefan', sight: 6, angle: 70, speed: 2.3, hp: 150, dps: 5, sprite: 'q-bernd', catches: 'kieser',
+    coffee: { every: [20_000, 30_000], ms: 5000, boost: 10_000, speed: 1.5, sight: 1.3, angle: 1.2 },
+    lines: { sus: ['Moment … ich pass grad nicht durch die Tür.', 'Wer schleicht da? Ich bin zu breit zum Umdrehen.'], alert: ['HALT! Erst Kieser, dann Kaffee!', 'Nach Kieser bin ich so breit, ich pass durch keine Tür!'], coffee: ['*schlürf* … mit Butter.', 'Bulletproof. Wie mein Rücken.'], buzz: ['Puls 180. Weiter geht’s!', 'JETZT bin ich wach!'], calm: ['Erst mal ’n Bulletproof Coffee.', 'Zu breit zum Hinterherlaufen.', 'Muss der Koffeinschock gewesen sein.'], wake: ['Wo ist mein Kaffee?'] },
+  },
+  camper: {
+    name: 'Dauercamper', sight: 5, angle: 90, speed: 2.2, hp: 70, dps: 6, sprite: 'q-camper',
+    lines: { sus: ['Wer latscht da über meine Parzelle?', 'Ey, das ist mein Stellplatz!'], alert: ['Grillzange raus! Einer ohne Platzkarte!', 'ALARM am Vorzelt!'], calm: ['Wohl nur ein Igel.', 'Zurück zum Grill, die Würstchen.'], wake: ['Wer hat meine Sandalen geklaut?'] },
+  },
+  dackel: {
+    name: 'Dackel', sight: 3, angle: 120, speed: 3.6, hp: 30, dps: 4, bark: true, sprite: 'q-dackel',
+    lines: { sus: ['*schnüffel*', 'Wuff?'], alert: ['WAU! WAU! WAU!', 'Grrrr ... WAU!'], calm: ['*kratzt sich am Ohr*', '*schnüffelt am Grill*'], wake: ['*jault*', 'Wuff ...'] },
+  },
+  platzwart: {
+    name: 'Platzwart', sight: 6, angle: 70, speed: 2.4, hp: 80, dps: 6, whistle: 0.5, sprite: 'q-platzwart',
+    lines: { sus: ['Haben Sie eine Platzkarte?', 'Nach 22 Uhr ist Ruhe!'], alert: ['*TRIIIIL* Platzverweis!', '*Trillerpfeife* Sofort stehen bleiben!'], calm: ['Ich schreib das ins Platzbuch.', 'Ruhe auf dem Platz.'], wake: ['Wo ist meine Pfeife?'] },
+  },
+  ranger: {
+    name: 'Ranger vom Bruch', sight: 8, angle: 50, speed: 2.3, hp: 80, dps: 6, catches: 'caught', fine: 10_000, fire: true, sprite: 'q-ranger',
+    lines: { sus: ['Moment, das ist kein Reiher ...', 'Hier ist Betreten verboten.'], alert: ['Halt! Naturschutzgebiet!', 'Personalien, aber zackig!'], caught: ['Das wird teuer!'], fire: ['FEUER! Wo ist die Feuerpatsche?', 'Es brennt im Bruch!'], calm: ['War wohl ein Wildschwein.', 'Ich zähl weiter Kraniche.'], wake: ['Wo ist mein Fernglas?'] },
+  },
 };
 
 // Kräfte (Spec §5.4). target: 'door' | 'point' | 'enemy' | 'self' | 'vaultOrDrone'. range in Kacheln, cd in ms.
@@ -45,8 +68,12 @@ export const ABILITIES = {
 export const abilitiesFor = unitId => Object.values(ABILITIES).filter(a => a.unit === unitId);
 
 const SPEED = 3, SPEED_SLOW = { viktor: 2.6 }, ITEM_SLOW = 0.6, CARRY_MAX = 2;
-const ACT = { vault: 'steal', sabotage: 'sabotage', item: 'fetch', plug: 'unplug' };
-const ACT_MS = { steal: 3000, sabotage: 4000, fetch: 5000, unplug: 4000, revive: 3000 };
+const ACT = { vault: 'steal', sabotage: 'sabotage', item: 'fetch', plug: 'unplug', valve: 'valve', tree: 'ignite' };
+const ACT_MS = { steal: 3000, sabotage: 4000, fetch: 5000, unplug: 4000, valve: 4000, ignite: 3000, revive: 3000 };
+// Ziele, die einzeln zählen (objective.type → Objektart)
+const COUNTED = { sabotage: 'sabotage', valve: 'valve', ignite: 'tree' };
+const OBJ_TILE = { C: 'vault', S: 'sabotage', K: 'plug', X: 'item', V: 'valve', B: 'tree' };
+const FIRE_MS = 5000, FIRE_R = 10, DOUSE_MS = 8000, BARK_R = 6, BARK_CD = 4000;
 const REACH = 1.5, REVIVE_HP = 0.4;
 const SUS_SHOW = 0.3, SUS_DECAY = 0.15, TOUCH = 0.9;
 const ALARM_STEP = 0.34, ALARM_DECAY = 0.02, ALARM_OFF = 0.5, FULL_CONE = 1.25;
@@ -59,7 +86,8 @@ const NOISE_R = { can: 5, hieb: 4 }, BAIT_R = 6, BAIT_MS = 30_000;
 const STUN_MS = { handbag: 15_000, argue: 8000, controller: 10_000, hack: 10_000, bribe: 25_000, eat: 20_000 };
 const ARGUE = 'Deutsche Bank ist kein Geringverdiener.';
 
-const WALK = new Set('.DPX~'), OPAQUE = new Set('#LCSK~'), SOLID = new Set('#LCSK');
+// V Wasseranschluss (fest, Sicht frei), B Baum zum Anzünden und T Baum/Deko (fest, blockieren Sicht), W Wasser (nicht begehbar, Sicht frei)
+const WALK = new Set('.DPX~'), OPAQUE = new Set('#LCSK~BT'), SOLID = new Set('#LCSKVBT');
 const CONE_ON = new Set(['patrol', 'suspicious', 'investigate', 'alert', 'distracted']);
 const CALM = new Set(['patrol', 'suspicious', 'investigate', 'distracted']); // ablenkbar
 const TIMED = new Set(['stunned', 'eating', 'bribed']);
@@ -70,7 +98,7 @@ const FAIL = {
   taken: 'Die trägt schon jemand.', noEnemy: 'Kein Gegner in der Nähe. Die Familie bleibt zu Hause.', sight: 'Keine Sichtlinie.',
   ability: 'Das kann der nicht.', extract: 'Abheben geht erst, wenn das Ziel erfüllt ist und alle auf der Plattform stehen.',
 };
-const END_TEXT = { allDown: 'Alle liegen flach. Die Haunebu fliegt ohne euch.', time: 'Die Zeit ist um.', late: 'Die Zeit ist um. Ziel erfüllt, aber die Haunebu ist ohne euch abgehoben.', abort: 'Abgebrochen. Die Haunebu wartet nicht.' };
+const END_TEXT = { allDown: 'Alle liegen flach. Die Haunebu fliegt ohne euch.', soloDown: 'liegt flach. Die Haunebu fliegt ohne dich.', time: 'Die Zeit ist um.', late: 'Die Zeit ist um. Ziel erfüllt, aber die Haunebu ist ohne euch abgehoben.', abort: 'Abgebrochen. Die Haunebu sammelt euch ein.', caught: 'Erwischt! „Das wird teuer!“' };
 
 const rad = d => d * Math.PI / 180;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -86,45 +114,74 @@ export const tileAt = (st, x, y) => {
 const walkable = st => (x, y) => WALK.has(st.tiles[y * st.w + x]);
 const blocker = st => (x, y) => x < 0 || y < 0 || x >= st.w || y >= st.h || OPAQUE.has(st.tiles[y * st.w + x]) || st.gas[y * st.w + x] > st.time;
 const pathTo = (st, ent, tx, ty, near = 0) => findPath(st.w, st.h, walkable(st), Math.floor(ent.x), Math.floor(ent.y), tx, ty, near);
+const rollMs = (st, [a, b]) => a + st.rng() * (b - a);
+const buzzed = (st, e) => e.buzzUntil > st.time; // nach dem Kaffee
+const enemySpeed = (st, e) => { const T = ENEMY_TYPES[e.type]; return T.speed * (buzzed(st, e) ? T.coffee.speed : 1); };
 
 // ---------- Erzeugen ----------
 
-// mission: Objekt oder id; variant: Objekt, id, Index oder leer (dann per rng); team: Kampfwerte (makeFighter), 1–3.
-export function createQuest({ mission, variant, team, rng = Math.random }) {
+// Setup → Karte. Neues Format (layouts): buildSetup aus missions.js; altes Format (map/variants direkt an der Mission,
+// z. B. Test-Missionen): die Mission ist das einzige Layout, ungespiegelt, Variante per id/Objekt/Index oder rng.
+function resolveSetup(m, setup, variant, rng) {
+  if (!m.layouts) {
+    const v = variant == null ? m.variants[Math.floor(rng() * m.variants.length) % m.variants.length]
+      : typeof variant === 'object' ? variant
+        : typeof variant === 'number' ? m.variants[variant] : m.variants.find(x => x.id === variant);
+    if (!v) throw new Error('Unbekannte Variante');
+    const rows = m.map.map(r => r.split(''));
+    for (const [x, y, ch] of v.patch || []) rows[y][x] = ch;
+    return { setup: { layoutId: null, variantId: v.id, mirror: false, seed: 0 }, built: { layout: m, variant: v, map: rows.map(r => r.join('')), gate: m.gate, enemies: v.enemies, coins: v.coins, mirror: false } };
+  }
+  if (!setup && variant != null) { // Kompatibilität: Variante (id/Objekt) ohne setup, ungespiegelt
+    const id = typeof variant === 'object' ? variant.id : variant, l = m.layouts.find(x => x.variants.some(v => v.id === id));
+    if (!l) throw new Error('Unbekannte Variante');
+    setup = { layoutId: l.id, variantId: id, mirror: false, seed: Math.floor(rng() * 4294967296) };
+  }
+  setup ||= pickSetup(m, rng);
+  const built = buildSetup(m, setup);
+  if (!built?.map) throw new Error('Unbekanntes Layout oder Variante');
+  return { setup, built };
+}
+
+// mission: Objekt oder id; setup: { layoutId, variantId, mirror, seed } (leer = pickSetup per rng);
+// variant: nur Kompatibilität (id/Objekt); team: Kampfwerte (makeFighter), 1–3; bei mission.solo nur dieser Rüther.
+export function createQuest({ mission, setup, variant, team, rng = Math.random }) {
   const m = typeof mission === 'string' ? MISSION_BY_ID[mission] : mission;
   if (!m) throw new Error('Unbekannte Mission');
-  const v = variant == null ? pickVariant(m, rng)
-    : typeof variant === 'object' ? variant
-      : typeof variant === 'number' ? m.variants[variant] : m.variants.find(x => x.id === variant);
-  if (!v) throw new Error('Unbekannte Variante');
   if (!team?.length) throw new Error('Kein Team');
-  const rows = m.map.map(r => r.split(''));
-  for (const [x, y, ch] of v.patch || []) rows[y][x] = ch;
+  const { setup: su, built: b } = resolveSetup(m, setup, variant, rng);
+  const v = b.variant, rows = b.map;
   const h = rows.length, w = rows[0].length;
+  const coinMap = b.coins && typeof b.coins === 'object' ? b.coins : null;
+  const coins0 = typeof b.coins === 'number' ? b.coins : b.layout?.coins ?? m.coins ?? 2;
   const st = {
-    missionId: m.id, variantId: v.id, mission: m, variant: v, theme: m.theme, w, h, tiles: [], gas: new Float64Array(w * h),
-    time: 0, timeLimit: m.timeMs, alarm: 0, fullAlarm: false, alarmEver: false, contact: false, reinforceAt: 0, reinforced: 0,
-    over: false, result: null, reason: null, units: [], enemies: [], objs: [], doors: [], pads: [], effects: [], pending: [],
-    delivered: 0, objective: null, gate: { x: m.gate[0], y: m.gate[1] }, lastSighting: null, nextId: 1, rng, dmgScale: 1,
+    missionId: m.id, variantId: v.id, layoutId: su.layoutId, mirror: !!b.mirror, setup: su, mission: m, variant: v, layout: b.layout,
+    theme: m.theme, w, h, tiles: [], gas: new Float64Array(w * h), paths: new Map(),
+    time: 0, timeLimit: m.timeMs ?? null, alarm: 0, fullAlarm: false, alarmEver: false, contact: false, reinforceAt: 0, reinforced: 0,
+    over: false, result: null, reason: null, paused: null, pausedBy: null, kieser: 0, fine: 0, solo: m.solo || null,
+    units: [], enemies: [], objs: [], doors: [], pads: [], spots: [], effects: [], pending: [],
+    delivered: 0, objective: null, gate: { x: b.gate[0], y: b.gate[1] }, lastSighting: null, nextId: 1, rng, dmgScale: 1,
   };
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const ch = rows[y][x];
-    if (ch === 'C') st.objs.push({ id: st.objs.length, kind: 'vault', x, y, coins: v.coins?.[`${x},${y}`] ?? m.coins ?? 2 });
-    else if (ch === 'S') st.objs.push({ id: st.objs.length, kind: 'sabotage', x, y, done: false });
-    else if (ch === 'K') st.objs.push({ id: st.objs.length, kind: 'plug', x, y, done: false });
-    else if (ch === 'X') st.objs.push({ id: st.objs.length, kind: 'item', x, y, taken: false, by: -1, delivered: false });
+    const ch = rows[y][x], kind = OBJ_TILE[ch], o = kind && { id: st.objs.length, kind, x, y };
+    if (kind === 'vault') o.coins = coinMap?.[`${x},${y}`] ?? coins0;
+    else if (kind === 'item') Object.assign(o, { taken: false, by: -1, delivered: false });
+    else if (kind) o.done = false;
+    if (kind === 'tree') Object.assign(o, { litAt: 0, spotted: false });
+    if (o) st.objs.push(o);
     else if (ch === 'D' || ch === 'L') st.doors.push({ id: st.doors.length, x, y, locked: ch === 'L', opening: false });
     else if (ch === 'P') st.pads.push({ x, y });
     st.tiles.push(ch === 'X' ? '.' : ch);
   }
   const type = m.objective.type;
-  const total = type === 'steal' ? st.objs.reduce((s, o) => s + (o.coins || 0), 0) : type === 'sabotage' ? st.objs.filter(o => o.kind === 'sabotage').length : 1;
+  const total = type === 'steal' ? st.objs.reduce((s, o) => s + (o.coins || 0), 0) : COUNTED[type] ? st.objs.filter(o => o.kind === COUNTED[type]).length : 1;
   st.objective = { type, label: m.objective.label, done: 0, total, min: m.objective.min ?? total };
   // Start auf der Plattform, von der Mitte aus
   const cx = st.pads.reduce((s, p) => s + p.x, 0) / st.pads.length, cy = st.pads.reduce((s, p) => s + p.y, 0) / st.pads.length;
-  const spots = [...st.pads].sort((a, b) => Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy));
-  team.slice(0, 3).forEach((f, i) => {
-    const p = spots[i % spots.length];
+  st.spots = [...st.pads].sort((a, b) => Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy));
+  const squad = m.solo ? [team.find(f => f.id === m.solo) || team[0]] : team.slice(0, 3);
+  squad.forEach((f, i) => {
+    const p = st.spots[i % st.spots.length];
     st.units.push({
       i, id: f.id, name: f.name, rarity: f.rarity, level: f.level, power: f.power || 1, hp: f.maxBtc, maxHp: f.maxBtc,
       x: p.x + 0.5, y: p.y + 0.5, dir: 0, state: 'idle', path: [], goal: { x: p.x, y: p.y }, intent: null, busy: null,
@@ -132,20 +189,20 @@ export function createQuest({ mission, variant, team, rng = Math.random }) {
     });
   });
   st.dmgScale = st.units.reduce((s, u) => s + u.maxHp * u.power, 0) / st.units.length / DMG_REF;
-  for (const d of v.enemies) addEnemy(st, d);
+  for (const d of b.enemies) addEnemy(st, d);
   return st;
 }
 
 function addEnemy(st, d) {
   const T = ENEMY_TYPES[d.type];
-  const dir = rad(d.dir ?? 0);
+  if (!T) throw new Error(`Unbekannter Gegner ${d.type}`);
+  const dir = rad(d.dir ?? 0), patrol = (d.patrol || []).map(([x, y, wait = 0, wd]) => ({ x, y, wait, dir: wd == null ? null : rad(wd) }));
   const e = {
     i: st.enemies.length, type: d.type, name: T.name, x: d.at[0] + 0.5, y: d.at[1] + 0.5, dir, hp: T.hp, maxHp: T.hp,
-    state: 'patrol', reason: null, until: 0, suspicion: 0,
-    patrol: (d.patrol || []).map(([x, y, wait = 0, wd]) => ({ x, y, wait, dir: wd == null ? null : rad(wd) })),
+    state: 'patrol', reason: null, until: 0, suspicion: 0, patrol,
     wp: 0, waitUntil: 0, waitDir: null, look: (d.look || []).map(rad), lookI: 0, lookAt: 0, lookDir: dir, home: { x: d.at[0], y: d.at[1], wait: 0, dir },
     path: [], goal: null, target: null, seen: -1, lastSeen: null, lostT: 0, swingAt: 0, repathAt: 0, bait: null, tied: false,
-    reinforcement: !!d.reinforcement,
+    reinforcement: !!d.reinforcement, coffeeAt: T.coffee ? st.time + rollMs(st, T.coffee.every) : 0, buzzUntil: 0, barkAt: 0,
   };
   st.enemies.push(e);
   return e;
@@ -159,18 +216,25 @@ export function canExtract(st) {
   return up.length > 0 && up.every(u => tileAt(st, u.x, u.y) === 'P');
 }
 
-// Ergebnis für onEnd und questResult(save, missionId, result, score, alarmFree).
+// Ergebnis für onEnd und questResult(save, missionId, result, score, alarmFree, { kieser, fine }).
 // score = erfüllte Ziele (Raub: abgelieferte Münzen); jeder liegengelassene Rüther (down, nicht auf P) kostet 1.
 export function questSummary(st) {
   const o = st.objective, alarmFree = !st.alarmEver;
   const leftBehind = st.units.filter(u => u.down && tileAt(st, u.x, u.y) !== 'P').length;
   return {
-    result: st.result, reason: st.reason, missionId: st.missionId, variantId: st.variantId, score: Math.max(0, o.done - leftBehind),
-    objective: { done: o.done, total: o.total, min: o.min }, timeMs: st.time, alarmFree, delivered: st.delivered, leftBehind,
+    result: st.result, reason: st.reason, missionId: st.missionId, layoutId: st.layoutId, variantId: st.variantId, mirror: st.mirror, setup: st.setup,
+    score: Math.max(0, o.done - leftBehind), objective: { done: o.done, total: o.total, min: o.min }, timeMs: st.time, alarmFree,
+    delivered: st.delivered, leftBehind, kieser: st.kieser, fine: st.fine,
   };
 }
 
-const coneOf = (st, e) => { const T = ENEMY_TYPES[e.type]; return { range: T.sight * (st.fullAlarm ? FULL_CONE : 1), half: rad(T.angle) / 2 }; };
+// Kegelmaße; liefert ein geteiltes Objekt (Sichtprüfung je Gegner × Rüther × Schritt ohne Allokation), sofort auslesen
+const CONE = { range: 0, half: 0 };
+const coneOf = (st, e) => {
+  const T = ENEMY_TYPES[e.type], c = buzzed(st, e) ? T.coffee : null;
+  CONE.range = T.sight * (st.fullAlarm ? FULL_CONE : 1) * (c ? c.sight : 1); CONE.half = rad(T.angle * (c ? c.angle : 1)) / 2;
+  return CONE;
+};
 
 // Sichtkegel als Polygon [Ursprung, Randpunkte …] in Kacheln, an Wänden, Deckung und Gas abgeschnitten. [] = Kegel aus.
 export function visibleCone(st, i) {
@@ -207,29 +271,39 @@ const familyTargets = (st, u) => st.enemies.filter(e => e.state !== 'ko' && dist
 
 // ---------- Schritt ----------
 
+// st.paused ('kieser'): Zeit steht, nur {type:'resume'} und {type:'abort'} werden angenommen.
 export function tick(st, dt, cmds = []) {
   const ev = [];
   if (st.over) return ev;
-  for (const c of cmds) { command(st, c, ev); if (st.over) return ev; }
-  if (!(dt > 0)) return ev; // taktische Pause: nur Befehle
+  for (const c of cmds) {
+    if (st.paused && c.type !== 'resume' && c.type !== 'abort') continue;
+    command(st, c, ev);
+    if (st.over) return ev;
+  }
+  if (st.paused || !(dt > 0)) return ev; // taktische Pause: nur Befehle
   st.time += dt;
   st.contact = false;
   const done0 = st.objective.done;
   // fällige Wurf-/Effekt-Folgen
   if (st.pending.length) {
     const due = st.pending.filter(p => p.at <= st.time);
-    st.pending = st.pending.filter(p => p.at > st.time);
-    for (const p of due) resolve(st, p, ev);
+    if (due.length) { st.pending = st.pending.filter(p => p.at > st.time); for (const p of due) resolve(st, p, ev); }
   }
-  st.effects = st.effects.filter(f => {
+  if (st.effects.length) st.effects = st.effects.filter(f => {
     if (f.until > st.time) return true;
     ev.push({ type: 'effectEnd', effect: f.id, kind: f.kind, x: f.x, y: f.y });
     return false;
   });
   assignBaits(st, ev);
+  spotFires(st, ev);
   const blk = blocker(st);
   for (const u of st.units) updateUnit(st, u, dt, ev, blk);
-  for (const e of [...st.enemies]) updateEnemy(st, e, dt, ev, blk);
+  for (let k = 0, n = st.enemies.length; k < n && !st.paused && !st.over; k++) updateEnemy(st, st.enemies[k], dt, ev, blk);
+  if (st.over) return ev; // erwischt
+  updateObjective(st);
+  const o = st.objective;
+  if (o.done !== done0) ev.push({ type: 'objective', kind: o.type, label: o.label, done: o.done, total: o.total, min: o.min, reached: o.done >= o.min });
+  if (st.paused) return ev; // Kieser: Rest nach resume
   // globaler Alarm
   if (!st.contact) st.alarm = Math.max(0, st.alarm - ALARM_DECAY * dt / 1000);
   if (!st.fullAlarm && st.alarm >= 0.999) {
@@ -240,25 +314,27 @@ export function tick(st, dt, cmds = []) {
     ev.push({ type: 'alarmOff', alarm: st.alarm });
   }
   if (st.fullAlarm && st.time >= st.reinforceAt) { st.reinforceAt += REINFORCE_MS; reinforce(st, ev); }
-  updateObjective(st);
-  const o = st.objective;
-  if (o.done !== done0) ev.push({ type: 'objective', kind: o.type, label: o.label, done: o.done, total: o.total, min: o.min, reached: o.done >= o.min });
   if (st.units.every(u => u.down)) end(st, 'fail', 'allDown', ev);
-  else if (st.time >= st.timeLimit) end(st, st.objective.type === 'steal' && st.objective.done >= st.objective.min ? 'success' : 'fail', 'time', ev);
+  else if (st.timeLimit != null && st.time >= st.timeLimit) end(st, o.type === 'steal' && o.done >= o.min ? 'success' : 'fail', 'time', ev);
   return ev;
 }
 
 function end(st, result, reason, ev) {
-  st.over = true; st.result = result; st.reason = reason;
+  st.over = true; st.result = result; st.reason = reason; st.paused = null;
   for (const u of st.units) { u.path = []; u.intent = null; u.busy = null; }
-  const o = st.objective, late = reason === 'time' && o.done >= o.min; // Ziel geschafft, nur nicht abgehoben: kein „Heizung brummt weiter“
-  ev.push({ type: 'end', result, reason, text: result === 'success' ? st.mission.texts.success : result === 'abort' ? END_TEXT.abort : late ? END_TEXT.late : `${END_TEXT[reason]} ${st.mission.texts.fail}`, summary: questSummary(st) });
+  const o = st.objective, t = st.mission.texts, late = reason === 'time' && o.done >= o.min; // Ziel geschafft, nur nicht abgehoben: kein „Heizung brummt weiter“
+  const why = reason === 'allDown' && st.solo ? `${st.units[0].name} ${END_TEXT.soloDown}` : END_TEXT[reason];
+  const text = result === 'success' ? t.success : result === 'abort' ? END_TEXT.abort : late ? END_TEXT.late
+    : reason === 'caught' && t.caught ? t.caught : `${why} ${t.fail}`;
+  ev.push({ type: 'end', result, reason, text, setup: st.setup, fine: st.fine, kieser: st.kieser, summary: questSummary(st) });
 }
+
+const doneCount = (st, kind) => { let n = 0; for (const x of st.objs) if (x.kind === kind && x.done) n++; return n; };
 
 function updateObjective(st) {
   const o = st.objective;
   if (o.type === 'steal') o.done = st.delivered;
-  else if (o.type === 'sabotage') o.done = st.objs.filter(x => x.kind === 'sabotage' && x.done).length;
+  else if (COUNTED[o.type]) o.done = doneCount(st, COUNTED[o.type]);
   else if (o.type === 'fetch') o.done = st.objs.some(x => x.kind === 'item' && x.delivered) ? 1 : 0;
   else o.done = st.objs.some(x => x.kind === 'plug' && x.done) ? 1 : 0;
 }
@@ -269,6 +345,11 @@ const fail = (ev, u, action, reason, extra = {}) => { ev.push({ type: 'fail', un
 
 function command(st, c, ev) {
   if (c.type === 'abort') return end(st, 'abort', 'abort', ev);
+  if (c.type === 'resume') return st.paused && resume(st, ev);
+  if (c.type === 'catch') { // Debug „Stefan ruft“: Fänger (sonst der erste mit catches) erwischt die Einheit (sonst 0) sofort
+    const e = st.enemies[c.enemy ?? st.enemies.findIndex(x => ENEMY_TYPES[x.type].catches)], u = st.units[c.unit ?? 0];
+    return e && ENEMY_TYPES[e.type].catches && u && !u.down && catchUnit(st, e, u, ev);
+  }
   if (c.type === 'extract') return canExtract(st) ? end(st, 'success', 'extract', ev) : fail(ev, null, 'extract', 'extract');
   const u = st.units[c.unit];
   if (!u) return;
@@ -309,7 +390,7 @@ function checkObj(st, u, o, ev) {
     if (u.carry >= CARRY_MAX) return fail(ev, u, 'interact', 'full', { obj: o.id });
   }
   if (u.item) return fail(ev, u, 'interact', 'carry', { obj: o.id });
-  if ((o.kind === 'sabotage' || o.kind === 'plug') && o.done) return fail(ev, u, 'interact', 'done', { obj: o.id });
+  if (o.done) return fail(ev, u, 'interact', 'done', { obj: o.id });
   if (o.kind === 'item' && (o.taken || o.delivered)) return fail(ev, u, 'interact', 'taken', { obj: o.id });
   return true;
 }
@@ -326,6 +407,7 @@ function abilityIntent(st, u, c, ev) {
     it.target = {};
   } else if (ab.target === 'point') {
     if (t.x == null || SOLID.has(tileAt(st, t.x, t.y))) return no('target');
+    if (ab.id === 'mms' && !WALK.has(tileAt(st, t.x, t.y))) return no('target'); // Köder ins Wasser frisst keiner
     // Ziel darf hinter einer Wand liegen: hinlaufen nur bis sicher in Wurfweite
     it.target = { x: t.x, y: t.y }; it.near = Math.max(0, ab.range - 1.42);
   } else if (ab.target === 'door') {
@@ -380,7 +462,7 @@ function pursue(st, u, ev, blk) {
 
 // Nächste freie begehbare Kachel (keine zwei Rüther auf demselben Ziel)
 function freeNear(st, u, tx, ty) {
-  const taken = new Set(st.units.filter(o => o !== u && !o.down).map(o => { const g = o.goal || { x: Math.floor(o.x), y: Math.floor(o.y) }; return g.y * st.w + g.x; }));
+  const taken = new Set(st.units.filter(o => o !== u && !o.down).map(o => { const g = o.goal || o.path[o.path.length - 1] || { x: Math.floor(o.x), y: Math.floor(o.y) }; return g.y * st.w + g.x; }));
   for (let r = 0; r <= 3; r++) {
     let best = null, bd = Infinity;
     for (let y = ty - r; y <= ty + r; y++) for (let x = tx - r; x <= tx + r; x++) {
@@ -455,7 +537,7 @@ function work(st, u, dt, ev) {
   const o = st.objs[b.obj], at = mid(o);
   // ein zweiter Rüther am selben Objekt kann inzwischen fertig sein: neu prüfen statt doppelt verbuchen
   if (b.kind === 'steal' && o.coins <= 0) return fail(ev, u, 'interact', 'empty', { obj: o.id });
-  if ((b.kind === 'sabotage' || b.kind === 'unplug') && o.done) return fail(ev, u, 'interact', 'done', { obj: o.id });
+  if (o.done) return fail(ev, u, 'interact', 'done', { obj: o.id });
   if (b.kind === 'fetch' && o.taken) return fail(ev, u, 'interact', 'taken', { obj: o.id });
   if (b.kind === 'steal') {
     if (u.carry < CARRY_MAX) {
@@ -464,9 +546,10 @@ function work(st, u, dt, ev) {
     }
     if (o.coins > 0 && u.carry < CARRY_MAX) u.busy = { ...b, t: 0 }; // nächste Münze
     else if (!o.coins) ev.push({ type: 'vaultEmpty', obj: o.id, x: at.x, y: at.y });
-  } else if (b.kind === 'sabotage') {
+  } else if (b.kind === 'sabotage' || b.kind === 'valve' || b.kind === 'ignite') {
     o.done = true;
-    ev.push({ type: 'sabotage', unit: u.i, obj: o.id, x: at.x, y: at.y, done: st.objs.filter(x => x.kind === 'sabotage' && x.done).length, total: st.objective.total });
+    if (b.kind === 'ignite') o.litAt = st.time; // brennt ab jetzt dauerhaft, Ranger bemerken es nach FIRE_MS
+    ev.push({ type: b.kind, unit: u.i, obj: o.id, x: at.x, y: at.y, done: doneCount(st, o.kind), total: st.objective.total });
   } else if (b.kind === 'fetch') {
     o.taken = true; o.by = u.i; u.item = true;
     ev.push({ type: 'pickup', unit: u.i, obj: o.id, x: at.x, y: at.y });
@@ -618,6 +701,8 @@ function resolve(st, p, ev) {
     const d = st.doors[p.door];
     d.locked = false; d.opening = false;
     st.tiles[d.y * st.w + d.x] = 'D';
+    st.paths.clear();
+    for (const e of st.enemies) if (e.state === 'patrol') e.goal = null; // Patrouillen planen über die neue Tür
     // laufende Wege neu planen, damit niemand den alten Umweg weiterläuft (Absichten plant pursue neu)
     for (const u of st.units) if (!u.down && u.path.length) { if (u.intent) u.intent.tx = null; else if (u.goal) u.path = pathTo(st, u, u.goal.x, u.goal.y) || u.path; }
     ev.push({ type: 'doorOpen', door: d.id, by: p.by, x: d.x + 0.5, y: d.y + 0.5 });
@@ -645,16 +730,89 @@ function timed(e, state, reason, until) {
   e.state = state; e.reason = reason; e.until = until; e.path = []; e.goal = null; e.bait = null; e.seen = -1;
 }
 
-// Geräusch: ablenkbare Gegner im Umkreis gehen nachsehen
-function noise(st, x, y, r, kind, ev) {
+// Geräusch: ablenkbare Gegner im Umkreis gehen nachsehen (außer der Quelle selbst). Liefert die Angelockten.
+function noise(st, x, y, r, kind, ev, src = null) {
   const hit = [];
   for (const e of st.enemies) {
-    if (!CALM.has(e.state) || e.bait != null || Math.hypot(e.x - x, e.y - y) > r) continue;
+    if (e === src || !CALM.has(e.state) || e.bait != null || Math.hypot(e.x - x, e.y - y) > r) continue;
     e.state = 'distracted'; e.reason = 'noise'; e.target = { x, y }; e.until = 0; e.goal = null;
     e.path = pathTo(st, e, Math.floor(x), Math.floor(y), REACH) || [];
     hit.push(e.i);
   }
-  ev.push({ type: 'noise', kind, x, y, r, enemies: hit });
+  if (ev) ev.push({ type: 'noise', kind, x, y, r, enemies: hit });
+  return hit;
+}
+
+// Dackel: Sichtung = Bellen, lockt Kollegen im Umkreis zum Hund
+function bark(st, e, ev) {
+  if (!ENEMY_TYPES[e.type].bark || st.time < e.barkAt) return;
+  e.barkAt = st.time + BARK_CD;
+  ev.push({ type: 'bark', enemy: e.i, x: e.x, y: e.y, r: BARK_R, enemies: noise(st, e.x, e.y, BARK_R, 'bark', null, e), say: 'WAU!' });
+}
+
+// Brennende Bäume: ruhige Ranger in FIRE_R Kacheln bemerken sie FIRE_MS nach dem Anzünden und laufen löschen (der Baum brennt weiter)
+function spotFires(st, ev) {
+  for (const o of st.objs) {
+    if (o.kind !== 'tree' || !o.done || o.spotted || st.time < o.litAt + FIRE_MS) continue;
+    const at = mid(o), hit = [], taken = new Set();
+    const endOf = (e, p) => { const t = p[p.length - 1] || { x: Math.floor(e.x), y: Math.floor(e.y) }; return t.y * st.w + t.x; };
+    for (const e of st.enemies) {
+      if (!ENEMY_TYPES[e.type].fire || !CALM.has(e.state) || e.bait != null || dist(e, at) > FIRE_R) continue;
+      let path = pathTo(st, e, o.x, o.y, REACH);
+      if (!path) continue;
+      if (taken.has(endOf(e, path))) { // Kollege steht schon dort: kürzester Weg zu einer freien Nachbarkachel des Baums
+        let alt = null;
+        for (let y = o.y - 1; y <= o.y + 1; y++) for (let x = o.x - 1; x <= o.x + 1; x++) {
+          if (taken.has(y * st.w + x) || !WALK.has(tileAt(st, x, y))) continue;
+          const p = pathTo(st, e, x, y);
+          if (p && (!alt || p.length < alt.length)) alt = p;
+        }
+        if (alt) path = alt;
+      }
+      taken.add(endOf(e, path));
+      Object.assign(e, { state: 'distracted', reason: 'fire', target: at, until: 0, goal: null, path });
+      hit.push(e.i);
+    }
+    if (!hit.length) continue;
+    o.spotted = true;
+    ev.push({ type: 'fireSpotted', obj: o.id, x: at.x, y: at.y, enemies: hit, say: line(st, st.enemies[hit[0]], 'fire') });
+  }
+}
+
+// Erwischt: 'kieser' pausiert bis resume, 'caught' beendet sofort mit Strafe
+function catchUnit(st, e, u, ev) {
+  const T = ENEMY_TYPES[e.type];
+  cancelBusy(u, 'erwischt', ev);
+  u.path = []; u.intent = null; u.goal = null;
+  if (T.catches === 'kieser') {
+    st.kieser++; st.paused = 'kieser'; st.pausedBy = { enemy: e.i, unit: u.i };
+    return ev.push({ type: 'kieser', unit: u.i, enemy: e.i, count: st.kieser, x: u.x, y: u.y, say: line(st, e, 'alert') });
+  }
+  st.fine = T.fine || 0;
+  ev.push({ type: 'caught', by: e.i, unit: u.i, fine: st.fine, x: u.x, y: u.y, say: line(st, e, 'caught') });
+  end(st, 'fail', 'caught', ev);
+}
+
+// Nach der Kieser-Cutscene: Rüther mit voller HP auf die Plattform, der Fänger zurück auf Anfang seiner Runde,
+// alle anderen beruhigen sich an Ort und Stelle, Alarm aus. Erledigte Ziele bleiben erledigt.
+function resume(st, ev) {
+  const reason = st.paused, by = st.pausedBy;
+  st.paused = null; st.pausedBy = null;
+  const u = st.units[by.unit];
+  const busy = new Set(st.units.filter(o => o !== u && !o.down).map(o => Math.floor(o.y) * st.w + Math.floor(o.x)));
+  const p = st.spots.find(s => !busy.has(s.y * st.w + s.x)) || st.spots[0];
+  Object.assign(u, { x: p.x + 0.5, y: p.y + 0.5, dir: 0, hp: u.maxHp, down: false, state: 'idle', path: [], goal: { x: p.x, y: p.y }, intent: null, busy: null });
+  for (const e of st.enemies) {
+    if (e.state === 'ko' || TIMED.has(e.state)) continue;
+    Object.assign(e, { state: 'patrol', reason: null, suspicion: 0, path: [], goal: null, target: null, until: 0, bait: null, lostT: 0, seen: -1, lastSeen: null, waitUntil: 0 });
+    const T = ENEMY_TYPES[e.type];
+    if (T.coffee) { e.buzzUntil = 0; e.coffeeAt = st.time + rollMs(st, T.coffee.every); }
+    if (e.i === by.enemy) Object.assign(e, { x: e.home.x + 0.5, y: e.home.y + 0.5, dir: e.home.dir, wp: 0, hp: e.maxHp });
+  }
+  st.alarm = 0; st.contact = false; st.lastSighting = null;
+  if (st.fullAlarm) { st.fullAlarm = false; ev.push({ type: 'alarmOff', alarm: 0 }); }
+  ev.push({ type: 'resumed', reason, unit: u.i, enemy: by.enemy, x: u.x, y: u.y, hp: u.hp });
+  return true;
 }
 
 // M&Ms: der nächste Wachgänger (patrol oder abgelenkt, keine Drohne) in 6 Kacheln geht hin
@@ -729,6 +887,7 @@ function updateEnemy(st, e, dt, ev, blk) {
     if (st.time < e.until) return;
     wake(st, e, ev);
   }
+  if (T.coffee && coffee(st, e, T.coffee, ev)) return;
   const seen = lookFor(st, e, blk);
   e.seen = seen ? seen.u.i : -1;
   if (e.state === 'alert') return hunt(st, e, seen, dt, ev);
@@ -740,19 +899,21 @@ function updateEnemy(st, e, dt, ev, blk) {
       if (e.state !== 'suspicious') {
         e.state = 'suspicious'; e.reason = null; e.bait = null; e.repathAt = 0;
         ev.push({ type: 'suspicious', enemy: e.i, unit: seen.u.i, x: e.x, y: e.y, say: line(st, e, 'sus') });
+        bark(st, e, ev);
       }
       // dreht sich zum Rüther und schleicht zur Sichtung
       if (st.time >= e.repathAt) { e.repathAt = st.time + 500; e.path = pathTo(st, e, Math.floor(seen.u.x), Math.floor(seen.u.y)) || []; }
-      walk(e, T.speed * 0.5, dt, false);
+      walk(e, enemySpeed(st, e) * 0.5, dt, false);
       return turnTo(e, angTo(e, seen.u), dt * 2);
     }
   } else if (e.state === 'suspicious') {
     investigate(st, e, e.lastSeen, e.suspicion);
   } else if (e.state !== 'investigate') e.suspicion = Math.max(0, e.suspicion - SUS_DECAY * dt / 1000);
 
+  const speed = enemySpeed(st, e);
   if (e.state === 'patrol') return patrol(st, e, dt);
   if (e.state === 'investigate') {
-    if (e.path.length) return walk(e, T.speed, dt);
+    if (e.path.length) return walk(e, speed, dt);
     if (!e.until) { e.until = st.time + LOOK_MS; e.lookBase = e.dir; }
     scan(st, e, dt, e.lookBase);
     if (st.time >= e.until) calm(st, e, ev);
@@ -762,16 +923,47 @@ function updateEnemy(st, e, dt, ev, blk) {
     if (e.bait != null) {
       const b = st.effects.find(f => f.id === e.bait);
       if (!b) return calm(st, e, ev);
-      if (e.path.length) return walk(e, T.speed, dt);
+      if (e.path.length) return walk(e, speed, dt);
       st.effects.splice(st.effects.indexOf(b), 1);
       timed(e, 'eating', 'eat', st.time + STUN_MS.eat);
       return ev.push({ type: 'stun', enemy: e.i, reason: 'eat', effect: b.id, ms: STUN_MS.eat, x: e.x, y: e.y, say: 'Mmh ... Moment, die sind von 2017.' });
     }
-    if (e.path.length) return walk(e, T.speed, dt);
-    if (!e.until) e.until = st.time + NOISE_MS;
-    scan(st, e, dt, angTo(e, e.target));
+    if (e.path.length) return walk(e, speed, dt);
+    // angekommen: Geräusch absuchen bzw. Feuer ausschlagen (reason 'fire', Blick auf den Baum)
+    const fire = e.reason === 'fire';
+    if (!e.until) e.until = st.time + (fire ? DOUSE_MS : NOISE_MS);
+    if (fire) turnTo(e, angTo(e, e.target), dt); else scan(st, e, dt, angTo(e, e.target));
     if (st.time >= e.until) calm(st, e, ev);
   }
+}
+
+// Stefans Kaffeepause: alle every ms (ab Pausenbeginn) 5 s stehen und schlürfen (Kegel aus), danach boost ms koffeiniert.
+// Nur aus der Patrouille heraus; true = diesen Schritt nichts weiter tun.
+function coffee(st, e, C, ev) {
+  if (e.state === 'coffee') {
+    if (st.time < e.until) return true;
+    Object.assign(e, { state: 'patrol', reason: null, until: 0, buzzUntil: st.time + C.boost });
+    ev.push({ type: 'coffee', phase: 'end', enemy: e.i, x: e.x, y: e.y });
+    ev.push({ type: 'caffeinated', enemy: e.i, ms: C.boost, until: e.buzzUntil, x: e.x, y: e.y, say: line(st, e, 'buzz') });
+    return false;
+  }
+  if (e.state !== 'patrol' || st.time < e.coffeeAt) return false;
+  Object.assign(e, { state: 'coffee', reason: 'coffee', until: st.time + C.ms, path: [], goal: null, suspicion: 0, seen: -1 });
+  e.coffeeAt = st.time + rollMs(st, C.every);
+  ev.push({ type: 'coffee', phase: 'start', enemy: e.i, ms: C.ms, x: e.x, y: e.y, say: line(st, e, 'coffee') });
+  return true;
+}
+
+// Patrouillen-Wege zwischen festen Kacheln wiederholen sich: Cache je (Start, Ziel), geleert, wenn eine Tür aufgeht
+function patrolPath(st, e, wp) {
+  const k = (Math.floor(e.y) * st.w + Math.floor(e.x)) * st.w * st.h + wp.y * st.w + wp.x;
+  let p = st.paths.get(k);
+  if (p === undefined) {
+    if (st.paths.size > 4000) st.paths.clear(); // ponytail: grob begrenzt, reicht für 15+ Wachen auf 64×48
+    p = pathTo(st, e, wp.x, wp.y);
+    st.paths.set(k, p);
+  }
+  return p ? p.slice() : [];
 }
 
 function patrol(st, e, dt) {
@@ -788,8 +980,9 @@ function patrol(st, e, dt) {
     if (st.time >= e.lookAt) { e.lookI = (e.lookI + 1) % dirs.length; e.lookAt = st.time + POST_LOOK_MS; }
     return turnTo(e, dirs[e.lookI % dirs.length], dt);
   }
-  if (e.goal !== wp || !e.path.length) { e.path = pathTo(st, e, wp.x, wp.y) || []; e.goal = wp; }
-  walk(e, ENEMY_TYPES[e.type].speed, dt);
+  if (e.goal !== wp) { e.path = patrolPath(st, e, wp); e.goal = wp; }
+  if (!e.path.length) return; // Wegpunkt unerreichbar: stehen bleiben statt jeden Schritt neu suchen
+  walk(e, enemySpeed(st, e), dt);
 }
 
 function investigate(st, e, pos, sus = 0) {
@@ -813,12 +1006,15 @@ function raiseAlert(st, e, u, ev) {
   const T = ENEMY_TYPES[e.type];
   Object.assign(e, { state: 'alert', reason: null, suspicion: 1, lostT: 0, lastSeen: { x: u.x, y: u.y }, path: [], goal: null, bait: null, repathAt: 0 });
   st.alarmEver = true; st.contact = true; st.lastSighting = { x: u.x, y: u.y };
-  st.alarm = T.megafon ? 1 : Math.min(1, st.alarm + ALARM_STEP);
+  st.alarm = T.megafon ? 1 : Math.min(1, st.alarm + (T.whistle || ALARM_STEP));
   // Ruf: Kollegen in der Nähe sehen nach
   const called = [];
   for (const o of st.enemies) if (o !== e && CALM.has(o.state) && o.bait == null && dist(o, e) <= SHOUT_R) { investigate(st, o, e.lastSeen, 0.5); called.push(o.i); }
   ev.push({ type: 'alert', enemy: e.i, unit: u.i, x: e.x, y: e.y, megafon: !!T.megafon, alarm: st.alarm, called, say: line(st, e, 'alert') });
+  if (T.whistle) ev.push({ type: 'whistle', enemy: e.i, x: e.x, y: e.y, alarm: st.alarm });
+  bark(st, e, ev);
   cancelBusy(u, 'entdeckt', ev);
+  if (T.catches && dist(e, u) <= MELEE) catchUnit(st, e, u, ev); // Misstrauen voll direkt daneben: sofort erwischt
 }
 
 function hunt(st, e, seen, dt, ev) {
@@ -830,6 +1026,7 @@ function hunt(st, e, seen, dt, ev) {
   } else e.lostT += dt;
   let foe = null, fd = MELEE;
   for (const u of st.units) if (!u.down) { const d = dist(u, e); if (d <= fd) { foe = u; fd = d; } }
+  if (foe && T.catches) return catchUnit(st, e, foe, ev); // Stefan und Ranger schlagen nicht, sie greifen zu
   if (foe) {
     e.path = [];
     turnTo(e, angTo(e, foe), dt * 3);
@@ -845,7 +1042,7 @@ function hunt(st, e, seen, dt, ev) {
     const to = seen ? seen.u : e.lastSeen;
     e.path = pathTo(st, e, Math.floor(to.x), Math.floor(to.y)) || [];
   }
-  if (e.path.length) walk(e, T.speed * HUNT_SPEED, dt);
+  if (e.path.length) walk(e, enemySpeed(st, e) * HUNT_SPEED, dt);
   else scan(st, e, dt, e.dir);
 }
 

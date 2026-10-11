@@ -14,13 +14,15 @@ export const CONST = {
   BREAKOUTS: 3,            // Ausbrüche, bis der Rüther abhaut
   MAX_CATCH_CHANCE: 0.95,
   MIN_CATCH_CHANCE: 0.05,
-  SUPERCOIN_BONUS: 0.2,
+  SUPERCOIN_BONUS: 0.5,   // v9: Super-Münze +50 % Fangchance
   TEAM_SIZE: 3,
   // Lockmodul
   LURE_MS: 300_000,
-  LURE_SPAWN_MIN: 4,
+  LURE_SPAWN_MIN: 4,       // v8-Wellen (ersetzt durch LURE_WAVE)
   LURE_SPAWN_MAX: 8,
-  LURE_INTERVAL: 20_000,
+  LURE_INTERVAL: 60_000,   // v9: jede Minute eine Welle
+  LURE_WAVE: 3,            // v9: 3 neue Rüther pro Welle, zusätzlich zu den vorhandenen, normale Seltenheiten
+  LURE_MAX: 15,            // v9: höchstens so viele Spawns gleichzeitig um dich
   // Power-Ups
   LEVEL_MAX: 20,
   LEVEL_STEP: 0.04,        // +4 % Stats pro Level über 1
@@ -96,8 +98,14 @@ export const CONST = {
   HAUNEBU_SUMMON_MAX: 8000,  // gedeckelt bei 8000
   HAUNEBU_WIN_SATS: 500,   // Sieg gegen Hitler: 10 Minuten Flugscheibe + 500 Sats
   XP_HAUNEBU: 500,
-  // v8: Lockmodul – alle LURE_INTERVAL komplett neue Rüther direkt in Fangreichweite
+  // Lockmodul: neue Rüther der Welle landen direkt in Fangreichweite
   LURE_RING: [12, 90],
+  // v9: Haunebu verlängern, solange sie dir gehört (ohne Hitler-Kampf)
+  HAUNEBU_EXTEND_COST: 5000,
+  HAUNEBU_EXTEND_MS: 600_000,
+  // v10: Quest-Fähigkeiten (gehören dem Rüther an sich): Pool-Fähigkeit kaufen = Stufe 1, Upgrades auf Stufe 2/3 (auch feste)
+  ABILITY_BUY: 1000,
+  ABILITY_UP: { 2: 2000, 3: 3000 },
   // v8: Quests (Kommando-Modus)
   QUEST_XP: 400,
 };
@@ -159,6 +167,8 @@ export const ACHIEVEMENTS = [
   { id: 'tachionen', name: 'Schneller als das Licht', desc: 'Besiege den Tachionenbitcoin in Neuschwabenland', icon: '⚡' },
   { id: 'quest1', name: 'Kommando', desc: 'Schließe deine erste Haunebu-Quest ab', icon: '🎯' },
   { id: 'quest_all', name: 'Kommando-Legende', desc: 'Schließe jede Haunebu-Quest einmal ab', icon: '🏆' },
+  { id: 'kieser3', name: 'Stammkunde bei Kieser', desc: 'Lass dich dreimal von Stefan zum Kieser-Training schleppen', icon: '⚡' },
+  { id: 'bruch_clean', name: 'Spurlos', desc: 'Feuer im Bruch, ohne dass ein Ranger Alarm schlägt', icon: '🔥' },
 ];
 
 export const RARITIES = [
@@ -170,10 +180,10 @@ export const RARITIES = [
 export const RARITY_BY_ID = Object.fromEntries(RARITIES.map(r => [r.id, r]));
 
 export const SHOP = [
-  { id: 'lockmodul', name: 'Lockmodul', icon: '🧲', cost: 300, desc: '5 Minuten lang alle 20 Sekunden 4 bis 8 komplett neue Rüthers direkt bei dir, alle in Fangreichweite.' },
-  { id: 'supercoin', name: 'Super-Münze', icon: '🪙', cost: 40, desc: 'Ein Wurf mit +20 % Fangchance. Wird beim Treffer verbraucht.' },
+  { id: 'lockmodul', name: 'Lockmodul', icon: '🧲', cost: 1000, desc: '5 Minuten lang jede Minute 3 neue Rüthers direkt bei dir, alle in Fangreichweite. Die alten bleiben.' },
+  { id: 'supercoin', name: 'Super-Münze', icon: '🪙', cost: 500, desc: 'Ein Wurf mit +50 % Fangchance. Wird beim Treffer verbraucht.' },
   // Kauf startet sofort den Kampf gegen Hitler (kein Inventar). Sieg = 10 Minuten Haunebu (save.haunebuUntil), Preis steigt je Beschwörung.
-  { id: 'haunebu', name: 'Haunebu-Reichsflugscheibe', icon: '🛸', cost: 5000, desc: 'Beschwört die Flugscheibe. Adolf Hitler steigt aus und will sie behalten. Besieg ihn, dann gehört sie dir 10 Minuten: freie Flüge zu jeder Arena, nach Neuschwabenland und zu Quests. Jede Beschwörung kostet 1000 Sats mehr (höchstens 8000).' },
+  { id: 'haunebu', name: 'Haunebu-Reichsflugscheibe', icon: '🛸', cost: 5000, desc: 'Beschwört die Flugscheibe. Adolf Hitler steigt aus und will sie behalten. Besieg ihn, dann gehört sie dir 10 Minuten: freie Flüge zu jeder Arena, nach Neuschwabenland und zu Quests. Gehört sie dir schon, verlängerst du für 5000 Sats um 10 Minuten. Jede Beschwörung kostet 1000 Sats mehr (höchstens 8000).' },
 ];
 
 export const ARENAS = [
@@ -280,12 +290,12 @@ export const BOSSES = {
   },
   // v8: Endgegner in Neuschwabenland, mit Abstand der stärkste Gegner. duration = eigene Kampfdauer.
   tachionen: {
-    id: 'tachionen', name: 'Tachionenbitcoin', btc: 1900, duration: 120_000,
-    fast: { name: 'Überlicht-Hash', damage: 34, every: 1650, warn: 450, fx: 'tachyon' },
+    id: 'tachionen', name: 'Tachionenbitcoin', btc: 1100, duration: 90_000,
+    fast: { name: 'Überlicht-Hash', damage: 20, every: 2000, warn: 600, fx: 'tachyon' },
     charged: [
       { name: 'Tachionen-Halving', damage: 120, warn: 1000, fx: 'thalving' },
-      { name: 'Kausalitätsbruch', damage: 30, warn: 1000, stun: 2000, poison: { perSec: 6, ms: 6000 }, fx: 'causality' },
-      { name: 'Zeitschleife', damage: 0, warn: 1200, heal: 150, fx: 'timeloop' },
+      { name: 'Kausalitätsbruch', damage: 35, warn: 1000, stun: 2000, poison: { perSec: 10, ms: 6000 }, fx: 'causality' },
+      { name: 'Zeitschleife', damage: 0, warn: 1200, heal: 250, fx: 'timeloop' },
     ],
   },
 };

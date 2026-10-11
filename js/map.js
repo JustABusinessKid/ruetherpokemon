@@ -134,7 +134,8 @@ export function createMap({ el, arenas, onSpawnTap, onArenaTap, onStopTap, onFol
       clearTimeout(waveT); waveT = setTimeout(() => el.classList.remove('wave'), 1400);
     },
     // v8: Lockmodul an/aus. Beim Wechsel zoomt die Karte, wenn sie dem Spieler folgt, auf lureZoom bzw. zurück auf 16;
-    // bei 16 decken sich die 4–8 Gesichter der Welle im 90-m-Ring (spawn.js lureWave). Flüge und follow() rechnen den Zoom am Ziel neu.
+    // bei 16 decken sich die bis zu 15 Gesichter des Lockmoduls im 90-m-Ring (spawn.js lureWave), darum hält die App den
+    // Lock-Zoom, solange noch Wellen-Gesichter liegen (v9). Flüge und follow() rechnen den Zoom am Ziel neu.
     setLure(on) {
       if (on === lure) return;
       lure = on;

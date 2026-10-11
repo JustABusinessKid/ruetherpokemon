@@ -20,18 +20,18 @@ Ortung HTTPS. Live unter `https://justabusinesskid.github.io/ruetherpokemon/`
 - Tab-Leiste unten: Karte, Sammlung, Quests, Rangliste, Profil. Die Sats-Pille oben rechts öffnet den Shop.
 - Karte folgt dir. Karte verschoben? Den Karten-Knopf unten rechts tippen.
 - Rüthers gibt es in vier Seltenheiten (Normal, Selten, Episch, Legendär), erkennbar an Rand und Aura auf der Karte. Seltenere sind stärker und schwerer zu fangen.
-- Fangen: Münze nach oben schnippen, kleiner Ring = bessere Chance. Super-Münze (Shop) gibt +20 %. Drei Ausbrüche, dann ist der Rüther weg. Oder im Wildkampf weichhauen.
+- Fangen: Münze nach oben schnippen, kleiner Ring = bessere Chance. Super-Münze (Shop) gibt +50 %. Drei Ausbrüche, dann ist der Rüther weg. Oder im Wildkampf weichhauen.
 - Sammlung: bis zu drei ins Team, Power-Up hebt das Level (kostet Sats), Füttern mit Duplikaten gibt +2 Level. Fusion: drei gleiche Rüthers derselben Seltenheit werden zu einem der nächsten Seltenheit. Rütherdex zeigt alle 20 Kombinationen.
 - Shop:
-  - **Lockmodul** (5 Minuten): alle 20 Sekunden eine Welle mit 4 bis 8 komplett neuen Rüthers direkt bei dir (12 bis 90 m, also in Fangreichweite). Die erste Welle kommt sofort beim Kauf, ein Ring-Puls auf der Karte zeigt jede Welle, das Banner zählt bis zur nächsten.
-  - **Super-Münzen.**
-  - **Haunebu-Reichsflugscheibe:** Die Beschwörung kostet 5.000 Sats, jede weitere 1.000 mehr, höchstens 8.000. Adolf Hitler steigt aus und will sie behalten. Wer ihn besiegt, hat die Haunebu **10 Minuten**: freie Flüge zu jeder Arena, so oft man will, auch nach Neuschwabenland. Bei 1:00 und am Ende kommt ein Hinweis, dann fliegt sie zurück zu Hitler. Wer gerade gebeamt ist, wird vorher nach Hause gebracht.
+  - **Lockmodul** (1.000 Sats, 5 Minuten): sofort beim Kauf und dann jede Minute eine Welle mit 3 neuen Rüthers direkt bei dir (12 bis 90 m, also in Fangreichweite), mit normalen Seltenheiten. Die alten bleiben liegen, höchstens 15 gleichzeitig; ist es voll, fallen die ältesten raus, nie der gerade offene. Ein Ring-Puls auf der Karte zeigt jede Welle, das Banner zeigt „Lockmodul 4:12 · nächste Welle 0:42".
+  - **Super-Münzen** (500 Sats): ein Wurf mit +50 % Fangchance.
+  - **Haunebu-Reichsflugscheibe:** Die Beschwörung kostet 5.000 Sats, jede weitere 1.000 mehr, höchstens 8.000. Adolf Hitler steigt aus und will sie behalten. Wer ihn besiegt, hat die Haunebu **10 Minuten**: freie Flüge zu jeder Arena, so oft man will, auch nach Neuschwabenland. Gehört sie dir schon, verlängert „+10 Min · 5.000" im Shop oder am Countdown-Chip oben um 10 Minuten, ohne Hitler-Kampf und ohne dass die Beschwörung teurer wird. Bei 1:00 und am Ende kommt ein Hinweis, dann fliegt sie zurück zu Hitler. Wer gerade gebeamt ist, wird vorher nach Hause gebracht.
 - Trainer-Level: Fänge, Stops, Fusionen, Arenasiege und Quests geben XP. Jeder Aufstieg bringt Sats.
 - Quests: jeden Tag drei neue, Fortschritt zählt automatisch, „Einlösen" gibt Sats und XP. Wer täglich wiederkommt, bekommt einen wachsenden Tagesbonus.
 - Dosenbier-Stops: echte Kioske, Kneipen und Supermärkte aus OpenStreetMap im Umkreis von 600 m. Näher als 80 m rangehen, Glücksrad drehen: 20 bis 60 Sats, manchmal eine Super-Münze. Danach 5 Minuten Abkühlung (grauer Marker).
 - Kampf: VS-Intro, dann auf den Boss tippen. Spezial-Buttons unten, wenn die Energie reicht. Blinkt es, wischen = ausweichen. Unter 50 % wird der Boss wütend und schneller. ✕ oben links = aufgeben.
 - Arenen haben fünf Level, der Boss wird pro Level stärker und die Belohnung größer. Level 5 besiegt = gemeistert. Fünf Arenen: Rütherschanze Worringen, Hüttenbergstraße, PC Sale, Keller der Rütherschanze und die **Geheime Festung Neuschwabenland** in der Antarktis. Die erreicht man nur mit der Haunebu, dort wartet der Tachionenbitcoin, mit Abstand der stärkste Boss (120 Sekunden Kampf).
-- **Haunebu-Quests** (oben im Quests-Tab, frei, wenn alle fünf Arenen gemeistert sind): Haunebu kapern, Mission wählen, bis zu drei Rüther ins Team, „Abflug". Die Quest verbraucht die Haunebu. Gespielt wird in der Draufsicht wie Commandos 2: Rüther antippen, Wegpunkt antippen, Doppeltipp auf einen Rüther öffnet seine Superkräfte (Plus 70 Prozent öffnet Türen, Giftgas-Wand, Familientreffen, Controllerwurf, M&M-Köder und mehr). Vier Missionen mit wechselnden Varianten: Tachionenraub und Hangar-Sabotage in Neuschwabenland, Michas PS3 aus dem PC-Sale-Lager, die Bitcoin-Heizung im Keller abschalten. Danach Ergebnis mit Sats, XP und Bestwert, dann fliegt die Haunebu euch nach Hause.
+- **Haunebu-Quests** (oben im Quests-Tab, frei, wenn alle fünf Arenen gemeistert sind): Haunebu kapern, Mission wählen, bis zu drei Rüther ins Team, „Abflug". Die Quest verbraucht die Haunebu nicht: Ist das Fenster danach noch offen, fliegt sie euch zurück an den Ort vor der Quest (Arena oder zu Hause) und die Zeit läuft weiter; läuft es während der Quest ab, geht es danach nach Hause. Gespielt wird in der Draufsicht wie Commandos 2: Rüther antippen, Wegpunkt antippen, Doppeltipp auf einen Rüther öffnet seine Superkräfte (Plus 70 Prozent öffnet Türen, Giftgas-Wand, Familientreffen, Controllerwurf, M&M-Köder und mehr). Sechs Missionen, jede mit mindestens zwei Karten und je zwei oder drei Varianten, dazu bei jedem Start zufällig gespiegelt, Wachen an anderen Punkten ihrer Runde und anders gefüllte Tresore (die Liste zeigt „Karten: n · Varianten: m"): Tachionenraub und Hangar-Sabotage in Neuschwabenland, Michas PS3 aus dem PC-Sale-Lager, die Bitcoin-Heizung im Keller abschalten, **Nie wieder duschen** (Viktor solo am Campingplatz an der Mosel: 3 Wasseranschlüsse abdrehen, keine Zeitgrenze; erwischt ihn Stefan (mit seinem Bulletproof Coffee), muss er zum Kieser-Training, 12.000 Sats, jedes Training −1.000, nie unter 10.000; ohne Viktor in der Box gesperrt) und **Feuer im Bruch** (3 Bäume im Worringer Bruch anzünden, jedes Mal 6.500 Sats; erwischt euch ein Ranger, kostet das 10.000 Sats Strafe). Scheitern oder Aufgeben bringt 10 % der Belohnung, aber nur, wenn schon etwas geschafft ist. Danach Ergebnis mit Sats, XP, Bestwert, Kieser-Trainings und Strafe, dann der Rückflug.
 - Rangliste: Top 20 nach Trophäen, wer gerade online ist, und ein Feed mit legendären Fängen, Fusionen, gemeisterten Arenen und geschafften Quests.
 - Profil: Trainer-Level und XP, Statistik, Erfolge, Sound/Haptik, Avatar, Spielstand kopieren/einfügen/löschen, Teilen.
 - Events: 18 bis 19 Uhr ist Rüther-Stunde (doppelte Spawns, 50 % mehr Sats). Jeden Tag ist ein anderer Rüther dreimal so häufig.
@@ -62,8 +62,9 @@ gegenseitig in der Rangliste.
 `?debug=1` an die URL hängen oder siebenmal auf den Titel tippen. Dann kann
 man sich an alle fünf Arenen beamen, Fake-Stops erzeugen, Sats und XP geben,
 die Haunebu für 10 Minuten bekommen, alle Arenen meistern, das Lockmodul
-einschalten und mit „Quest starten" der Reihe nach jede Mission direkt mit dem
-aktuellen Team starten.
+einschalten und mit „Quest starten" eine Mission direkt mit dem aktuellen Team
+starten (Auswahl: Mission, Karte, Spiegelung; leer = Zufall). „Stefan ruft"
+startet „Nie wieder duschen" und löst sofort die Kieser-Cutscene aus.
 
 ## Tests
 

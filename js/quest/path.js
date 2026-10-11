@@ -4,6 +4,9 @@
 const SQ2 = Math.SQRT2;
 const DIRS = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, SQ2], [1, -1, SQ2], [-1, 1, SQ2], [-1, -1, SQ2]];
 const octile = (dx, dy) => { dx = Math.abs(dx); dy = Math.abs(dy); return dx + dy + (SQ2 - 2) * Math.min(dx, dy); };
+// Puffer für alle Suchen (synchron, nie verschachtelt): große Karten suchen oft, ohne jedes Mal neu anzulegen
+let G = new Float64Array(0), PREV = new Int32Array(0), CLOSED = new Uint8Array(0);
+const hk = [], hi = [];
 
 // passable(x,y) → bool. Ziel: jede begehbare Kachel, deren Mitte ≤ near Kacheln von der Zielkachel entfernt ist
 // (near=1.5: daneben, auch diagonal).
@@ -12,10 +15,12 @@ export function findPath(w, h, passable, sx, sy, tx, ty, near = 0) {
   const ok = (x, y) => x >= 0 && y >= 0 && x < w && y < h && passable(x, y);
   const goal = (x, y) => Math.hypot(x - tx, y - ty) <= near + 1e-9 && ok(x, y);
   if (goal(sx, sy)) return [];
-  const n = w * h, g = new Float64Array(n).fill(Infinity), prev = new Int32Array(n).fill(-1), closed = new Uint8Array(n);
+  const n = w * h;
+  if (G.length < n) { G = new Float64Array(n); PREV = new Int32Array(n); CLOSED = new Uint8Array(n); }
+  const g = G, prev = PREV, closed = CLOSED; // prev gilt nur, wo g in dieser Suche gesetzt wurde
+  g.fill(Infinity, 0, n); closed.fill(0, 0, n); hk.length = 0; hi.length = 0;
   const hf = (x, y) => Math.max(0, octile(x - tx, y - ty) - near * 1.0824); // octile ≤ 1,0824 × euklidisch: zulässig
   // Binärer Heap über [f, idx]
-  const hk = [], hi = [];
   const push = (f, i) => {
     let k = hk.length; hk.push(f); hi.push(i);
     while (k > 0) { const p = (k - 1) >> 1; if (hk[p] <= f) break; hk[k] = hk[p]; hi[k] = hi[p]; k = p; }

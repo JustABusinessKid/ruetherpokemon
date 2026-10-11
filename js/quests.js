@@ -92,7 +92,9 @@ const COND = {
   haunebu: s => (s.stats.haunebuWins || 0) >= 1,
   tachionen: s => (s.arenaLevels.neuschwabenland || 1) >= 2,
   quest1: s => Object.values(s.questLog || {}).some(q => q.done),
-  quest_all: s => Object.keys(QUEST_SATS).every(id => s.questLog?.[id]?.done),
+  quest_all: s => Object.keys(QUEST_SATS).every(id => s.questLog?.[id]?.done), // v9: alle 6 Missionen
+  kieser3: s => (s.questLog?.camping?.kieser || 0) >= 3,
+  bruch_clean: s => !!s.questLog?.bruch?.clean,
 };
 // Prüft alle Erfolge, schaltet neue frei (+Sats), gibt die neuen zurück
 export function checkAchievements(save, now = 1) {

@@ -1,19 +1,24 @@
 // Haunebu-Quests: Kommando-Ansicht wie Commandos 2 (Spec §5.5). Canvas-Draufsicht mit 32-px-Kacheln, HUD als DOM.
-// createQuestScreen({ el, onEnd }) -> { start({ mission, variant, team, fighters, rng, tutorial }), stop() }
-//   fighters: makeFighter-Kampfwerte (oder team als Exemplare { id, rarity, level, uid }), 1–3. tutorial: erzwingen/aus.
-//   onEnd(questSummary + { text, team }) genau einmal: nach Abheben, Scheitern oder Aufgeben (result 'success'|'fail'|'abort').
+// createQuestScreen({ el, onEnd }) -> { start({ mission, setup, team, fighters, rng, tutorial }), stop(), send(cmd), debug() }
+//   mission: Objekt oder id; setup: { layoutId, variantId, mirror, seed } (leer = gewürfelt; variant geht noch als Kompatibilität).
+//   fighters: makeFighter-Kampfwerte (oder team als Exemplare { id, rarity, level, uid }), 1–3; bei mission.solo das stärkste Exemplar.
+//   tutorial: erzwingen/aus. send(cmd): Befehl an die Engine samt Animationen (Debug „Stefan ruft“: send({ type: 'catch' })).
+//   onEnd(questSummary + { text, team, setup, kieser, fine }) genau einmal: nach Abheben, Scheitern oder Aufgeben (result 'success'|'fail'|'abort').
+// v9: Kieser- und Erwischt-Cutscene als DOM-Overlay (.q-cut), Minikarte (.q-mini) ab 41 Kacheln Breite.
 // Schleife: feste 50-ms-Logik (engine.tick) mit Aufholen, rAF-Zeichnen mit Interpolation zwischen den Schritten.
 // Befehle gehen sofort per tick(st, 0, [cmd]) an die Engine, auch in der taktischen Pause.
 // Uhren: gt = Spielzeit (steht in der Pause, treibt Effekte, Würfe, Blasen), rt = echte Zeit (Auswahl-Puls, Untertasse, Abspann).
 // Bedienung: Antippen wählt/läuft/interagiert, Doppeltipp auf einen Rüther = Kreismenü, Zielmodus mit Reichweite, Ziehen = Kamera,
 // Zwei-Finger-Zoom und ±. Sounds: vorhandene sfx plus step/alarm/steal/gas (audio.js; unbekannte Namen sind stumm).
-import { createQuest, tick, canExtract, questSummary, visibleCone, abilitiesFor, abilityTargets, ABILITIES, ENEMY_TYPES } from './engine.js';
+import { createQuest, tick, canExtract, visibleCone, abilitiesFor, abilityTargets, ABILITIES, ENEMY_TYPES } from './engine.js';
+import { MISSION_BY_ID } from './missions.js';
 import { makeFighter } from '../battle.js';
 import { RUETHER_BY_ID } from '../data.js';
+import { QUEST_SATS } from '../progress.js';
 import { sfx, haptic } from '../audio.js';
 import { banner } from '../fx.js';
 import { popup, esc } from '../ui.js';
-import { TILE, INK, PAPER, GOLD, THEMES, loadImg, img, variant, paintMap, doorHoriz, drawDoor, faceFrame, bitmap, bubble, dither, hash } from './draw.js';
+import { TILE, INK, PAPER, GOLD, THEMES, loadImg, img, variant, paintMap, paintMini, doorHoriz, drawDoor, faceFrame, bitmap, bubble, dither, hash, flames, smoke, mug, fountain, swatter } from './draw.js';
 
 const STEP = 50, MAX_CATCHUP = 1500;
 const ZOOMS = [0.6, 0.8, 1, 1.25, 1.6, 2], ZOOM_MIN = 0.5, ZOOM_MAX = 2.4;
@@ -26,7 +31,11 @@ const short = id => id[0].toUpperCase() + id.slice(1); // „Onkel Micha“ → 
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 const angDiff = (a, b) => { const d = (b - a) % (2 * Math.PI); return d > Math.PI ? d - 2 * Math.PI : d < -Math.PI ? d + 2 * Math.PI : d; };
 const mmss = ms => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
-const GOAL_ART = { steal: 'art/q-coin.png', sabotage: 'art/q-saucer.png', fetch: 'art/q-ps3.png', unplug: 'art/q-plug.png' };
+const GOAL_ART = { steal: 'art/q-coin.png', sabotage: 'art/q-saucer.png', fetch: 'art/q-ps3.png', unplug: 'art/q-plug.png', valve: 'art/q-valve.png', ignite: 'art/q-tree.png' };
+const FACE_LEFT = new Set(['dackel']); // Sprite schaut nach links: Spiegeln umgekehrt
+const KIESER_LINES = [['bernd', 'Erst Kieser, dann Kaffee!'], ['viktor', 'Ich wollte doch nur nicht duschen …'], ['bernd', 'Danach bin ich so breit, ich pass durch keine Tür mehr!']];
+const MINI_W = 40; // Minikarte ab mehr als 40 Kacheln Breite
+const fmt = n => n.toLocaleString('de-DE');
 const THROWN = { can: 'beer-can', mms: 'mms', controller: 'controller' };
 const MMS = ['#B03B2B', '#3F8EF5', '#5BB55A', '#F2C94C', '#E0A52B', '#7A4A2A'];
 const RED = '#E0634C', GREEN = '#5BB55A', TEAL = '#3FC1B0', AMBER = '#E0A52B';
@@ -38,7 +47,7 @@ const TUT = [
   { at: 'powers', text: 'Doppeltipp auf einen Rüther öffnet seine Kräfte. Oder unten auf „Kräfte“.' },
 ];
 const ART = [
-  'art/q-coin.png', 'art/q-vault.png', 'art/q-saucer.png', 'art/q-ps3.png', 'art/q-plug.png', 'art/q-pad.png', 'art/fx-haunebu.png', 'art/fx-tractor-beam.png',
+  'art/q-coin.png', 'art/q-vault.png', 'art/q-saucer.png', 'art/q-ps3.png', 'art/q-plug.png', 'art/q-valve.png', 'art/q-tree.png', 'art/q-pad.png', 'art/fx-haunebu.png', 'art/fx-tractor-beam.png',
   ...new Set(Object.values(ENEMY_TYPES).map(t => `art/${t.sprite}.png`)), ...Object.values(ABILITIES).map(a => fxArt(a.icon)),
   fxArt('beer-can'), fxArt('chart-up'), face('christian'), face('micha'), face('hildegard'),
 ];
@@ -47,13 +56,15 @@ const HTML = `
 <div class="q-top wood">
   <div class="q-goal"><img class="q-goal-ico" alt=""><span class="q-goal-label"></span><b class="q-goal-n"></b></div>
   <b class="q-time">0:00</b>
-  <div class="q-alarm"><span>Alarm</span><div class="bar"><div class="fill"></div></div></div>
+  <div class="q-alarm"><span>Alarm</span><div class="bar"><div class="fill"></div></div><b class="q-note hidden"></b></div>
 </div>
 <div class="q-stage">
   <canvas class="q-cv"></canvas>
   <div class="q-edge"></div>
   <div class="q-fx"></div>
-  <div class="q-zoom"><button class="q-zin" aria-label="Näher ran">+</button><button class="q-zout" aria-label="Weiter weg">−</button></div>
+  <div class="q-zoom"><button class="q-zin" aria-label="Näher ran">+</button><button class="q-zout" aria-label="Weiter weg">−</button><button class="q-mapbtn hidden">Karte</button></div>
+  <div class="q-mini hidden"><div class="q-mini-box panel"><canvas class="q-mini-cv"></canvas><p>Tipp auf die Karte: Die Kamera springt hin.</p><button class="q-mini-x">Zurück</button></div></div>
+  <div class="q-cut hidden"></div>
   <div class="q-paused hidden">Pause · Befehle gehen trotzdem</div>
   <div class="q-aim hidden"><img alt=""><span></span><button class="q-aim-x">Abbrechen</button></div>
   <div class="q-msg hidden"></div>
@@ -76,8 +87,11 @@ export function createQuestScreen({ el, onEnd }) {
   const alarmBox = $('.q-alarm'), alarmFill = $('.q-alarm .fill');
   const teamEl = $('.q-team'), powersEl = $('.q-powers'), pauseBtn = $('.q-pause'), extractBtn = $('.q-extract'), quitBtn = $('.q-quit');
   const aimEl = $('.q-aim'), pausedEl = $('.q-paused'), msgEl = $('.q-msg'), ringEl = $('.q-ring'), tutEl = $('.q-tut'), cardEl = $('.q-card'), stampEl = $('.q-stamp');
+  const noteEl = $('.q-note'), mapBtn = $('.q-mapbtn'), miniEl = $('.q-mini'), miniCv = $('.q-mini-cv'), cutEl = $('.q-cut');
 
   let st = null, th = null, mapCv = null, gasPat = null, seq = 0;
+  let mini = null, cut = null, caught = null, hasWater = false, catcher = {}; // mini: { s, base, was } solange offen; cut: laufende Cutscene
+  const valveAt = new Map(), seenE = new Set(); // seenE: Gegner, die schon im Bild waren (Minikarte zeigt nur bekannte)
   let running = false, raf = 0, lastTs = 0, acc = 0, overClock = 0, paused = false, gt = 0, rt = 0, frameDt = 16;
   let sel = [], follow = true, zoom = 1, cam = { x: 0, y: 0 }, vw = 0, vh = 0, dpr = 1;
   let inspect = null, menuFor = -1, aim = null, tut = -1, ending = null, ended = false, lastTap = {}, hitSfxAt = 0, reached = false, warned = false;
@@ -122,10 +136,10 @@ export function createQuestScreen({ el, onEnd }) {
   // ---------- Effekt-Bausteine (alles in Spielzeit gt, Weltpixel) ----------
   const now = () => st.time;
   function text(ref, t, color = PAPER, size = 16, ms = 1100) { fx.texts.push({ ref, t, color, size, ms, born: now() }); }
-  function say(ref, t, ms = 2600) { // eine Blase je Figur, höchstens 5 gleichzeitig
+  function say(ref, t, ms = 2600, delay = 0) { // eine Blase je Figur, höchstens 5 gleichzeitig; delay in Spielzeit
     if (!t) return;
     fx.bubbles = fx.bubbles.filter(b => !((ref.u != null && b.ref.u === ref.u) || (ref.e != null && b.ref.e === ref.e)));
-    fx.bubbles.push({ ref, t, ms, born: now() });
+    fx.bubbles.push({ ref, t, ms: ms + delay, born: now(), at: now() + delay });
     if (fx.bubbles.length > 5) fx.bubbles.shift();
   }
   const ring = (x, y, r, color, ms = 700, delay = 0) => fx.rings.push({ x: x * TILE, y: y * TILE, r: r * TILE, color, ms, born: now() + delay });
@@ -350,7 +364,7 @@ export function createQuestScreen({ el, onEnd }) {
     all.className = 'q-all';
     all.textContent = 'Alle';
     all.addEventListener('click', () => { if (st && !st.over) select(upUnits()); });
-    teamEl.appendChild(all);
+    if (!st.solo) teamEl.appendChild(all); // solo: nur einer, „Alle“ wäre sinnlos
   }
   function buildPowers() {
     const one = sel.length === 1 ? st.units[sel[0]] : null, key = one ? `${one.i}` : 'team';
@@ -380,13 +394,22 @@ export function createQuestScreen({ el, onEnd }) {
     node.style.setProperty('--cd', (left / ab.cd).toFixed(3));
     setText(cd, left > 0 ? `${Math.ceil(left / 1000)}` : '');
   }
+  // HUD-Hinweis aus den Fänger-Typen der Karte: Kieser-Zähler mit aktuellem Belohnungsstand bzw. die Strafe fürs Erwischtwerden
+  const kieserReward = n => { const r = QUEST_SATS[st.missionId]; return r?.kieser ? Math.max(r.min || 0, r.base - r.kieser * n) : null; };
+  function noteText() {
+    if (catcher.kieser) { const r = kieserReward(st.kieser); return `Kieser: ${st.kieser}${r == null ? '' : ` · ${fmt(r)}`}`; }
+    return catcher.fine ? `Erwischt = −${fmt(catcher.fine)}` : '';
+  }
   function hud() {
     const o = st.objective, need = o.type === 'steal' ? o.min : o.total;
     setText(goalN, o.type === 'steal' && o.done >= o.min ? `${o.done}` : `${o.done}/${need}`);
     goalN.classList.toggle('done', o.done >= o.min);
-    const left = st.timeLimit - st.time;
-    setText(timeEl, mmss(left));
+    const left = st.timeLimit == null ? Infinity : st.timeLimit - st.time;
+    setText(timeEl, left === Infinity ? 'Keine Eile' : mmss(left));
     timeEl.classList.toggle('low', left < 30_000);
+    const note = noteText();
+    setText(noteEl, note);
+    noteEl.classList.toggle('hidden', !note);
     const w = `${Math.round(st.alarm * 100)}%`;
     if (alarmFill.style.width !== w) alarmFill.style.width = w;
     alarmBox.classList.toggle('full', st.fullAlarm);
@@ -414,11 +437,14 @@ export function createQuestScreen({ el, onEnd }) {
     pauseBtn.disabled = briefing;
     setText(pauseBtn, paused && !briefing ? 'Weiter' : 'Pause');
     pauseBtn.classList.toggle('on', paused && !briefing);
-    pausedEl.classList.toggle('hidden', !paused || !!ending || briefing);
+    pausedEl.classList.toggle('hidden', !paused || !!ending || briefing || !!mini || !!cut);
+    if (mini) drawMini();
   }
 
   function setPaused(p) { paused = !!p; if (!paused) lastTs = 0; }
-  pauseBtn.addEventListener('click', () => { if (st && !st.over && tut < 0) setPaused(!paused); });
+  // Bei offener Minikarte heißt der Knopf „Weiter“: Karte zu und weiter, nicht blind hinter der Karte weiterspielen
+  function togglePause() { if (mini) { closeMini(); setPaused(false); } else setPaused(!paused); }
+  pauseBtn.addEventListener('click', () => { if (st && !st.over && tut < 0) togglePause(); });
   extractBtn.addEventListener('click', () => send({ type: 'extract' }));
   quitBtn.addEventListener('click', async () => {
     if (!st || st.over || quitAsk) return;
@@ -434,18 +460,20 @@ export function createQuestScreen({ el, onEnd }) {
   stampEl.addEventListener('click', () => finish());
   function onKey(e) {
     if (!st || st.over) return;
-    if (e.key === ' ' && tut < 0 && cardEl.classList.contains('hidden')) { setPaused(!paused); e.preventDefault(); }
-    if (e.key === 'Escape') { endAim(); closeMenu(); }
+    if (e.key === ' ' && tut < 0 && cardEl.classList.contains('hidden')) { togglePause(); e.preventDefault(); }
+    if (e.key === 'Escape') { endAim(); closeMenu(); closeMini(); }
   }
   function onHide() { if (document.hidden && st && !st.over) setPaused(true); }
 
   // ---------- Einstieg: Briefing und Tutorial ----------
   function showIntro(withTut) {
-    const m = st.mission, v = st.variant;
+    const m = st.mission, v = st.variant, solo = st.solo ? ` · Solo: ${esc(short(st.units[0].id))}` : '';
+    const where = st.layoutId != null && st.layout?.name ? `<span class="q-card-layout">Karte: ${esc(st.layout.name)}${st.mirror ? ' · gespiegelt' : ''}</span>` : '';
+    const warn = catcher.fine ? `<p class="q-card-warn">Erwischt = −${fmt(catcher.fine)} Sats Strafe</p>` : '';
     cardEl.innerHTML = `<p class="q-card-place">${esc(m.place)}</p><h2>${esc(m.name)}</h2>`
-      + `<p class="q-card-var"><b>${esc(v.name)}.</b> ${esc(v.desc)}</p><p>${esc(m.intro)}</p><p class="q-card-hint">${esc(m.hint)}</p>`
+      + `<p class="q-card-var">${where}<b>Variante: ${esc(v.name)}.</b> ${esc(v.desc)}</p><p>${esc(m.intro)}</p><p class="q-card-hint">${esc(m.hint)}</p>${warn}`
       + `<div class="q-card-team">${st.units.map(u => `<img class="r-${esc(u.rarity)}" src="${face(u.id)}" alt="${esc(short(u.id))}">`).join('')}</div>`
-      + `<p class="q-card-meta">${esc(m.objective.label)} · ${mmss(st.timeLimit)}</p><button class="primary q-go">Los!</button>`;
+      + `<p class="q-card-meta">${esc(m.objective.label)} · ${st.timeLimit == null ? 'Keine Eile' : mmss(st.timeLimit)}${solo}</p><button class="primary q-go">Los!</button>`;
     cardEl.classList.remove('hidden');
     cardEl.querySelector('.q-go').addEventListener('click', () => {
       cardEl.classList.add('hidden');
@@ -455,7 +483,7 @@ export function createQuestScreen({ el, onEnd }) {
   function showTut() {
     const s = TUT[tut];
     tutEl.className = `q-tut at-${s.at}`;
-    setText(tutEl.querySelector('p'), s.text);
+    setText(tutEl.querySelector('p'), tut === 0 && st.solo ? `Tipp auf ${short(st.units[0].id)}s Gesicht, um ihn zu wählen. Diesmal ist er allein unterwegs.` : s.text);
   }
   function tutStep(k) {
     if (tut !== k) return;
@@ -485,7 +513,7 @@ export function createQuestScreen({ el, onEnd }) {
           if (e.kind === 'revive') say({ u: e.unit }, 'Steh auf, wir sind noch nicht fertig!', 2000);
           break;
         case 'interactCancel':
-          if (e.reason !== 'befehl') text({ u: e.unit }, e.reason === 'entdeckt' ? 'Entdeckt!' : 'Autsch!', RED, 14);
+          if (e.reason !== 'befehl') text({ u: e.unit }, e.reason === 'entdeckt' ? 'Entdeckt!' : e.reason === 'erwischt' ? 'Erwischt!' : 'Autsch!', RED, 14);
           break;
         case 'steal':
           if (!e.instant) coinsFly(e.x, e.y, U.x, U.y - 0.6, 1);
@@ -527,6 +555,7 @@ export function createQuestScreen({ el, onEnd }) {
         case 'doorOpen':
           burst(e.x, e.y, 8, { colors: [GOLD, TEAL], speed: 40, up: 30, ms: 600 });
           if (e.by != null) say({ u: e.by }, 'Plus 70 Prozent. Auch auf Türen.', 2000);
+          if (miniBase) miniBase.cv = paintMini(st, th, miniBase.s); // Minikarte zeigt die Tür offen
           sfx.play('coin');
           break;
         case 'noise': {
@@ -588,6 +617,53 @@ export function createQuestScreen({ el, onEnd }) {
         case 'effectEnd':
           if (e.kind === 'gas') burst(e.x, e.y, 10, { colors: ['#9BE36B', '#5BB55A'], speed: 30, up: 10, grav: -20, ms: 900, size: 4 });
           break;
+        // ---------- v9 ----------
+        case 'valve':
+          valveAt.set(e.obj, now());
+          burst(e.x, e.y - 0.3, 14, { colors: ['#9fd0ea', PAPER, '#5c9fcf'], speed: 50, up: 50, grav: 160, ms: 800, size: 3 });
+          text({ x: e.x, y: e.y - 1.3 }, `${st.mission.texts?.valve || 'Kein Wasser mehr!'} ${e.done}/${e.total}`, TEAL, 15, 1600);
+          say({ u: e.unit }, e.done >= e.total ? 'Ohne Wasser keine Dusche. Ungeschlagen logisch.' : 'Zugedreht. Weiter.', 2200, 1500); // erst nach dem Text überm Ventil
+          sfx.play('breakout');
+          break;
+        case 'ignite':
+          burst(e.x, e.y - 0.5, 16, { kind: 'spark', colors: [GOLD, AMBER, RED], speed: 70, up: 60, grav: 40, ms: 900, size: 1.4 });
+          text({ x: e.x, y: e.y - 1.6 }, `${st.mission.texts?.fire || 'Es brennt!'} ${e.done}/${e.total}`, AMBER, 15, 1600);
+          sfx.play('hit');
+          break;
+        case 'fireSpotted':
+          for (let k = 0; k < 2; k++) ring(e.x, e.y, 1.6, RED, 800, k * 250);
+          if (e.enemies?.length) say({ e: e.enemies[0] }, e.say);
+          msg('Ein Ranger hat das Feuer gesehen und kommt löschen. Weg da!', 2600);
+          sfx.play('warn');
+          break;
+        case 'bark':
+          for (let k = 0; k < 3; k++) ring(e.x, e.y, e.r, AMBER, 700, k * 200);
+          text({ e: e.enemy }, 'WAU!', AMBER, 20, 1100);
+          sfx.play('warn');
+          break;
+        case 'whistle':
+          for (let k = 0; k < 2; k++) ring(e.x, e.y, 3, PAPER, 600, k * 160);
+          text({ e: e.enemy }, 'TRIIIL!', PAPER, 18, 1200);
+          break;
+        case 'coffee':
+          if (e.phase === 'start') { say({ e: e.enemy }, e.say, 3200); sfx.play('tap'); }
+          else burst(e.x, e.y - 0.6, 5, { colors: [PAPER], speed: 10, up: 30, grav: -30, ms: 900, size: 2 });
+          break;
+        case 'caffeinated':
+          text({ e: e.enemy }, 'KOFFEIN!', GOLD, 16, 1300);
+          say({ e: e.enemy }, e.say, 2400);
+          sfx.play('rage');
+          break;
+        case 'kieser': kieserScene(e); break;
+        case 'resumed': {
+          const u = st.units[e.unit];
+          prev = new WeakMap(); // harter Schnitt: Rüther und Stefan springen, nicht gleiten
+          cam = { x: u.x * TILE, y: u.y * TILE };
+          select([e.unit]);
+          msg(`Kieser-Training #${st.kieser} überstanden. Zurück an der Haunebu, alles ist ruhig.`, 3000);
+          break;
+        }
+        case 'caught': caught = e; haptic([120, 60, 120]); break;
         case 'end': endSequence(e); break;
       }
     }
@@ -636,25 +712,123 @@ export function createQuestScreen({ el, onEnd }) {
   }
 
   function endSequence(e) {
-    closeMenu(); endAim();
+    closeMenu(); endAim(); closeMini(); closeCut();
     tut = -1; tutEl.classList.add('hidden'); msgEl.classList.add('hidden');
     const lift = e.result === 'success' && e.reason === 'extract';
-    ending = { at: rt, lift, text: e.text, summary: e.summary, result: e.result };
+    ending = { at: rt, lift, text: e.text, summary: e.summary, result: e.result, ready: false };
+    if (e.reason === 'caught') return caughtScene(e);
     sfx.play(lift ? 'ufo' : e.result === 'success' ? 'win' : 'lose');
     const title = e.result === 'success' ? 'Geschafft!' : e.result === 'abort' ? 'Abgebrochen' : 'Gescheitert';
     later(() => {
       setText(stampEl.querySelector('b'), title);
       setText(stampEl.querySelector('p'), e.text);
       stampEl.className = `q-stamp ${e.result}`;
+      ending.ready = true;
     }, lift ? 1500 : 400);
     later(finish, lift ? 4200 : 3400);
   }
   function finish() {
-    if (!ending || ended || stampEl.classList.contains('hidden')) return;
+    if (!ending?.ready || ended) return;
     ended = true;
-    const r = { ...ending.summary, text: ending.text, team: st.units.map(u => ({ id: u.id, name: u.name, rarity: u.rarity, level: u.level, hp: u.hp, maxHp: u.maxHp, down: u.down })) };
+    const r = {
+      ...ending.summary, text: ending.text, setup: st.setup, kieser: st.kieser, fine: st.fine,
+      team: st.units.map(u => ({ id: u.id, name: u.name, rarity: u.rarity, level: u.level, hp: u.hp, maxHp: u.maxHp, down: u.down })),
+    };
     stop();
     onEnd?.(r);
+  }
+
+  // ---------- Cutscenes (DOM-Overlay über dem Canvas, echte Gesichter); Tippen überspringt nach kurzer Sperre ----------
+  function playCut(kind, html, ms, done) {
+    cut = { done, at: performance.now(), closing: false };
+    cutEl.className = `q-cut ${kind}`;
+    cutEl.innerHTML = html;
+    later(endCut, ms);
+  }
+  function endCut() {
+    if (!cut || cut.closing) return;
+    cut.closing = true;
+    cut.done();
+  }
+  function closeCut() { cut = null; cutEl.className = 'q-cut hidden'; cutEl.innerHTML = ''; }
+  cutEl.addEventListener('click', () => { if (cut && performance.now() - cut.at > 600) endCut(); });
+  const frameFace = (u, cls = '', style = '') => `<span class="q-cut-face r-${esc(u.rarity)} ${cls}" style="${style}"><img src="${face(u.id)}" alt="${esc(short(u.id))}"><i></i></span>`;
+
+  // Stefan zieht den Rüther am Kragen in den Kraftraum; danach Schnitt zurück zur Plattform (resume)
+  function kieserScene(e) {
+    closeMenu(); endAim(); closeMini();
+    const u = st.units[e.unit], n = e.count, r = kieserReward(n), r0 = kieserReward(n - 1);
+    const sub = r == null ? '' : r < r0 ? `−${fmt(r0 - r)} Sats` : `Belohnung bleibt bei ${fmt(r)}`;
+    const says = (st.mission.texts?.kieser || KIESER_LINES).map(([who, t], k) => `<p class="q-cut-say ${who === 'bernd' ? 'boss' : 'hero'}" style="--d:${(0.8 + k).toFixed(1)}s">${esc(t)}</p>`).join('');
+    sfx.play('rage'); haptic([60, 40, 60]);
+    playCut('kieser', `<div class="q-cut-scene"><div class="q-cut-walk"><img class="q-cut-boss" src="art/boss-bernd.png" alt="${esc(ENEMY_TYPES.bernd.name)}"><i class="q-cut-rope"></i>${frameFace(u, 'dragged')}</div>${says}</div>`
+      + `<div class="q-cut-stamp"><b>Kieser-Training #${n}</b>${sub ? `<span>${esc(sub)}</span>` : ''}</div><span class="q-cut-skip">Tippen zum Überspringen</span>`, 4000, () => {
+      cutEl.classList.add('black');
+      later(() => { send({ type: 'resume' }); later(closeCut, 300); }, 240);
+    });
+  }
+
+  // Ranger zückt den Block, das Team schaut betreten, Stempel mit der Strafe; danach Abspann (onEnd)
+  function caughtScene(e) {
+    const by = caught && st.enemies[caught.by], T = ENEMY_TYPES[by?.type] || ENEMY_TYPES.ranger, fine = e.fine || st.fine;
+    sfx.play('lose');
+    const team = st.units.map((u, k) => frameFace(u, 'sorry', `--k:${k}`)).join('');
+    playCut('caught', `<div class="q-cut-scene"><img class="q-cut-ranger" src="art/${T.sprite}.png" alt="${esc(T.name)}"><div class="q-cut-pad"><i></i><i></i><i></i><i></i></div>`
+      + `<p class="q-cut-say boss" style="--d:.6s">${esc(caught?.say || st.mission.texts?.caught || 'Das wird teuer!')}</p><div class="q-cut-team">${team}</div></div>`
+      + `<div class="q-cut-stamp fail"><b>Erwischt!</b><span>−${fmt(fine)} Sats</span></div><span class="q-cut-skip">Tippen für weiter</span>`, 5200, () => { ending.ready = true; finish(); });
+  }
+
+  // ---------- Minikarte (Karten über 40 Kacheln Breite): Rüther, Ziele, bekannte Gegner, Kamera-Ausschnitt; Antippen springt hin ----------
+  let miniBase = null;
+  mapBtn.addEventListener('click', () => (mini ? closeMini() : openMini()));
+  $('.q-mini-x').addEventListener('click', () => closeMini());
+  miniEl.addEventListener('click', e => { if (e.target === miniEl) closeMini(); });
+  miniCv.addEventListener('click', e => {
+    if (!mini) return;
+    const r = miniCv.getBoundingClientRect();
+    follow = false;
+    cam = { x: (e.clientX - r.left) / r.width * st.w * TILE, y: (e.clientY - r.top) / r.height * st.h * TILE };
+    closeMini();
+  });
+  function openMini() {
+    if (!st || st.over || cut || briefingOpen() || tut >= 0) return;
+    closeMenu(); endAim();
+    const s = Math.max(2, Math.floor(Math.min((vw - 40) / st.w, (vh - 110) / st.h)));
+    if (miniBase?.s !== s) miniBase = { s, cv: paintMini(st, th, s) };
+    miniCv.width = st.w * s * dpr; miniCv.height = st.h * s * dpr;
+    miniCv.style.width = `${st.w * s}px`; miniCv.style.height = `${st.h * s}px`;
+    mini = { was: paused };
+    setPaused(true); // nicht hinterrücks erwischt werden, während man die Karte liest
+    miniEl.classList.remove('hidden');
+    drawMini();
+  }
+  function closeMini() {
+    if (!mini) return;
+    const was = mini.was;
+    mini = null;
+    miniEl.classList.add('hidden');
+    setPaused(was);
+  }
+  function drawMini() {
+    const s = miniBase.s, m = miniCv.getContext('2d'), box = (x, y, r, c) => { m.fillStyle = INK; m.fillRect(Math.round(x - r - 1), Math.round(y - r - 1), 2 * r + 2, 2 * r + 2); m.fillStyle = c; m.fillRect(Math.round(x - r), Math.round(y - r), 2 * r, 2 * r); };
+    m.setTransform(dpr, 0, 0, dpr, 0, 0);
+    m.imageSmoothingEnabled = false;
+    m.drawImage(miniBase.cv, 0, 0);
+    for (const o of st.objs) {
+      if (o.kind === 'item' && o.taken && !o.delivered) continue;
+      const open = o.kind === 'vault' ? o.coins > 0 : o.kind === 'item' ? !o.delivered : !o.done;
+      box((o.x + 0.5) * s, (o.y + 0.5) * s, Math.max(3, Math.round(s * 0.7)), o.kind === 'tree' && o.done ? (Math.floor(rt / 220) % 2 ? RED : AMBER) : open ? GOLD : '#8a8f94');
+    }
+    for (const e of st.enemies) {
+      if (!seenE.has(e.i)) continue;
+      const p = pos(e), T = ENEMY_TYPES[e.type], z = Math.max(14, s * 3), im = e.state === 'ko' ? variant(`art/${T.sprite}.png`, 'grey') : img(`art/${T.sprite}.png`);
+      if (e.state === 'alert') box(p.x * s, p.y * s, Math.round(z / 2), RED);
+      if (im) { m.imageSmoothingEnabled = true; m.drawImage(im, p.x * s - z / 2, p.y * s - z / 2, z, z); m.imageSmoothingEnabled = false; }
+    }
+    const hw = vw / 2 / zoom / TILE * s, hh = vh / 2 / zoom / TILE * s, cx = cam.x / TILE * s, cy = cam.y / TILE * s;
+    m.strokeStyle = INK; m.lineWidth = 3; m.strokeRect(cx - hw, cy - hh, 2 * hw, 2 * hh);
+    m.strokeStyle = PAPER; m.lineWidth = 1; m.strokeRect(cx - hw, cy - hh, 2 * hw, 2 * hh);
+    for (const u of st.units) { const p = pos(u); faceFrame(m, img(face(u.id)), p.x * s, p.y * s, Math.max(16, s * 3.4), u.rarity, { grey: u.down, src: face(u.id) }); }
   }
 
   // ---------- Zeichnen ----------
@@ -707,14 +881,29 @@ export function createQuestScreen({ el, onEnd }) {
     const s = dpr * zoom;
     g.setTransform(s, 0, 0, s, Math.round(dpr * (vw / 2 - cam.x * zoom)), Math.round(dpr * (vh / 2 - cam.y * zoom)));
     g.imageSmoothingEnabled = false;
-    g.drawImage(mapCv, 0, 0);
     const view = { x0: (cam.x - vw / 2 / zoom) / TILE - 1, y0: (cam.y - vh / 2 / zoom) / TILE - 1, x1: (cam.x + vw / 2 / zoom) / TILE + 1, y1: (cam.y + vh / 2 / zoom) / TILE + 1 };
     const inView = (x, y, m = 0) => x > view.x0 - m && x < view.x1 + m && y > view.y0 - m && y < view.y1 + m;
+    // nur den sichtbaren Ausschnitt der Offscreen-Karte kopieren (64×48-Karten auf dem Handy)
+    const sx = clamp(Math.floor(view.x0 * TILE), 0, mapCv.width), sy = clamp(Math.floor(view.y0 * TILE), 0, mapCv.height);
+    const sw = clamp(Math.ceil(view.x1 * TILE), 0, mapCv.width) - sx, sh = clamp(Math.ceil(view.y1 * TILE), 0, mapCv.height) - sy;
+    if (sw > 0 && sh > 0) g.drawImage(mapCv, sx, sy, sw, sh, sx, sy, sw, sh);
+    if (hasWater) drawWater(view);
     drawDoors(); drawObjs(); drawSaucer(); drawEffects(); drawCones(inView); drawPaths(); drawAim();
     drawEnemies(inView); drawUnits(); drawFx();
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     drawScreen();
     placeMenu();
+  }
+
+  // Wellen-Glitzer auf sichtbaren Wasserkacheln (die Wasserfläche selbst liegt im Karten-Cache)
+  function drawWater(v) {
+    const x0 = Math.max(0, Math.floor(v.x0)), y0 = Math.max(0, Math.floor(v.y0)), x1 = Math.min(st.w - 1, Math.ceil(v.x1)), y1 = Math.min(st.h - 1, Math.ceil(v.y1));
+    g.fillStyle = th.ql || PAPER;
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      if (st.tiles[y * st.w + x] !== 'W') continue;
+      const h = hash(x, y, 7), ph = (rt / 2400 + h * 5) % 1;
+      if (h < 0.5 && ph < 0.55) g.fillRect(x * TILE + 4 + Math.floor(ph * 8) * 2, y * TILE + 6 + Math.floor(h * 36), 6, 2);
+    }
   }
 
   function drawDoors() {
@@ -751,6 +940,28 @@ export function createQuestScreen({ el, onEnd }) {
         sprite(img('art/q-ps3.png'), x, y - 1 + Math.sin(rt / 300) * 1, 26);
         if ((rt / 1300) % 1 < 0.12) bitmap(g, 'spark', x + 8, y - 9, 1, GOLD);
       } else if (o.kind === 'item' && o.delivered) sprite(img('art/q-ps3.png'), x, y, 22);
+      else if (o.kind === 'valve') {
+        // sprudelt, bis er zu ist; dann versiegt die Fontäne in 1,6 s und die Pfütze trocknet
+        const k = o.done ? clamp(age(valveAt.get(o.id) ?? -1e9) / 1600) : 0, busy = st.units.some(u => u.busy?.obj === o.id);
+        if (k < 1) { g.globalAlpha = 0.6 * (1 - k); g.fillStyle = '#5c9fcf'; g.fillRect(x - 13, y + 9, 26, 5); g.fillRect(x - 8, y + 7, 16, 9); g.globalAlpha = 1; }
+        shadow(x, y + 13, 18);
+        sprite(o.done ? variant('art/q-valve.png', 'tint', INK, 0.25) : img('art/q-valve.png'), x, y - 3, 30);
+        if (busy) { // Handrad dreht sich
+          const a = gt / 90;
+          g.strokeStyle = PAPER; g.lineWidth = 2; g.beginPath();
+          for (const q of [0, Math.PI / 2]) { g.moveTo(x + Math.cos(a + q) * 6, y - 12 + Math.sin(a + q) * 2.5); g.lineTo(x - Math.cos(a + q) * 6, y - 12 - Math.sin(a + q) * 2.5); }
+          g.stroke();
+        }
+        fountain(g, x + 6, y - 1, rt, busy ? 0.6 : 1 - k);
+      } else if (o.kind === 'tree') {
+        // brennt dauerhaft: Krone verkohlt in 3 Stufen, Flammen, Rauchsäule, Funken; beim Anzünden ein Flämmchen am Stamm
+        const a = o.done ? age(o.litAt) : 0, burnt = o.done ? Math.min(3, 1 + Math.floor(a / 4000)) : 0, lit = st.units.find(u => u.busy?.obj === o.id);
+        shadow(x, y + 13, 28);
+        sprite(burnt ? variant('art/q-tree.png', 'tint', '#2a1a10', burnt * 0.15) : img('art/q-tree.png'), x, y - 8, 44);
+        if (o.done) { smoke(g, x, y - 26, gt, clamp(a / 800)); flames(g, x, y - 10, gt, clamp(a / 500)); }
+        else if ((rt / 1700 + o.id * 0.41) % 1 < 0.14) bitmap(g, 'spark', x + 11, y - 22, 1, GOLD);
+        if (lit) flames(g, x, y + 10, gt, 0.3 + 0.5 * lit.busy.t / lit.busy.ms, 3, 12);
+      }
     }
   }
 
@@ -808,15 +1019,15 @@ export function createQuestScreen({ el, onEnd }) {
       const pts = visibleCone(st, e.i);
       e.x = ox; e.y = oy; e.dir = od;
       if (pts.length < 3) continue;
-      const strong = e.i === strongE, c = e.state === 'alert' ? RED : e.state === 'patrol' ? GREEN : GOLD;
+      const strong = e.i === strongE, c = e.state === 'alert' ? RED : e.state === 'patrol' ? th.cone || GREEN : GOLD, k2 = th.coneK || 1;
       g.beginPath();
       g.moveTo(pts[0].x * TILE, pts[0].y * TILE);
       for (let k = 1; k < pts.length; k++) g.lineTo(pts[k].x * TILE, pts[k].y * TILE);
       g.closePath();
       g.fillStyle = c;
-      g.globalAlpha = strong ? 0.4 : e.state === 'alert' ? 0.26 : 0.15;
+      g.globalAlpha = strong ? 0.4 : (e.state === 'alert' ? 0.26 : 0.15) * k2;
       g.fill();
-      if (strong) { g.globalAlpha = 0.9; g.strokeStyle = c; g.lineWidth = 1.5; g.stroke(); }
+      if (strong || k2 > 1) { g.globalAlpha = strong ? 0.9 : 0.45; g.strokeStyle = c; g.lineWidth = 1.5; g.stroke(); }
       g.globalAlpha = 1;
     }
   }
@@ -867,18 +1078,41 @@ export function createQuestScreen({ el, onEnd }) {
     for (const e of st.enemies) {
       const p = pos(e);
       if (!inView(p.x, p.y, 1)) continue;
+      seenE.add(e.i);
       const T = ENEMY_TYPES[e.type], src = `art/${T.sprite}.png`, boss = T.sprite.startsWith('boss'), s = boss ? 36 : 30;
-      const x = p.x * TILE, y = p.y * TILE, ph = gt / 95 + e.i * 1.9;
-      const hacked = e.state === 'stunned' && e.reason === 'hack', ko = e.state === 'ko';
+      const hacked = e.state === 'stunned' && e.reason === 'hack', ko = e.state === 'ko', buzz = !ko && e.buzzUntil > st.time;
+      const jit = buzz ? Math.floor(rt / 45) : 0; // koffeiniert: Zittern
+      const x = p.x * TILE + (buzz ? Math.round((hash(jit, e.i) - 0.5) * 3) : 0), y = p.y * TILE + (buzz ? Math.round((hash(jit, e.i, 1) - 0.5) * 2) : 0), ph = gt / 95 + e.i * 1.9;
       const fly = T.flying && !hacked && !ko, lift = fly ? 9 + Math.sin(rt / 260 + e.i) * 2 : 0;
       const walk = p.moved && !fly && !ko ? Math.sin(ph) * (e.type === 'pinguin' ? 0.2 : 0.1) : 0;
       shadow(x, y + 12, fly ? 16 : 22);
+      if (buzz) { // Aura und gelbe Speed-Linien hinter ihm
+        g.globalAlpha = Math.floor(rt / 120) % 2 ? 0.75 : 0.4; g.strokeStyle = GOLD; g.lineWidth = 2;
+        g.beginPath(); g.arc(x, y - 3, 18, 0, 2 * Math.PI); g.stroke(); g.globalAlpha = 1;
+        if (p.moved) {
+          const c = Math.cos(p.dir), sn = Math.sin(p.dir);
+          g.beginPath();
+          for (let k = -1; k <= 1; k++) { const d0 = 17 + (k & 1) * 4, ox = -sn * k * 7, oy = c * k * 7; g.moveTo(x - c * d0 + ox, y - 3 - sn * d0 + oy); g.lineTo(x - c * (d0 + 11) + ox, y - 3 - sn * (d0 + 11) + oy); }
+          g.strokeStyle = INK; g.lineWidth = 4; g.stroke(); g.strokeStyle = GOLD; g.lineWidth = 2; g.stroke();
+        }
+      }
       let im = img(src);
       if (ko || hacked) im = variant(src, 'grey');
       else if (e.state === 'eating' || (e.state === 'stunned' && e.reason === 'gas')) im = variant(src, 'tint', '#5BB55A', 0.45);
       if ((flash.get(e) || 0) > gt) im = variant(src, 'tint', '#FFFFFF', 0.75);
-      sprite(im, x, y - 3 - lift - (p.moved && !fly ? Math.abs(Math.sin(ph)) * 2 : 0), s, { rot: ko ? Math.PI / 2 : walk, flip: Math.cos(p.dir) < 0 });
+      const left = Math.cos(p.dir) < 0;
+      sprite(im, x, y - 3 - lift - (p.moved && !fly ? Math.abs(Math.sin(ph)) * 2 : 0), s, { rot: ko ? Math.PI / 2 : walk, flip: left !== FACE_LEFT.has(e.type) });
       const head = y - s / 2 - 6 - lift;
+      if (e.state === 'coffee') { // Bulletproof Coffee: Becher an den Mund, Dampf, *schlürf*
+        mug(g, x + (left ? -10 : 10), y - 9, rt);
+        if ((rt / 1600 + e.i * 0.3) % 1 < 0.55) label(x, head - 4, '*schlürf*', PAPER, 12);
+      }
+      if (e.state === 'distracted' && e.reason === 'fire' && e.target) { // Ranger: hin zum Feuer, dort mit der Feuerpatsche draufhauen
+        if (!e.path.length) {
+          swatter(g, x + 3, y - 5, Math.atan2(e.target.y * TILE - y, e.target.x * TILE - x) - 0.5 + Math.abs(Math.sin(gt / 140)) * 1.1);
+          if ((gt / 900 + e.i * 0.37) % 1 < 0.3) label(x, head - 2, 'PATSCH!', AMBER, 13);
+        } else label(x, head - 2, '!', AMBER, 18);
+      }
       if (ko && e.tied) { g.fillStyle = '#8a5a2b'; g.fillRect(x - 14, y - 6, 28, 3); g.fillRect(x - 14, y + 2, 28, 3); g.fillStyle = INK; g.fillRect(x - 2, y - 8, 4, 12); }
       if (ko) label(x, y - 16, 'KO', GOLD, 13);
       else if (e.state === 'stunned' && e.reason !== 'gas' && e.reason !== 'argue' && !hacked) {
@@ -893,7 +1127,7 @@ export function createQuestScreen({ el, onEnd }) {
       const bounce = 1 + 0.5 * Math.max(0, 1 - age(popAt.get(e) ?? -1e9) / 250);
       if (e.state === 'alert') label(x, head - 2, '!', RED, Math.round(22 * bounce));
       else if (e.state === 'suspicious' || e.state === 'investigate') label(x, head - 2, '?', GOLD, Math.round(20 * bounce));
-      else if (e.state === 'distracted') label(x, head - 2, '?', PAPER, 16);
+      else if (e.state === 'distracted' && e.reason !== 'fire') label(x, head - 2, '?', PAPER, 16);
       if (e.suspicion > 0.02 && SUS_BAR.has(e.state)) bar(x, y + 15, 20, e.suspicion, GOLD);
       if (!ko && e.hp < e.maxHp) bar(x, y + 19, 20, e.hp / e.maxHp, RED);
       if (inspect?.e === e.i && rt < inspect.until) label(x, y + 30, e.name, PAPER, 13);
@@ -1024,6 +1258,7 @@ export function createQuestScreen({ el, onEnd }) {
     const avoid = faces.filter(f => !f.down).map(({ x, y, w, h }) => ({ x, y, w, h })), nFaces = avoid.length;
     for (let k = fx.bubbles.length - 1; k >= 0; k--) { // neueste zuerst an ihren Platz, ältere weichen nach oben aus
       const b = fx.bubbles[k], p = at(b.ref), s = toScreen(p.x, p.y);
+      if (gt < b.at) continue; // verzögerte Blase (Ventil-Text zuerst)
       if (s.x < -8 || s.x > vw + 8 || s.y < -8 || s.y > vh + 80) continue; // unten mehr Rand: die Blase sitzt über dem Kopf
       bubble(g, s.x, s.y - 32 * zoom - 10, b.t, { vw, maxW: Math.min(170, vw - 40), avoid, head: s.y - 15 * zoom });
     }
@@ -1044,6 +1279,7 @@ export function createQuestScreen({ el, onEnd }) {
       g.globalAlpha = clamp((1 - k) / 0.35);
       pixelText(t.t, Math.round(s.x), Math.round(y), t.color, t.size);
       g.globalAlpha = 1;
+      blocks.push({ x: s.x - hw, y: y - hh, w: 2 * hw, h: 2 * hh }); // gleichzeitige Texte am selben Anker stapeln sich
     }
   }
 
@@ -1063,7 +1299,7 @@ export function createQuestScreen({ el, onEnd }) {
     if (!st.over && !paused) {
       acc += real;
       while (acc >= STEP && !st.over) { snap(); handle(tick(st, STEP)); acc -= STEP; }
-      if (!st.over && !warned && st.timeLimit - st.time <= 60_000) { warned = true; msg('Noch 1 Minute!'); sfx.play('warn'); }
+      if (!st.over && !warned && st.timeLimit != null && st.timeLimit - st.time <= 60_000) { warned = true; msg('Noch 1 Minute!'); sfx.play('warn'); }
     } else if (st.over) overClock += real;
     gt = Math.max(0, st.time - STEP + acc + overClock);
     if (vw && vh) draw();
@@ -1071,19 +1307,28 @@ export function createQuestScreen({ el, onEnd }) {
     raf = requestAnimationFrame(frame);
   }
 
-  async function start({ mission, variant, team, fighters, rng = Math.random, tutorial } = {}) {
+  async function start({ mission, setup, variant, team, fighters, rng = Math.random, tutorial } = {}) {
     stop();
-    const run = seq;
-    const squad = (fighters?.length ? fighters : team || []).slice(0, 3).map(f => (f.maxBtc ? f : makeFighter(RUETHER_BY_ID[f.id], f)));
-    st = createQuest({ mission, variant, team: squad, rng });
+    const run = seq, m = typeof mission === 'string' ? MISSION_BY_ID[mission] : mission;
+    let squad = (fighters?.length ? fighters : team || []).map(f => (f.maxBtc ? f : makeFighter(RUETHER_BY_ID[f.id], f)));
+    if (m?.solo) { const own = squad.filter(f => f.id === m.solo).sort((a, b) => b.maxBtc - a.maxBtc); if (own.length) squad = own; } // sein stärkstes Exemplar
+    st = createQuest({ mission: m, setup, variant, team: squad.slice(0, 3), rng });
     th = THEMES[st.theme] || THEMES.neuschwabenland;
     el.dataset.theme = st.theme;
-    goalIco.src = GOAL_ART[st.objective.type];
+    goalIco.src = GOAL_ART[st.objective.type] || GOAL_ART.steal;
     setText(goalLabel, st.objective.label);
+    const types = [...new Set([...st.enemies.map(e => e.type), st.mission.reinforce])].map(t => ENEMY_TYPES[t]).filter(Boolean);
+    catcher = { kieser: types.some(T => T.catches === 'kieser'), fine: Math.max(0, ...types.map(T => T.fine || 0)) };
+    timeEl.classList.toggle('calm', st.timeLimit == null);
+    noteEl.classList.toggle('warn', !!catcher.fine);
+    mapBtn.classList.toggle('hidden', st.w <= MINI_W);
+    hasWater = st.tiles.includes('W'); miniBase = null;
     buildTeam();
     sel = [0]; powersKey = ''; follow = true; zoom = 1.25;
     cam = { x: st.units[0].x * TILE, y: st.units[0].y * TILE };
     resize();
+    // Cutscene-Kulissen laden nebenbei (groß, erst später gebraucht)
+    for (const src of [...(catcher.kieser ? ['art/bg-kieser.png', 'art/boss-bernd.png'] : []), ...(catcher.fine ? ['art/bg-ranger.png'] : [])]) loadImg(src);
     await Promise.all([...ART, ...st.units.map(u => face(u.id))].map(loadImg));
     if (run !== seq) return; // inzwischen gestoppt oder neu gestartet
     mapCv = paintMap(st, th);
@@ -1110,11 +1355,12 @@ export function createQuestScreen({ el, onEnd }) {
     prev = new WeakMap(); flash = new WeakMap(); popAt = new WeakMap(); doorAt.clear(); effAt.clear(); ptrs.clear(); gesture = null;
     acc = 0; overClock = 0; gt = 0; paused = false; ending = null; ended = false; inspect = null; lastTap = {}; reached = false; warned = false; quitAsk = false;
     tut = -1; endAim(); closeMenu();
-    for (const n of [tutEl, cardEl, stampEl, msgEl, pausedEl]) n.classList.add('hidden');
+    mini = null; caught = null; valveAt.clear(); seenE.clear(); closeCut();
+    for (const n of [tutEl, cardEl, stampEl, msgEl, pausedEl, miniEl]) n.classList.add('hidden');
     edge.className = 'q-edge';
   }
 
   // debug(): Zustand und Kachel → Bildschirmpunkt (CSS-px im Canvas) für Tests und das Debug-Panel
-  const debug = () => ({ st, paused, sel, aim, menuFor, tile: (x, y) => toScreen(x * TILE, y * TILE) });
-  return { start, stop, debug };
+  const debug = () => ({ st, paused, sel, aim, menuFor, cut: cut && cutEl.className, mini: !!mini, send, tile: (x, y) => toScreen(x * TILE, y * TILE) });
+  return { start, stop, send, debug };
 }

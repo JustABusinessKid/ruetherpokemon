@@ -5,7 +5,7 @@ import { esc, popup, ico, kitName } from './ui.js';
 import { hashrateText } from './format.js';
 import { playSheet, btcRain } from './fx.js';
 import { MISSIONS } from './quest/missions.js';
-import { abilitiesFor } from './quest/engine.js';
+import { abilitiesFor, ENEMY_TYPES } from './quest/engine.js';
 
 const fmt = n => n.toLocaleString('de-DE');
 // Restzeit „7:41"
@@ -229,16 +229,19 @@ export function createDexScreen({ el, onBack }) {
 }
 
 // ---------- Shop ----------
-// onBuy(itemId) -> { ok, reason }
+// onBuy(itemId | 'haunebu-extend') -> { ok, reason }
 export function createShopScreen({ el, onBuy, onBack }) {
   el.querySelector('.back').addEventListener('click', onBack);
   const list = el.querySelector('.shop-items');
   let save = null;
   // v8 §1: Haunebu-Preis steigt pro Beschwörung; im 10-Minuten-Fenster „Im Einsatz · noch 7:41"
+  // v9 §1: dazu der Knopf „+10 Min · 5.000" (onBuy('haunebu-extend'): verlängert nur, beschwört nie, auch wenn das Fenster
+  // zwischen Anzeige und Tipp abläuft)
   function haunebuButton() {
     const now = Date.now(), cost = summonCost(save);
     if (haunebuActive(save, now)) {
-      return `<div class="price"><button class="buy summon" disabled><span>Im Einsatz</span><span>noch&nbsp;<span class="hb-left">${clock(save.haunebuUntil - now)}</span></span></button>`
+      return `<div class="price"><div class="sub hb-on">Im Einsatz · noch <span class="hb-left">${clock(save.haunebuUntil - now)}</span></div>`
+        + `<button class="buy summon primary" data-id="haunebu-extend" ${save.sats < CONST.HAUNEBU_EXTEND_COST ? 'disabled' : ''}><span>+${CONST.HAUNEBU_EXTEND_MS / 60000} Min</span><span>${fmt(CONST.HAUNEBU_EXTEND_COST)}${ico('coin')}</span></button>`
         + `<div class="sub next">Danach: ${fmt(cost)}</div></div>`;
     }
     const next = summonCost({ stats: { haunebuSummons: (save.stats.haunebuSummons || 0) + 1 } });
@@ -258,8 +261,8 @@ export function createShopScreen({ el, onBuy, onBack }) {
         ${ico(kitName(item.icon) || 'shop', 'icon')}
         <div class="meta"><div class="iname">${item.name}</div><div class="sub">${item.desc}</div><div class="sub owned">${owned}</div></div>
         ${item.id === 'haunebu' ? haunebuButton() : `<button class="buy primary" ${save.sats < item.cost ? 'disabled' : ''}>${fmt(item.cost)}${ico('coin')}</button>`}`;
-      div.querySelector('.buy').addEventListener('click', () => {
-        const res = onBuy(item.id);
+      div.querySelector('.buy').addEventListener('click', e => {
+        const res = onBuy(e.currentTarget.dataset.id || item.id);
         render();
         if (res.ok) { const d = list.querySelector(`.shop-item:nth-child(${SHOP.indexOf(item) + 1})`); d?.classList.add('bought'); setTimeout(() => d?.classList.remove('bought'), 600); }
       });
@@ -328,9 +331,18 @@ export function createVictoryScreen({ el, onBack }) {
 // ---------- Quests ----------
 // v8 §5.1: oben „Haunebu-Quests" (gesperrt: Fortschritt + fehlende Arenen; frei: Haunebu-Status + Missionen mit Bestwert).
 // onClaim(id) -> { sats, xp } | null  (Toast macht der App-Code); onQuestStart(missionId); onShop()
-const THEME_BG = { neuschwabenland: 'neuschwabenland', hangar: 'neuschwabenland', pcsale: 'pcsale', keller: 'keller' };
-const BEST_UNIT = { steal: 'Münzen', sabotage: 'Flugscheiben', fetch: 'PS3', unplug: 'Stecker' };
-const questReward = r => [r.coin && `${fmt(r.coin)} je Münze`, r.base && fmt(r.base), r.done && `+${fmt(r.done)} Abschluss`, r.clean && `+${fmt(r.clean)} ohne Alarm`].filter(Boolean).join(' · ');
+const THEME_BG = { neuschwabenland: 'neuschwabenland', hangar: 'neuschwabenland', pcsale: 'pcsale', keller: 'keller', mosel: 'mosel', bruch: 'ranger' };
+const BEST_UNIT = { steal: 'Münzen', sabotage: 'Flugscheiben', fetch: 'PS3', unplug: 'Stecker', valve: 'Anschlüsse', ignite: 'Bäume' };
+// v9: Strafe, wenn ein Gegner der Mission erwischen kann (Ranger: fine), sonst 0
+const missionFine = m => Math.max(0, ...m.layouts.flatMap(l => l.variants.flatMap(v => v.enemies.map(e => ENEMY_TYPES[e.type]?.fine || 0))));
+const variantCount = m => m.layouts.reduce((n, l) => n + l.variants.length, 0);
+// Belohnungszeile (HTML, nur Zahlen): Camping „10.000–12.000 · jedes Kieser-Training −1.000", Bruch „6.500 · Erwischt: −10.000".
+// Jeder Teil ein eigenes Flex-Element, damit die Zeile teilweise umbricht und die Münze vorne stehen bleibt.
+const questReward = (r, fine = 0) => [
+  r.kieser && `${fmt(r.min)}–${fmt(r.base)}`, r.kieser && `jedes Kieser-Training −${fmt(r.kieser)}`,
+  r.coin && `${fmt(r.coin)} je Münze`, !r.kieser && r.base && fmt(r.base), r.done && `+${fmt(r.done)} Abschluss`, r.clean && `+${fmt(r.clean)} ohne Alarm`,
+  fine && `<span class="m-fine">Erwischt: −${fmt(fine)}</span>`,
+].filter(Boolean).map((t, i, all) => `<span>${t}${i < all.length - 1 ? '&nbsp;·' : ''}</span>`).join('');
 export function createQuestsScreen({ el, onClaim, onQuestStart, onShop }) {
   const streak = el.querySelector('.quest-streak'), list = el.querySelector('.quest-list'), reset = el.querySelector('.quest-reset'), hq = el.querySelector('.hq');
   let save = null;
@@ -347,21 +359,24 @@ export function createQuestsScreen({ el, onClaim, onQuestStart, onShop }) {
     }
     const now = Date.now(), active = haunebuActive(save, now);
     hq.innerHTML = `<div class="hq-box panel thin${active ? ' on' : ''}">${ico('haunebu', 'ico-lg hq-ico')}<div class="hq-meta">${active
-      ? `<div class="big">Haunebu bereit</div><div class="sub">noch <span class="hb-left">${clock(save.haunebuUntil - now)}</span> · eine Quest verbraucht sie</div>`
-      : '<div class="big">Kapere zuerst die Haunebu</div><div class="sub">Beschwöre sie im Shop und besiege Hitler. Danach hast du 10 Minuten für eine Quest.</div>'}
+      ? `<div class="big">Haunebu bereit</div><div class="sub">noch <span class="hb-left">${clock(save.haunebuUntil - now)}</span> · nach der Quest fliegt sie euch zurück</div>`
+      : '<div class="big">Kapere zuerst die Haunebu</div><div class="sub">Beschwöre sie im Shop und besiege Hitler. Danach hast du 10 Minuten für Quests und Flüge.</div>'}
       </div>${active ? '' : '<button class="hq-shop primary">Zum Shop</button>'}</div>`
       + MISSIONS.map(m => {
         const log = save.questLog?.[m.id], r = QUEST_SATS[m.id];
+        // v9 §3: Solo-Mission ohne Team-Wahl, gesperrt ohne den Rüther in der Box; sein echtes Gesicht steht auf der Kachel
+        const solo = m.solo && RUETHER_BY_ID[m.solo], locked = solo && !save.box.some(i => i.id === m.solo);
         return `<div class="mission-card" data-id="${m.id}">
-          <div class="m-art" style="background-image:url(art/bg-${THEME_BG[m.theme] || 'menu'}.png)"></div>
+          <div class="m-art" style="background-image:url(art/bg-${THEME_BG[m.theme] || 'menu'}.png)">${solo ? `<img class="m-solo" src="${spriteOf(m.solo)}" alt="${esc(solo.name)}">` : ''}</div>
           <div class="m-meta">
             <div class="m-name">${esc(m.name)}${log?.done ? ` ${ico('trophy', 'ico-in')}` : ''}</div>
-            <div class="sub">${esc(m.place)} · ${Math.round(m.timeMs / 60000)} Min.</div>
+            <div class="sub">${esc(m.place)} · ${m.timeMs ? `${Math.round(m.timeMs / 60000)} Min.` : 'Keine Eile'}${solo ? ` · nur ${esc(solo.name)}` : ''}</div>
             <div class="m-goal">${esc(m.objective.label)}${m.objective.min ? ` (mind. ${m.objective.min})` : ''}</div>
-            ${r ? `<div class="m-reward">${ico('coin', 'ico-in')}${questReward(r)}</div>` : ''}
-            <div class="sub m-best">${log ? `Bestwert: ${log.best} ${BEST_UNIT[m.objective.type] || ''}${log.done ? ' · geschafft' : ''}` : 'Noch nicht gespielt'}</div>
+            ${r ? `<div class="m-reward">${ico('coin', 'ico-in')}${questReward(r, missionFine(m))}</div>` : ''}
+            <div class="sub m-maps">Karten: ${m.layouts.length} · Varianten: ${variantCount(m)}</div>
+            <div class="sub m-best">${log ? `Bestwert: ${log.best} ${BEST_UNIT[m.objective.type] || ''}${log.done ? ' · geschafft' : ''}${log.kieser ? ` · Kieser: ${log.kieser}` : ''}` : 'Noch nicht gespielt'}</div>
           </div>
-          <button class="m-start${active ? ' primary' : ''}">Starten</button>
+          <button class="m-start${active && !locked ? ' primary' : ''}" ${locked ? 'disabled' : ''}>${locked ? `Fang erst ${esc(solo.name)}` : solo ? 'Solo starten' : 'Starten'}</button>
         </div>`;
       }).join('');
     hq.querySelector('.hq-shop')?.addEventListener('click', () => onShop?.());
@@ -461,30 +476,35 @@ export function createQuestTeamScreen({ el, onStart, onBack }) {
 }
 
 // ---------- v8 §5.1: Ergebnis der Haunebu-Quest ----------
-// show({ mission, variant, summary (onEnd der Quest, mit text der Engine), reward (questResult), team (Exemplare) }); onDone() = Heimflug
+// show({ mission, setup, summary (onEnd der Quest, mit text der Engine), reward (questResult), team (Exemplare) }); onDone() = Heimflug
+// v9: Karte und Variante aus setup, Kieser-Trainings (camping) und Strafe (Ranger hat erwischt: reward.fine)
 export function createQuestResultScreen({ el, onDone }) {
   el.innerHTML = '<div class="qr-body"></div>';
   const body = el.querySelector('.qr-body');
   body.addEventListener('click', e => { if (e.target.closest('.qr-done')) onDone?.(); });
   return {
-    show({ mission, variant, summary, reward, team }) {
+    show({ mission, setup, summary, reward, team }) {
       const ok = summary.result === 'success', o = summary.objective || { done: 0, total: 0 };
+      const layout = mission.layouts?.find(l => l.id === setup?.layoutId), variant = layout?.variants.find(v => v.id === setup?.variantId);
+      const r = QUEST_SATS[mission.id] || {}, kieser = summary.kieser || 0, fine = reward?.fine || 0, caught = summary.reason === 'caught';
       el.style.backgroundImage = `url(art/bg-${THEME_BG[mission.theme] || 'menu'}.png)`;
       el.classList.toggle('won', ok);
       const clean = summary.alarmFree ? `nie ausgelöst${ok && QUEST_SATS[mission.id]?.clean ? ` · +${fmt(QUEST_SATS[mission.id].clean)} Bonus` : ''}` : 'ausgelöst';
       body.innerHTML = `
         <div class="qr-faces">${team.map((inst, i) => `<div class="frame r-${inst.rarity}" style="--d:${i * 120}ms"><img src="${spriteOf(inst.id)}" alt="${esc(RUETHER_BY_ID[inst.id]?.name || '')}"><span class="shine"></span></div>`).join('')}</div>
-        <h2 class="qr-title">${ok ? 'Mission erfüllt!' : summary.result === 'abort' ? 'Abgebrochen' : 'Mission gescheitert'}</h2>
-        <p class="qr-mission">${esc(mission.name)}${variant ? ` · ${esc(variant.name)}` : ''}</p>
+        <h2 class="qr-title">${ok ? 'Mission erfüllt!' : caught ? 'Erwischt!' : summary.result === 'abort' ? 'Abgebrochen' : 'Mission gescheitert'}</h2>
+        <p class="qr-mission">${esc(mission.name)}${layout ? ` · ${esc(layout.name)}` : ''}${variant ? ` · ${esc(variant.name)}` : ''}${setup?.mirror ? ' · gespiegelt' : ''}</p>
         <div class="qr-card panel">
           <div class="qr-row"><span>${esc(mission.objective.label)}</span><b>${o.done}/${o.total}</b></div>
           <div class="qr-row"><span>Zeit</span><b>${clock(summary.timeMs || 0)}</b></div>
           <div class="qr-row"><span>Alarm</span><b>${clean}</b></div>
+          ${r.kieser ? `<div class="qr-row"><span>Kieser-Training</span><b>${kieser ? `${kieser}×${ok ? ` · −${fmt(Math.min(kieser * r.kieser, r.base - r.min))}` : ''}` : 'keins'}</b></div>` : ''}
+          ${caught || fine ? `<div class="qr-row fine"><span>Strafe</span><b>−${fmt(fine)}${fine < (summary.fine || 0) ? ' (mehr war nicht da)' : ''}</b></div>` : ''}
           <div class="qr-row"><span>Bestwert</span><b>${reward ? `${reward.best} ${BEST_UNIT[mission.objective.type] || ''}${reward.newBest ? ' · neu!' : ''}` : '–'}</b></div>
-          <div class="qr-gain"><span class="big">+${fmt(reward?.sats || 0)}${ico('coin', 'ico-in')}</span><span class="big xp">+${fmt(reward?.xp || 0)} XP</span></div>
+          <div class="qr-gain"><span class="big">+${fmt(reward?.sats || 0)}${ico('coin', 'ico-in')}</span>${fine ? `<span class="big fine">−${fmt(fine)}${ico('coin', 'ico-in')}</span>` : ''}<span class="big xp">+${fmt(reward?.xp || 0)} XP</span></div>
         </div>
         <p class="qr-text">${esc(summary.text || (ok ? mission.texts.success : mission.texts.fail))}</p>
-        <button class="qr-done primary">Heimflug</button>`;
+        <button class="qr-done primary">Rückflug</button>`;
     },
   };
 }

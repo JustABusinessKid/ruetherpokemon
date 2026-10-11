@@ -84,7 +84,7 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
   }
   function renderThrows() { throwsEl.textContent = `Ausbrüche übrig: ${left}`; }
   function renderSuper() {
-    superBtn.innerHTML = `${ICO('coin')} Super-Münze (${superCoins})`;
+    superBtn.innerHTML = `${ICO('coin')} Super-Münze +${Math.round(CONST.SUPERCOIN_BONUS * 100)} % (${superCoins})`;
     superBtn.classList.toggle('hidden', superCoins <= 0);
     superBtn.classList.toggle('active', superActive);
     if (superActive === !!sparkle) return;

@@ -109,8 +109,19 @@ export function haunebuWin(save, now = Date.now()) {
   save.stats.haunebuWins = (save.stats.haunebuWins || 0) + 1;
   return { sats, until: save.haunebuUntil };
 }
-// Quest-Start verbraucht die Haunebu: Das Fenster endet sofort (Spec §5.1).
+// v8: Quest-Start verbrauchte die Haunebu. v9 §1: Quests verbrauchen sie nicht mehr, die Funktion bleibt für alte Aufrufer.
 export function consumeHaunebu(save, now) { save.haunebuUntil = Math.min(save.haunebuUntil || 0, now); }
+// v9 §1: Gehört sie dir schon, kaufst du für HAUNEBU_EXTEND_COST weitere HAUNEBU_EXTEND_MS, ohne Hitler-Kampf und ohne
+// dass der Beschwörungspreis steigt. Ein aktiver Beam übernimmt das neue Ende.
+export function extendHaunebu(save, now) {
+  if (!haunebuActive(save, now)) return { ok: false, reason: 'keine' };
+  if (save.sats < CONST.HAUNEBU_EXTEND_COST) return { ok: false, reason: 'sats' };
+  save.sats -= CONST.HAUNEBU_EXTEND_COST;
+  save.haunebuUntil += CONST.HAUNEBU_EXTEND_MS;
+  const beam = activeBeam(save, now);
+  if (beam) beam.until = save.haunebuUntil;
+  return { ok: true, until: save.haunebuUntil };
+}
 // Flüge sind im Fenster frei und beliebig oft; der Beam endet mit dem Fenster. from = Heimatort, bleibt beim Weiterspringen.
 export function startBeam(save, arenaId, now, from = save.beam?.from ?? null) {
   if (!haunebuActive(save, now)) return { ok: false, reason: 'keine' };
@@ -121,32 +132,48 @@ export function startBeam(save, arenaId, now, from = save.beam?.from ?? null) {
 export const activeBeam = (save, now) => (save.beam && save.beam.until > now && haunebuActive(save, now) ? save.beam : null);
 export function endBeam(save) { save.beam = null; }
 
-// ---------- v8: Haunebu-Quests (Spec §5.1, §5.6) ----------
+// ---------- v8/v9: Haunebu-Quests (Spec v8 §5.1, §5.6; v9 §7) ----------
 export const questsUnlocked = save => ARENAS.every(a => save.arenaMastered[a.id]);
-// Sats je Mission: coin × score (abgelieferte Münzen) + base, bei Erfolg + done (Abschluss) + clean (ohne Alarm)
+// Sats je Mission: coin × score (abgelieferte Münzen) + base − kieser × Kieser-Trainings, mindestens min;
+// bei Erfolg + done (Abschluss) + clean (ohne Alarm)
 export const QUEST_SATS = {
   tachionenraub: { coin: 300, base: 0, done: 1000 },
   hangar: { coin: 0, base: 2500, done: 0 },
   ps3: { coin: 0, base: 2500, done: 0 },
   keller: { coin: 0, base: 2000, done: 0, clean: 1000 },
+  camping: { coin: 0, base: 12_000, done: 0, kieser: 1000, min: 10_000 }, // v9 §3: 12k, je Kieser-Training −1k, nie unter 10k
+  bruch: { coin: 0, base: 6500, done: 0 },                                  // v9 §4: jedes Mal 6,5k, Erwischen kostet extra.fine
 };
 const QUEST_FAIL = 0.1;
-// result 'success' | 'fail' | 'abort' (Aufgeben zählt wie Misserfolg: 10 % der Sats und XP, kein Abschluss).
+const nat = n => Math.max(0, Math.floor(n) || 0);
+// result 'success' | 'fail' | 'abort' (Aufgeben zählt wie Misserfolg: 10 % der Sats und XP, kein Abschluss). Trostgeld und
+// Trost-XP nur mit Fortschritt (score > 0): seit die Quest die Haunebu nicht verbraucht, wäre „Los!“ + Aufgeben sonst gratis Geld.
+// extra.kieser: Kieser-Trainings dieser Runde, extra.fine: Strafe (Ranger hat erwischt; dann kein Trostgeld), nie unter 0 Sats.
 // Sats werden gutgeschrieben, XP gibt der Aufrufer per gainXp weiter (wie arenaWin). null bei unbekannter Mission.
-export function questResult(save, missionId, result, score = 0, alarmFree = false) {
+// Rückgabe fine = tatsächlich abgezogene Strafe. questLog[id] = { best, done, wins, kieser, fines, clean }.
+export function questResult(save, missionId, result, score = 0, alarmFree = false, extra = {}) {
   const r = QUEST_SATS[missionId];
   if (!r) return null;
   const ok = result === 'success';
-  score = Math.max(0, Math.floor(score) || 0);
-  const full = r.coin * score + r.base;
-  const sats = ok ? full + r.done + (alarmFree ? r.clean || 0 : 0) : Math.round(full * QUEST_FAIL);
-  const xp = ok ? CONST.QUEST_XP : Math.round(CONST.QUEST_XP * QUEST_FAIL);
+  score = nat(score);
+  const kieser = nat(extra?.kieser), fineDue = nat(extra?.fine);
+  const full = Math.max(r.min || 0, r.coin * score + r.base - (r.kieser || 0) * kieser);
+  const sats = ok ? full + r.done + (alarmFree ? r.clean || 0 : 0) : fineDue || !score ? 0 : Math.round(full * QUEST_FAIL);
+  const xp = ok ? CONST.QUEST_XP : score ? Math.round(CONST.QUEST_XP * QUEST_FAIL) : 0;
   save.questLog = save.questLog || {};
   const prev = save.questLog[missionId] || { best: 0, done: false };
   const best = Math.max(prev.best || 0, score);
-  save.questLog[missionId] = { best, done: !!prev.done || ok };
+  save.questLog[missionId] = {
+    best, done: !!prev.done || ok,
+    wins: (prev.wins ?? (prev.done ? 1 : 0)) + (ok ? 1 : 0), // v8-Einträge kennen nur done
+    kieser: (prev.kieser || 0) + kieser,
+    fines: (prev.fines || 0) + (fineDue ? 1 : 0),
+    clean: !!prev.clean || (ok && !!alarmFree),
+  };
   save.sats += sats;
-  return { sats, xp, best, newBest: score > (prev.best || 0), firstDone: ok && !prev.done };
+  const fine = Math.min(save.sats, fineDue);
+  save.sats -= fine;
+  return { sats, xp, best, newBest: score > (prev.best || 0), firstDone: ok && !prev.done, fine };
 }
 
 // ---------- XP / Trainer-Level ----------

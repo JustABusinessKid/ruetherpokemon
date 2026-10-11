@@ -225,7 +225,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .mission-card .m-meta { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .mission-card .m-name { display: flex; align-items: center; gap: 4px; font: 700 18px/1.15 var(--font-pixel); }
 .mission-card .m-goal { font-size: 14px; font-weight: 800; }
-.mission-card .m-reward { display: flex; align-items: center; flex-wrap: wrap; gap: 0 2px; font: 700 14px/1.3 var(--font-pixel); }
+.mission-card .m-reward { display: flex; align-items: center; flex-wrap: wrap; gap: 0 5px; font: 700 14px/1.3 var(--font-pixel); }
 .mission-card .m-start { grid-column: 1 / -1; min-height: 44px; }
 
 /* Team-Wahl: Box als Zeilen mit echtem Gesicht, Quest-Kräften und Reihenfolge-Plakette, unten Holzleiste mit Abflug */
@@ -274,6 +274,13 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .qr-gain .big.xp { background: var(--teal); }
 .qr-text { padding: 8px 12px; font: 700 14px/1.4 var(--font-body); color: var(--ink); background: var(--paper); border: 3px solid var(--ink); box-shadow: var(--shadow); }
 .qr-done { min-width: 200px; min-height: 52px; font-size: 20px; }
+/* v9: Strafe (Ranger hat erwischt) rot, Solo-Gesicht auf der Missionskachel, Debug-Auswahl für „Quest starten" */
+.qr-row.fine b, .mission-card .m-fine { color: var(--red); }
+.qr-gain .big.fine { color: var(--paper); background: var(--red); }
+.mission-card .m-art { position: relative; }
+.mission-card .m-solo { position: absolute; right: -2px; bottom: -2px; width: 36px; height: 36px; image-rendering: pixelated; border: 2px solid var(--ink); background: var(--ink); }
+.mission-card .m-start:disabled { opacity: 1; color: var(--ink-soft); background: var(--paper-2); }
+.debug select { min-height: 36px; padding: 4px; font: 700 13px var(--font-body); color: var(--ink); background: var(--paper); border: 2px solid var(--ink); border-radius: 0; }
 
 /* ---------- Rangliste: Holzbrett mit Papierzeilen ---------- */
 .lb-status { padding: 8px 16px 0; }

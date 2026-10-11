@@ -42,7 +42,7 @@ test('levelCost und powerUp', () => {
 
 test('catchChanceV3: Abzug, Ring, Super-Münze, Grenzen', () => {
   assert.equal(catchChanceV3(0.5, 'legendaer', 0.9, false), 0.2);
-  assert.equal(catchChanceV3(0.5, 'legendaer', 0.9, true), 0.4);
+  assert.equal(catchChanceV3(0.5, 'legendaer', 0.9, true), 0.7); // v9: +50 %
   assert.equal(catchChanceV3(0.5, 'normal', 0.4, true), 0.95);
   assert.equal(catchChanceV3(0.35, 'legendaer', 0.9, false), 0.05);
   assert.equal(catchChanceV3(0.5, 'selten', 0.6, false), 0.52);
@@ -90,13 +90,13 @@ test('Arena: Skalierung, Belohnung, Level, gemeistert', () => {
 test('buyItem: Super-Münze ins Inventar, Lockmodul aktiviert sofort', () => {
   const s = emptySaveV2();
   assert.equal(buyItem(s, 'supercoin', 0).ok, false);
-  s.sats = 400;
+  s.sats = 1600; // v9: Super-Münze 500, Lockmodul 1000
   assert.equal(buyItem(s, 'supercoin', 0).ok, true);
   assert.equal(s.items.supercoin, 1);
-  assert.equal(s.sats, 360);
+  assert.equal(s.sats, 1100);
   assert.equal(buyItem(s, 'lockmodul', 1000).ok, true);
   assert.equal(s.lureUntil, 301000);
-  assert.equal(s.sats, 60);
+  assert.equal(s.sats, 100);
   assert.equal(lureActive(s, 2000), true);
   assert.equal(lureActive(s, 400000), false);
   assert.equal(buyItem(s, 'nix', 0).ok, false);
