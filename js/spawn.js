@@ -62,21 +62,32 @@ export function updateSpawns({ spawns, player, arenas, ruethers, now, rng, lure 
 // (der Spawn, der gerade im Fang- oder Kampf-Screen offen ist), dafür LURE_SPAWN_MIN..MAX neue im LURE_RING
 // direkt um den Spieler, also in Fangreichweite. Rein.
 // Verteilt statt Klumpen: jeder Spawn bekommt seinen eigenen Winkel-Sektor (plus wenig Zufall) und abwechselnd den
-// inneren bzw. äußeren Ring (ungerade n: i = 0 und n-1 liegen beide außen, dort ist Platz). Zusammen mit Zoom 17
-// während des Lockmoduls (map.setLure) liegen Nachbarn ≥ 44 m ≈ 60 px auseinander: die 48-px-Gesichter decken sich
-// nicht und bleiben vom Spieler-Punkt frei. Bei Zoom 16 passen 8 Gesichter gar nicht in 90 m.
-const LURE_NEAR = [45, 52], LURE_FAR = [80, 90]; // m, innerhalb CONST.LURE_RING
-export function lureWave({ player, ruethers, arenas, now, rng, keep = null, featured = null }) {
+// inneren bzw. äußeren Ring (ungerade n: i = 0 und n-1 liegen beide außen, dort ist Platz). Zusammen mit dem engen Zoom
+// während des Lockmoduls (map.js lureZoom) liegen Nachbarn ≥ LURE_GAP = 44 m ≈ 60 px auseinander: die 48-px-Gesichter
+// decken sich nicht und bleiben vom Spieler-Punkt frei. Bei Zoom 16 passen 8 Gesichter gar nicht in 90 m.
+// Besetzte Plätze werden neu gewürfelt: näher als LURE_GAP an einem anderen Gesicht (auch keep), je Achse näher als gap
+// (Gesichter sind Quadrate; bei kleiner Karte reichen 44 m schräg nicht) oder in einem Sperrquadrat aus avoid (Arena-Schilder
+// samt Besitzer-Foto, Knöpfe; beides map.js lureRoom). Dann im eigenen Sektor weiter, abwechselnd auf dem anderen Ring;
+// findet sich nichts, fällt der Platz weg (an vollen Orten wie Worringen/Keller kommen dann auch mal nur 3).
+const LURE_NEAR = [45, 52], LURE_FAR = [80, 90], LURE_GAP = 44; // m, innerhalb CONST.LURE_RING
+// Sperrquadrat b = { lat, lon, r }: halbe Kantenlänge r in m, die Karte ist genordet
+const inBlock = (b, p) => distance(b, { lat: p.lat, lon: b.lon }) < b.r && distance(b, { lat: b.lat, lon: p.lon }) < b.r;
+export function lureWave({ player, ruethers, arenas, now, rng, keep = null, featured = null, avoid = [], gap = 0 }) {
   const list = keep ? [keep] : [];
   if (!player) return list;
   const { pool } = spawnPool(player, arenas, ruethers, featured);
   const n = CONST.LURE_SPAWN_MIN + Math.floor(rng() * (CONST.LURE_SPAWN_MAX - CONST.LURE_SPAWN_MIN + 1));
   const rot = rng() * 2 * Math.PI;
+  const free = p => list.every(s => distance(s, p) >= LURE_GAP && !inBlock({ ...s, r: gap }, p)) && !avoid.some(b => inBlock(b, p));
   for (let i = 0; i < n; i++) {
     const r = pool[Math.floor(rng() * pool.length)];
-    const [a, b] = i % 2 ? LURE_NEAR : LURE_FAR;
-    const ang = rot + ((i + rng() * 0.3) / n) * 2 * Math.PI, d = a + rng() * (b - a);
-    list.push(makeSpawn(r, offsetPoint(player, d * Math.cos(ang), d * Math.sin(ang)), now, rng));
+    for (let k = 0; k < 8; k++) {
+      const [a, b] = (i + k) % 2 ? LURE_NEAR : LURE_FAR;
+      // erster Versuch wie immer (+0..0.3 Sektor), danach bis 0.6: der Abstand zum nächsten Sektor bleibt ≥ 0.4
+      const ang = rot + ((i + rng() * (k ? 0.6 : 0.3)) / n) * 2 * Math.PI, d = a + rng() * (b - a);
+      const p = offsetPoint(player, d * Math.cos(ang), d * Math.sin(ang));
+      if (free(p)) { list.push(makeSpawn(r, p, now, rng)); break; }
+    }
   }
   return list;
 }

@@ -461,7 +461,7 @@ export function createQuestTeamScreen({ el, onStart, onBack }) {
 }
 
 // ---------- v8 §5.1: Ergebnis der Haunebu-Quest ----------
-// show({ mission, variant, summary (onEnd der Quest), reward (questResult), team (Exemplare) }); onDone() = Heimflug
+// show({ mission, variant, summary (onEnd der Quest, mit text der Engine), reward (questResult), team (Exemplare) }); onDone() = Heimflug
 export function createQuestResultScreen({ el, onDone }) {
   el.innerHTML = '<div class="qr-body"></div>';
   const body = el.querySelector('.qr-body');
@@ -483,7 +483,7 @@ export function createQuestResultScreen({ el, onDone }) {
           <div class="qr-row"><span>Bestwert</span><b>${reward ? `${reward.best} ${BEST_UNIT[mission.objective.type] || ''}${reward.newBest ? ' · neu!' : ''}` : '–'}</b></div>
           <div class="qr-gain"><span class="big">+${fmt(reward?.sats || 0)}${ico('coin', 'ico-in')}</span><span class="big xp">+${fmt(reward?.xp || 0)} XP</span></div>
         </div>
-        <p class="qr-text">${esc(ok ? mission.texts.success : mission.texts.fail)}</p>
+        <p class="qr-text">${esc(summary.text || (ok ? mission.texts.success : mission.texts.fail))}</p>
         <button class="qr-done primary">Heimflug</button>`;
     },
   };

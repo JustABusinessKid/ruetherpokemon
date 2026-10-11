@@ -4,9 +4,10 @@
    Bewegung in ganzen Pixeln bzw. mit steps(); keine weichen Schatten, keine Verläufe außer Dither und Segmenten.
    Einmal-Animationen nutzen translate/rotate/scale einzeln, damit sie sich nicht gegenseitig überschreiben.
    Ebenen: .bg 0 · Boss 1 · .rage::after/.enemy-helpers 2 · .fx 3 · .combo/.stage-hint/.helpers (sichtbar)/.enemy-helpers.arrive 4
-   · .flash 5 · .switch 6 · .enemy-say 7 · .intro 8 · .quit 9 · .overlay 10. In .fx: Requisit 5 · Sheet/₿-Regen 6 · Requisit mit
-   echtem Gesicht/.rush 7 · Text 8 (WUT! 9) · Banner-Brett und Sprechblasen-Requisit 9 · mega 10. Echte Gesichter (.helpers, .rush,
-   Reiter) liegen über Requisiten und Einschlägen, Texte weichen ihnen aus (--fx-hit-*, --fx-info-me-y, TXT.beside in battle-ui.js). */
+   · .flash 5 (Wildkampf 0) · .switch 6 · .enemy-say 7 · .intro 8 · .quit 9 · .overlay 10. In .fx: Dimmer 4 · Requisit 5
+   · Sheet/₿-Regen 6 · echtes Gesicht des Wilden (erstes Kind), Requisit mit echtem Gesicht/.rush 7 · Text 8 (WUT! 9, im Wildkampf 6)
+   · Banner-Brett und Sprechblasen-Requisit 9 · mega 10. Echte Gesichter (.helpers, .rush, Reiter, der Wilde) liegen über Dimmer,
+   Requisiten und Einschlägen, Texte weichen ihnen aus (--fx-hit-*, --fx-info-me-y, TXT.beside, INFO_SIDE in battle-ui.js). */
 
 #screen-battle {
   --bt-outline: 2px 0 0 var(--ink), -2px 0 0 var(--ink), 0 2px 0 var(--ink), 0 -2px 0 var(--ink), 3px 3px 0 var(--ink);
@@ -25,8 +26,10 @@
 #screen-battle[data-arena="haunebu"] { --arena-bg: url(../art/bg-mondbasis.png); } /* Beschwörung: Mondbasis-Hangar */
 #screen-battle[data-arena="neuschwabenland"] { --arena-bg: url(../art/bg-neuschwabenland.png); } /* v8: Eis-Bunker, Tachionenbitcoin */
 
-/* Warn-Blinken vor Boss-Angriffen: gelb = schnell, rot = Lade-Attacke */
+/* Warn-Blinken vor Boss-Angriffen: gelb = schnell, rot = Lade-Attacke. Im Wildkampf unter der Bühne (blinkt nur um sie herum),
+   sonst tönte es das echte Gesicht des Gegners rot bzw. gelb */
 #screen-battle .flash { position: absolute; inset: 0; z-index: 5; pointer-events: none; opacity: 0; }
+#screen-battle[data-arena="wild"] .flash { z-index: 0; }
 #screen-battle .flash.yellow { background: var(--gold); animation: bt-flash .3s steps(1) infinite; }
 #screen-battle .flash.red { background: var(--red); animation: bt-flash .2s steps(1) infinite; }
 @keyframes bt-flash { 0% { opacity: .1; } 50% { opacity: .35; } }
@@ -67,8 +70,8 @@
 @keyframes bt-timer { 50% { color: var(--paper); } }
 
 /* Eigener Rüther im Pixel-Rahmen in Seltenheitsfarbe (Klasse r-<rarity> setzt JS) */
-#screen-battle .fighter.me .frame {
-  --rc: var(--r-normal);
+#screen-battle .fighter.me .frame { /* über dem Warn-Blinken (.flash 5): mein echtes Gesicht wird nicht mitgetönt */
+  --rc: var(--r-normal); position: relative; z-index: 6;
   flex: none; width: 72px; height: 72px; margin: 2px; padding: 0; overflow: hidden;
   background: var(--paper-2); border: 4px solid var(--rc); border-radius: 0;
   outline: 2px solid var(--ink); box-shadow: 4px 4px 0 2px var(--wood-2);
@@ -93,6 +96,8 @@
   position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; margin: 0; padding: 3px 6px; pointer-events: none;
   text-align: center; font: 800 11px/1.2 var(--font-body); color: var(--paper); background: rgba(30, 42, 34, .8);
 }
+/* … aber weg, solange ein Requisit mit echtem Gesicht fliegt: Reiter steigen vom Bühnenboden auf (Rakete, Hildegards Handtasche) */
+#screen-battle .stage:has(.fx-prop > img.rider, .enemy-sprite.face.lunge) .stage-hint { visibility: hidden; } /* … bzw. der Wilde rempelt nach unten */
 /* Beben nach Schaden in ganzen Pixeln: s < 15 (2 px), m < 30 (4 px), l darüber (6 px) */
 #screen-battle .stage.quake-s { animation: bt-quake-s .3s steps(1); }
 #screen-battle .stage.quake-m { animation: bt-quake-m .5s steps(1); }
@@ -125,13 +130,16 @@
 }
 @keyframes bt-breathe { 50% { translate: 0 -4px; } }
 #screen-battle .enemy-sprite.windup { scale: 1.12; rotate: -6deg; }
-#screen-battle .enemy-sprite.weak { opacity: .7; }
-#screen-battle .sprite.poisoned { filter: sepia(1) hue-rotate(60deg) saturate(2.5); }
-#screen-battle .enemy-sprite.stunned { filter: grayscale(1) brightness(.8); rotate: 12deg; }
-/* Wut: roter Pixel-Rahmen blinkt bis Kampfende, Boss rot getönt */
+/* Status-Tönung (geschwächt, Gift, betäubt) nur am Boss-Bild: echte Gesichter (der Wilde, mein Rüther in der Leiste) bleiben
+   ungetönt und deckend, der Status steht in der Leiste; betäubt kippt auch das echte Gesicht */
+#screen-battle .enemy-sprite.weak:not(.face) { opacity: .7; }
+#screen-battle .enemy-sprite.poisoned:not(.face) { filter: sepia(1) hue-rotate(60deg) saturate(2.5); }
+#screen-battle .enemy-sprite.stunned { rotate: 12deg; }
+#screen-battle .enemy-sprite.stunned:not(.face) { filter: grayscale(1) brightness(.8); }
+/* Wut: roter Pixel-Rahmen blinkt bis Kampfende, Boss rot getönt (ein echtes Gesicht nicht) */
 #screen-battle .stage.rage::after { content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none; border: 4px solid var(--red); animation: bt-rage .5s steps(1) infinite; }
 @keyframes bt-rage { 50% { border-color: transparent; } }
-#screen-battle .stage.rage .enemy-sprite { filter: sepia(1) saturate(5) hue-rotate(-40deg) brightness(.95); }
+#screen-battle .stage.rage .enemy-sprite:not(.face) { filter: sepia(1) saturate(5) hue-rotate(-40deg) brightness(.95); }
 /* Treffer-Blitz: 2 Frames reines Weiß (JS nimmt .hit nach 70 ms wieder ab), schlägt Gift- und Wut-Tönung */
 #screen-battle .stage .enemy-sprite.hit { filter: brightness(0) invert(1); }
 #screen-battle .stage .enemy-sprite.face.hit { filter: brightness(1.5); border-color: var(--paper); } /* echtes Gesicht bleibt erkennbar */
@@ -141,6 +149,34 @@
 #screen-battle .face.r-episch { --rc: var(--r-episch); }
 #screen-battle .face.r-legendaer { --rc: var(--r-legendaer); }
 #screen-battle .enemy-sprite.face { width: min(176px, 52%); max-height: none; }
+/* Wildkampf: battle-ui.js hängt das echte Gesicht des Gegners als erstes Kind in .fx (z 7), mittig wie sonst der Boss.
+   Dimmer, Requisiten, Einschläge und ₿-Regen liegen darunter; Reiter (später eingehängt, gleiche Ebene), Texte und Brett darüber.
+   .fx ist Größen-Container: --face-w (Rahmenbreite) und die Mitte (top) passen sich der Bühnenhöhe an. Außen: oben 3 px Kontur
+   + 4 px Atmen, unten 11 px Schatten. Steht das Spezial-Brett, rückt es unter dessen Unterkante (--board-clear, battle-ui.js)
+   und bleibt über der aufsteigenden Info-Zeile am Boden (100 % − 30 px, steigt bis zu 33 px); steht die Mega-Zahl („+70 %“,
+   Mitte enemy-y − 10 % = 32 %, unten + 36 px), rückt es darunter und bleibt über dem Hinweisbalken (21 px; 68cqh = 100 % − 32 %) */
+#screen-battle .fx { container-type: size; }
+#screen-battle .fx > .enemy-sprite.face {
+  --face-w: min(176px, 52cqw);
+  position: absolute; left: 50%; top: 50%; z-index: 7; width: var(--face-w); margin: calc(var(--face-w) / -2) 0 0 calc(var(--face-w) / -2);
+  transition: scale .3s steps(3), rotate .3s steps(3), opacity .3s steps(3), left .3s steps(3), top .3s steps(3), width .3s steps(3), margin .3s steps(3);
+}
+#screen-battle .stage:has(.fx-banner) .fx > .enemy-sprite.face {
+  --face-w: min(176px, 52cqw, 100cqh - var(--board-clear, 96px) - 74px); top: max(50%, calc(var(--board-clear, 96px) + 7px + var(--face-w) / 2));
+}
+#screen-battle .stage:has(.fx-text.mega) .fx > .enemy-sprite.face {
+  --face-w: min(176px, 52cqw, 68cqh - 80px); top: max(50%, calc(var(--fx-enemy-y) - 10% + 47px + var(--face-w) / 2));
+}
+/* Familientreffen (10 s): Christians und Michas echte Gesichter stehen unter ihm (.helpers z 4, über .fx; Oberkante me-y − 48 px,
+   12 px Hüpfer; 86cqh = me-y). Auf kleinen Bühnen rückt es über ihre Reihe, höchstens bis unter die Gegner-Blase (46 px), notfalls
+   kleiner; steht ein Brett (Beschwörung selbst, weitere Spezial-Attacke), zwischen Brett und Reihe */
+#screen-battle[data-arena="wild"] .helpers:not(.hidden) ~ .fx > .enemy-sprite.face {
+  --face-w: min(176px, 52cqw, 86cqh - 110px); top: min(50%, calc(86cqh - 64px - var(--face-w) / 2));
+}
+#screen-battle[data-arena="wild"] .stage:has(.fx-banner) .helpers:not(.hidden) ~ .fx > .enemy-sprite.face {
+  --face-w: min(176px, 52cqw, 86cqh - 71px - var(--board-clear, 96px));
+  top: clamp(calc(var(--board-clear, 96px) + 7px + var(--face-w) / 2), 50%, calc(86cqh - 64px - var(--face-w) / 2));
+}
 /* Rempler des wilden Rüthers: springt nach vorn auf den Spieler zu */
 #screen-battle .enemy-sprite.lunge { animation: bt-lunge .45s steps(4); }
 @keyframes bt-lunge { 45% { translate: -36px 56px; scale: 1.15; rotate: -8deg; } }
@@ -266,17 +302,53 @@
   --fx-me-num-y: calc(var(--fx-me-y) - 14%); --fx-info-me-y: calc(var(--fx-me-y) - 26%); --fx-hit-x: var(--fx-enemy-x); --fx-hit-y: var(--fx-enemy-y);
 }
 /* Echtes Gesicht am Gegner (Wildkampf; Viktor bzw. Hildegard fliegen bei der Heizung los: .side-hits): Tipp-Einschläge und Zahlen
-   rechts daneben; im Wildkampf Info-Texte bei mir („Ausgewichen!") unter seinem Gesicht am Bühnenboden */
-#screen-battle[data-arena="wild"] .fx, #screen-battle .stage.side-hits .fx { --fx-hit-x: calc(var(--fx-enemy-x) + 36%); --fx-hit-y: 50%; }
+   rechts daneben, ebenso solange eine Mega-Zahl über dem Gegner steht (.side, battle-ui.js); im Wildkampf Info-Texte bei mir
+   („Ausgewichen!") unter seinem Gesicht am Bühnenboden */
+#screen-battle[data-arena="wild"] .fx, #screen-battle .stage.side-hits .fx, #screen-battle .fx > .side { --fx-hit-x: calc(var(--fx-enemy-x) + 36%); --fx-hit-y: 50%; }
 #screen-battle[data-arena="wild"] .fx { --fx-info-me-y: calc(100% - 30px); }
 /* Viktors Sprechblase im Wildkampf (.aside, 2,2 s): Blase unten rechts, das echte Gesicht des Gegners rückt kleiner nach links */
-#screen-battle .stage.aside .enemy-sprite.face { position: relative; left: -26%; top: 4%; scale: .75; }
+/* Ebenso, solange eine eigene Requisite mit Reiter fliegt (Rakete, Handschlag, Würfe, Gaswolke, M&Ms, Hardware-Wallet). Ausweichen
+   sofort statt in Stufen, weil Requisite bzw. Blase gleich erscheinen (zurück wieder in Stufen); :where hält die Mega-Zahl-Regel oben
+   stärker (top, Größe), links und .75 bleiben */
+#screen-battle .stage.aside .fx > .enemy-sprite.face, /* läuft im Freeze: unter dem Brett (wie oben, bei .75) */
+#screen-battle[data-arena="wild"] .stage:where(:has(> .fx > :is(.path-launch, .path-pulse-at-enemy, .path-arc-to-enemy, .path-rise-at-enemy, .path-morph-at-me):not(.from-face) > img.rider)) .fx > .enemy-sprite.face {
+  --face-w: min(176px, 52cqw); left: 24%; top: max(54%, calc(var(--board-clear, 96px) + 7px + var(--face-w) * .375)); scale: .75; transition: none;
+}
 #screen-battle .stage.aside .fx-prop.path-bubble-at-me { left: calc(100% - var(--size, 160px) / 2 - 4px); top: calc(100% - var(--size, 160px) / 2 - 44px); }
+/* … und die Requisiten steigen rechts daneben senkrecht auf und landen dort (die Wallet klappt dort auf): Mitte zwischen seiner rechten
+   Kante (24 % + 66 px + Kontur) und dem Rand, höchstens 38 % breit (die Rakete wächst gedreht auf das 1,4-Fache); der Reiter sitzt
+   waagerecht mittig und vor dem Requisit, bei Würfen ganz mittig, damit er beim Drehen nicht in sein Gesicht schwenkt. Höhe: wie
+   überall unter dem Brett (s. u.) */
+#screen-battle[data-arena="wild"] .fx > :is(.path-launch, .path-pulse-at-enemy, .path-arc-to-enemy, .path-rise-at-enemy, .path-morph-at-me):not(.from-face) {
+  --fx-enemy-x: calc(62% + 34px); --fx-me-x: var(--fx-enemy-x); --fit: min(var(--size, 160px), 38cqw);
+  width: var(--fit); height: var(--fit); margin: calc(var(--fit) / -2) 0 0 calc(var(--fit) / -2);
+}
+#screen-battle[data-arena="wild"] .fx > :is(.path-launch, .path-pulse-at-enemy, .path-arc-to-enemy, .path-rise-at-enemy, .path-morph-at-me):not(.from-face) > img.rider {
+  left: calc(50% - var(--rider-size, 44%) / 2); z-index: 1;
+}
+#screen-battle[data-arena="wild"] .fx > .path-arc-to-enemy:not(.from-face) > img.rider { top: calc(50% - var(--rider-size, 44%) / 2); }
+/* Eigene Requisiten mit Reiter auf den Gegner landen so tief, dass der Reiter unter dem Spezial-Brett bleibt (--board-clear, battle-ui.js;
+   kleine Bühnen, zweizeiliger Spruch); sonst auf --fx-enemy-y (42 %). Zugabe = wie weit der Reiter höchstens über das Ziel ragt:
+   Rakete (Gesicht auf dem Rumpf) 36 px; Handschlag (Gesicht links darüber, bis 1,2×) 112 px; Würfe am Scheitel (8 % höher, ×.8) bzw.
+   gedreht im Ziel (Dose 40°, ×1,075); Gaswolke/M&Ms steigen bis 24 % höher und wachsen */
+#screen-battle .fx > .fx-prop:not(.from-face):has(> img.rider).path-launch { --fx-enemy-y: max(42%, calc(var(--board-clear, 0px) + 36px)); }
+#screen-battle .fx > .fx-prop:not(.from-face):has(> img.rider).path-pulse-at-enemy { --fx-enemy-y: max(42%, calc(var(--board-clear, 0px) + 112px)); }
+#screen-battle .fx > .fx-prop:not(.from-face):has(> img.rider).path-arc-to-enemy { --fx-enemy-y: max(42%, calc(var(--board-clear, 0px) + max(122px, 88px + 8%))); }
+#screen-battle .fx > .fx-prop:not(.from-face):has(> img.rider).path-rise-at-enemy { --fx-enemy-y: max(42%, calc(var(--board-clear, 0px) + 68px + 24%)); }
+/* Sein eigenes Requisit (Lade-Attacke) hängt battle-ui.js vor sein Gesicht in .fx: es kommt hinter ihm hervor statt es zu verdecken,
+   bleibt aber über Einschlägen (auch die Sprechblase, sonst z 9) */
+#screen-battle .fx-prop.from-face { z-index: 7; }
 /* WUT! über den Tipp-Zahlen; Zahl der eigenen Spezial-Attacke in Papierweiß auf der goldenen ₿-Explosion */
 #screen-battle .fx-text.wut { z-index: 9; }
+#screen-battle[data-arena="wild"] .fx-text.wut { z-index: 6; } /* … aber hinter seinem echten Gesicht: beim Wut-Wackeln (bis 1,2×) reicht es bis an „WUT!“ */
 #screen-battle .fx-text.burst { color: var(--paper); }
-/* Schadenszahlen bei mir: stehen Christian und Micha dort, über ihrer Reihe (Oberkante me-y − 48 px, 12 px Hüpfer) statt dahinter */
+/* Schadenszahlen bei mir: stehen Christian und Micha dort, über ihrer Reihe (Oberkante me-y − 48 px, 12 px Hüpfer) statt dahinter;
+   Info-Texte („Ausgewichen!") dann noch 44 px darüber, nicht zwischen den Zahlen (Wildkampf: Info-Zeile am Boden, s. o.) */
 #screen-battle .helpers:not(.hidden) ~ .fx { --fx-me-num-y: calc(var(--fx-me-y) - 100px); }
+#screen-battle:not([data-arena="wild"]) .helpers:not(.hidden) ~ .fx { --fx-info-me-y: calc(var(--fx-me-y) - 144px); }
+/* Flugscheiben-Strahl: der Strahl zieht mein Gesicht (80 px, Unterkante me-y − 12 px, reicht links in ihre Reihe) hoch; solange er
+   steht, treten sie sofort 48 px nach rechts beiseite statt es zu verdecken (höher ginge nicht: oben steht die Gegner-Blase mit dem Ausruf) */
+#screen-battle .stage:has(> .fx > .path-beam-on-me) .helpers .helper { translate: 48px 0; }
 #screen-battle .fx .tap { position: absolute; width: 32px; height: 32px; margin: -16px 0 0 -16px; border: 3px solid var(--paper); box-shadow: 0 0 0 2px var(--ink), inset 0 0 0 2px var(--ink); animation: bt-tap .3s steps(3) forwards; }
 @keyframes bt-tap { from { scale: .5; } to { scale: 1.5; opacity: 0; } }
 /* Hardware-Wallet: Münz-Sheet wandert vom Boss zum eigenen Rüther */
@@ -324,6 +396,17 @@
 /* Familientreffen läuft: Blase über die Helferreihe (Helfer-Oberkante me-y − 48 px, 12 px Hüpfer), damit Christians und
    Michas echte Gesichter frei bleiben; ganz an den rechten Rand, damit sie auf kleinen Bühnen nicht auf seinem Gesicht sitzt */
 #screen-battle .helpers:not(.hidden) ~ .fx .fx-prop.krupp-speech { left: calc(100% - var(--size, 160px) / 2 - 4px); top: calc(var(--fx-me-y) - 60px - var(--size, 160px) / 2); }
+/* Goebbels und Himmler stehen neben ihm: Blase rechts oben über Himmler (Oberkante enemy-y + 18 % − 56 px), höchstens bis 4 px unter
+   die Bühnenkante bzw. unter die Gegner-Blase; nur waagerecht gespiegelt, der Zipfel zeigt nach links unten zu ihm. Die Wutblase
+   „!!" springt dann links über seinem Kopf auf */
+#screen-battle .enemy-helpers:not(.hidden) ~ .fx .fx-prop.krupp-speech {
+  --krupp-top: calc(var(--fx-enemy-y) + 18% - 60px - var(--size, 160px) / 2);
+  left: calc(100% - var(--size, 160px) / 2 - 4px); top: max(calc(4px + var(--size, 160px) / 2), var(--krupp-top));
+}
+#screen-battle.talking .enemy-helpers:not(.hidden) ~ .fx .fx-prop.krupp-speech { top: max(calc(var(--say-clear, 8px) + var(--size, 160px) / 2), var(--krupp-top)); }
+#screen-battle .enemy-helpers:not(.hidden) ~ .fx .fx-prop.krupp-speech > img { scale: -1 1; }
+#screen-battle .enemy-helpers:not(.hidden) ~ .fx .fx-prop.krupp-speech .bubble-text { top: 9%; bottom: 30%; }
+#screen-battle .enemy-helpers:not(.hidden) ~ .fx .fx-prop.path-rant-pop { left: calc(var(--fx-enemy-x) - 22%); }
 /* Firmware-Update (bar-on-me): Beschriftung über dem Requisit, den Balken zeichnet theme.css */
 #screen-battle .fx-prop .fw-label { top: auto; right: auto; bottom: 100%; left: 50%; translate: -50% 0; padding: 2px 6px; white-space: nowrap; font: 800 12px/1.15 var(--font-body); color: var(--paper); background: var(--ink); }
 

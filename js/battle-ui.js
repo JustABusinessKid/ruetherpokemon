@@ -35,15 +35,23 @@ const RARITY_COLORS = RARITIES.map(r => `var(--r-${r.id})`);
 // hit = Tipp-Treffer am Gegner (--fx-hit-*, css/battle.css): rechts neben dem Gesicht, solange dort ein echtes ist
 const AT = { enemy: { x: 'var(--fx-enemy-x)', y: 'var(--fx-enemy-y)' }, me: { x: 'var(--fx-me-x)', y: 'var(--fx-me-y)' }, hit: { x: 'var(--fx-hit-x)', y: 'var(--fx-hit-y)' } };
 // Zahlen am Gegner über den Tipp-Treffern (nicht über den rechten Rand); bei mir: --fx-me-num-y (css/battle.css), über der
-// Helferreihe, solange Christian und Micha dort stehen; beside = rechts neben meinem Gesicht im Flugscheiben-Strahl
+// Helferreihe, solange Christian und Micha dort stehen; beside = rechts neben meinem Gesicht im Flugscheiben-Strahl;
+// wildMe = bei mir im Wildkampf: rechts neben seinem echten Gesicht unter den Tipp-Zahlen (sein Rempler geht nach links unten), wenig Streuung
 const TXT = {
   enemy: { x: 'min(var(--fx-hit-x), calc(100% - 44px))', y: 'calc(var(--fx-hit-y) - 12%)' },
   me: { x: 'calc(var(--fx-me-x) + 4%)', y: 'var(--fx-me-num-y)' },
   beside: { x: 'calc(var(--fx-me-x) + 30%)', y: 'var(--fx-me-num-y)' },
+  wildMe: { x: 'calc(100% - 40px)', y: 'var(--fx-me-num-y)', spread: 32 },
 };
 // Info-Texte zum eigenen Rüther (Ausgewichen!, … du bist dran!): mittig, damit lange Namen nicht links aus der Bühne laufen,
-// 12 % über den Schadenszahlen; im Wildkampf unter seinem echten Gesicht (--fx-info-me-y, css/battle.css)
+// 12 % über den Schadenszahlen; im Wildkampf unter seinem echten Gesicht (--fx-info-me-y, css/battle.css).
+// Kurze (Ausgewichen!, betäubt, im Strahl) weichen der angekündigten bzw. letzten Boss-Attacke aus: bei der Krupp-Rede nach links
+// (Sprechblase rechts), im Flugscheiben-Strahl nach rechts (mein Gesicht steigt links hoch), im Wildkampf rechts der Mitte
+// (meine Reiter-Requisiten steigen links vom Bühnenboden auf)
 const INFO_ME = { x: '50%', y: 'var(--fx-info-me-y)' };
+const INFO_SIDE = { krupp: '30%', ray: '60%' }, INFO_WILD = '64%';
+// Wildkampf: Hinweise zum Gegner (geschwächt) ebenso unten rechts der Mitte; neben seinem echten Gesicht ragten lange Wörter hinein
+const INFO_WILD_ENEMY = { x: INFO_WILD, y: INFO_ME.y };
 const jitter = (x, px) => `calc(${x} + ${Math.round((Math.random() - 0.5) * px)}px)`;
 // Einschlag-Sheet wächst mit dem Schaden: Tipp (3) ≈ 76 px, Spezial (40) = 224 px
 const impactSize = dmg => Math.min(256, 64 + Math.round(dmg) * 4);
@@ -156,14 +164,27 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
   const rider = f => ({ rider: f.id, riderRarity: f.rarity || 'normal' });
   const sheet = (name, at, opts = {}) => playSheet(fx, name, { ...AT[at], ...opts });
   let numSeq = 0; // Zahlen in drei Höhen (−22/0/+22 px) staffeln, damit schnelle Tipps nicht übereinander liegen
-  const num = (t, at, kind = 'info', ms = 900) => floatText(fx, t, { x: jitter(TXT[at].x, 60), y: `calc(${TXT[at].y} + ${(numSeq++ % 3 - 1) * 22}px)`, kind, ms });
+  const num = (t, at, kind = 'info', ms = 900) => {
+    const p = TXT[at === 'me' && ctx.wild ? 'wildMe' : at];
+    return floatText(fx, t, { x: jitter(p.x, p.spread || 60), y: `calc(${p.y} + ${(numSeq++ % 3 - 1) * 22}px)`, kind, ms });
+  };
   const dmgNum = (n, at) => num(`-${n}`, at, n >= 25 ? 'big' : 'hurt');
-  const text = (t, at, kind = 'info') => floatText(fx, t, { ...(at === 'me' ? INFO_ME : TXT[at]), kind, ms: 1200 });
+  const text = (t, at, kind = 'info', aside = false) => {
+    const x = aside && (INFO_SIDE[state.enemy.warning?.attack.fx || bossFx] || (ctx.wild && INFO_WILD));
+    return floatText(fx, t, { ...(at === 'me' ? INFO_ME : ctx.wild ? INFO_WILD_ENEMY : TXT[at]), ...(x && { x }), kind, ms: 1200 });
+  };
   function hitEnemy(n) {
     anim(enemySprite, 'shake', 300);
     anim(enemySprite, 'hit', 70); // 2 Frames weiß (echtes Gesicht nur heller, css/battle.css)
-    sheet('impact', 'hit', { size: impactSize(n) });
-    later(() => dmgNum(n, 'enemy'), 50);
+    // steht eine Mega-Zahl („+70 °C“) über ihm: Einschlag und Zahl rechts daneben (.side, css/battle.css), nicht darunter
+    const side = !!fx.querySelector(':scope > .fx-text.mega');
+    sheet('impact', 'hit', { size: impactSize(n) }).el.classList.toggle('side', side);
+    later(() => dmgNum(n, 'enemy').el.classList.toggle('side', side), 50);
+  }
+  // Mega-Zahl über dem Gegner (1,4 s); Tipp-Zahlen und -Einschläge darunter rücken rechts daneben (.side), neue landen dort (hitEnemy)
+  function mega(t) {
+    fx.querySelectorAll(':scope > .fx-text:not(.burst), :scope > .fx-sheet[data-sheet="impact"]').forEach(n => n.classList.add('side'));
+    floatText(fx, t, { x: '50%', y: 'calc(var(--fx-enemy-y) - 10%)', kind: 'mega', ms: 1400 });
   }
   // Einschlag einer Spezial-Attacke: ₿-Explosion, große Zahl 1,6 s, Beben, Boss blitzt zweimal, ab 20 Schaden ₿-Regen
   function specialHit(n) {
@@ -274,7 +295,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
       node('moon', 2600, bgEl);
       prop('candles', 'rise-from-bottom', { ms: 1600, size: 256 });
       later(() => prop('btc-rocket', 'launch', { ms: 1400, size: 176, ...rider(me) }, { '--rider-x': '34%', '--rider-y': '40%', '--rider-size': '42%' }), 500);
-      later(() => floatText(fx, '+70 %', { x: '50%', y: 'calc(var(--fx-enemy-y) - 10%)', kind: 'mega', ms: 1400 }), 1650);
+      later(() => mega('+70 %'), 1650);
       return 1650;
     },
     handshake(atk, me) {
@@ -339,7 +360,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     },
     overheat() {
       const hit = toMe('heat', slow(900), 224);
-      later(() => floatText(fx, '+70 °C', { x: '50%', y: 'calc(var(--fx-enemy-y) - 10%)', kind: 'mega', ms: 1400 }), slow(200));
+      later(() => mega('+70 °C'), slow(200));
       later(() => anim(stage, 'overheat', 1000), hit);
       return hit;
     },
@@ -413,9 +434,11 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
       const hits = atk.damage > 0, ms = slow(800), size = atk.prop === 'speech' ? 176 : 128;
       const html = atk.prop === 'speech' ? bubbleText(atk.flavour || pickLine(atk.ownerId, 'fight')) : '';
       // Gesicht im Requisit statt darüber: am Scheitel von Bogen bzw. Aufstieg steckte es sonst unter der Gegner-Blase
-      // (sein Ausruf steht dort); bei der Sprechblase unter dem Text
-      prop(atk.prop || 'chart-up', hits ? 'arc-to-me' : 'rise-at-enemy', { ms, size, html, rider: atk.ownerId || ctx.wild?.id, riderRarity: ctx.wild?.rarity || 'normal' },
+      // (sein Ausruf steht dort); bei der Sprechblase unter dem Text. Vor seinem echten Gesicht eingehängt: kommt hinter ihm hervor
+      const p = prop(atk.prop || 'chart-up', hits ? 'arc-to-me' : 'rise-at-enemy', { ms, size, html, rider: atk.ownerId || ctx.wild?.id, riderRarity: ctx.wild?.rarity || 'normal' },
         { '--spin': '-30deg', '--rider-x': '30%', '--rider-y': atk.prop === 'speech' ? '72%' : '34%' });
+      p.el.classList.add('from-face');
+      fx.prepend(p.el);
       return hits ? Math.round(ms * 0.86) : 0;
     },
   };
@@ -436,7 +459,8 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
         hideSay();
         if (rest > 0) later(() => { if (!state.over) talk(was.line, was.shout, Math.max(rest, 1500)); }, freeze);
         const subs = (LINES[me.id]?.fight || []).filter(l => !l.includes(atk.name)); // Spruch wiederholt nicht den Titel
-        banner(fx, { title: atk.fx === 'family' ? 'Familientreffen!' : atk.name, sub: subs[Math.floor(Math.random() * subs.length)] || '', portrait: sprite(me.id), rarity: me.rarity, ms: freeze });
+        const board = banner(fx, { title: atk.fx === 'family' ? 'Familientreffen!' : atk.name, sub: subs[Math.floor(Math.random() * subs.length)] || '', portrait: sprite(me.id), rarity: me.rarity, ms: freeze }).el.querySelector('.fx-board');
+        fx.style.setProperty('--board-clear', `${board.offsetTop + board.offsetHeight + 8}px`); // Unterkante samt Schatten: darunter rückt das Gesicht des Wilden (css/battle.css)
         batchDelay = run(FX, atk, me);
         sheet('sparkle', 'me', { size: 128, ms: 700 });
         sfx.play('special'); haptic(20);
@@ -449,7 +473,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
       case 'specialDenied': anim(specials, 'shake-x', 400); break;
       case 'stunnedTap': { // höchstens ein „betäubt" gleichzeitig (lebt 1,2 s)
         const now = performance.now();
-        if (now - stunTextAt > 1200) { stunTextAt = now; text('betäubt', 'me'); } // stunTextAt kann in der Zukunft liegen (stun)
+        if (now - stunTextAt > 1200) { stunTextAt = now; text('betäubt', 'me', 'info', true); } // stunTextAt kann in der Zukunft liegen (stun)
         break;
       }
       case 'warn':
@@ -459,7 +483,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
           nextLineAt = state.time + SAY_MS + 500; // nächster Spruch gleich nach dem Ausruf, damit er vor dem nächsten ausreden kann
         }
         break;
-      case 'dodge': anim(meSprite, `dodge-${dodgeDir}`, 450); text('Ausgewichen!', 'me'); sfx.play('dodge'); break;
+      case 'dodge': anim(meSprite, `dodge-${dodgeDir}`, 450); text('Ausgewichen!', 'me', 'info', true); sfx.play('dodge'); break;
       case 'enemyAttack': {
         bossFx = e.attack.fx; bossHit = e.fighter; // eine Betäubung danach im selben Schritt gehört zu dieser Attacke
         batchDelay = run(BOSS_FX, e.attack, e.fighter);
@@ -486,7 +510,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
         if (at === 'enemy') later(() => { for (let i = 0; i < 3; i++) later(() => num('Z', 'enemy', 'info', 1400), i * 450); }, batchDelay);
         else if (t) { // kein „betäubt" darüber; geht er am Treffer K.o., steht dort nur „… ist pleite!"
           stunTextAt = performance.now() + batchDelay;
-          if (bossHit?.btc > 0) later(() => text(t, 'me'), batchDelay);
+          if (bossHit?.btc > 0) later(() => text(t, 'me', 'info', true), batchDelay);
         }
         else later(() => prop('firmware', 'bar-on-me', { ms: e.ms, size: 144, html: '<span class="fw-label">Firmware-Update…</span>' }), batchDelay);
         break;
@@ -632,8 +656,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     enemySprite.classList.toggle('windup', !!w);
     enemySprite.classList.toggle('stunned', e.status.stunUntil > t);
     enemySprite.classList.toggle('weak', e.status.weakenedUntil > t);
-    enemySprite.classList.toggle('poisoned', !!e.status.poison);
-    meSprite.classList.toggle('poisoned', !!me.status.poison);
+    enemySprite.classList.toggle('poisoned', !!e.status.poison); // mein echtes Gesicht bleibt ungetönt, „Gift" steht in der Leiste
     helpers.classList.toggle('hidden', !state.summons.length);
     enemyHelpers.classList.toggle('hidden', !state.enemySummons?.length);
     if (combo && t - lastHitAt > COMBO_HIDE) resetCombo();
@@ -829,6 +852,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     for (const id of timers) clearTimeout(id);
     timers.clear(); pending.clear();
     window.removeEventListener('keydown', onKey);
+    bgEl.after(enemySprite); // zurück aus .fx (Wildkampf, start)
     fx.innerHTML = ''; bgEl.innerHTML = ''; helpers.innerHTML = ''; helpers.className = 'helpers hidden';
     enemyHelpers.innerHTML = ''; enemyHelpers.className = 'enemy-helpers hidden';
     rede.forEach(p => p.stop()); rede = [];
@@ -855,7 +879,8 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     if (scene) el.dataset.arena = scene; else delete el.dataset.arena;
     const me = state.team[state.active];
     enemySprite.src = w ? sprite(w.id) : bossArt(state.enemy.id);
-    if (w) enemySprite.classList.add('face', `r-${w.rarity}`); // echtes Gesicht im Seltenheitsrahmen
+    // echtes Gesicht im Seltenheitsrahmen, in der Effekt-Ebene über Dimmer, Requisiten und ₿-Regen (css/battle.css)
+    if (w) { enemySprite.classList.add('face', `r-${w.rarity}`); fx.prepend(enemySprite); }
     meSprite.src = sprite(me.id);
     setFrame(me);
     anim(meSprite, 'slide-in', 500);

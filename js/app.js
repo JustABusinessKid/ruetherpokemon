@@ -85,7 +85,7 @@ function persist() {
   online.syncSoon();
 }
 function updateHud() {
-  document.querySelectorAll('.sats-chip').forEach(b => { b.textContent = `💰 ${fmt(save.sats)}`; });
+  document.querySelectorAll('.sats-chip').forEach(b => { b.lastChild.textContent = fmt(save.sats); }); // Münz-Icon steht im HTML davor
   $('#hud-dex').textContent = `Dex ${dexCount(save)}/${DEX_TOTAL}`;
   const mastered = ARENAS.filter(a => save.arenaMastered[a.id]).length;
   $('#badge').classList.toggle('hidden', !(save.victoryShown || mastered === ARENAS.length));
@@ -108,9 +108,9 @@ function updateBanners() {
   const left = (save.lureUntil || 0) - Date.now();
   lure.classList.toggle('hidden', left <= 0);
   const wave = nextWaveAt - Date.now();
-  if (left > 0) lure.textContent = `🧲 Lockmodul: ${clock(left)}${wave > 0 ? ` · neue Welle in ${Math.ceil(wave / 1000)} s` : ''}`;
+  if (left > 0) lure.lastChild.textContent = `Lockmodul: ${clock(left)}${wave > 0 ? ` · neue Welle in ${Math.ceil(wave / 1000)} s` : ''}`;
   $('#hour-banner').classList.toggle('hidden', !isHappyHour());
-  $('#hour-banner').textContent = `⏰ Rüther-Stunde bis ${CONST.HOUR_END}:00 · doppelte Spawns, 50 % mehr Sats`;
+  $('#hour-banner').lastChild.textContent = `Rüther-Stunde bis ${CONST.HOUR_END}:00 · doppelte Spawns, 50 % mehr Sats`;
   const f = featuredRuether(today);
   const fb = $('#featured-banner');
   fb.classList.remove('hidden');
@@ -139,7 +139,7 @@ function showLevelUps() {
 function afterChange() {
   for (const a of checkAchievements(save, Date.now())) {
     sfx.play('quest');
-    toast(`Erfolg: ${a.name} (+${CONST.ACHIEVEMENT_SATS} 💰)`, { icon: a.icon, kind: 'achievement' });
+    toast(`Erfolg: ${a.name} (+${CONST.ACHIEVEMENT_SATS} Sats)`, { icon: a.icon, kind: 'achievement' });
   }
   persist();
 }
@@ -151,7 +151,7 @@ function dailyCheck() {
   const st = applyStreak(save, today);
   if (st) {
     sfx.play('coin');
-    popup({ title: `🔥 Tag ${st.streak} in Folge`, html: `<p>${st.streak === 1 ? 'Dein Tagesbonus. Komm morgen wieder, dann gibt es mehr.' : 'Danke fürs Wiederkommen.'}</p><p class="big">+${fmt(st.bonus)}${ico('coin', 'ico-in')}</p>` });
+    popup({ title: `Tag ${st.streak} in Folge`, icon: 'star', html: `<p>${st.streak === 1 ? 'Dein Tagesbonus. Komm morgen wieder, dann gibt es mehr.' : 'Danke fürs Wiederkommen.'}</p><p class="big">+${fmt(st.bonus)}${ico('coin', 'ico-in')}</p>` });
   }
   persist();
 }
@@ -224,7 +224,9 @@ function refreshSpawns() {
   if (lure) {
     // v8 §3: Lockmodul-Welle, alles neu direkt um dich; nur der gerade offene Spawn (Fang-Screen, Wildkampf) bleibt
     const keep = current === 'screen-catch' ? openSpawn : fight?.spawn || null;
-    spawns = lureWave({ player: pos, ruethers: RUETHERS, arenas: ARENAS, now, rng: Math.random, keep, featured: featuredRuether(today) });
+    // Gesichter nicht aufeinander, nicht auf Arena-Schilder (Besitzer-Foto) und nicht unter Haunebu- oder Folge-Knopf
+    const room = map.lureRoom(pos, [$('#btn-haunebu'), $('#btn-locate')]);
+    spawns = lureWave({ player: pos, ruethers: RUETHERS, arenas: ARENAS, now, rng: Math.random, keep, featured: featuredRuether(today), ...room });
     if (debugLegendary && spawns.length > (keep ? 1 : 0)) spawns[spawns.length - 1].rarity = 'legendaer';
     if (pos) { map.wave(); if (current === 'screen-map') sfx.play('wave'); }
   } else {
@@ -305,7 +307,7 @@ const collection = createCollectionScreen({
   onTeamChange(team) { save.team = team; persist(); },
   onPowerUp(uid) {
     const res = powerUp(save, uid);
-    if (res.ok) { sfx.play('levelup'); toast(`Level ${res.level}! −${fmt(res.cost)} 💰`, { icon: '⬆️', kind: 'level' }); trackQuest(save, 'powerup'); afterChange(); }
+    if (res.ok) { sfx.play('levelup'); toast(`Level ${res.level}! −${fmt(res.cost)} Sats`, { kind: 'level' }); trackQuest(save, 'powerup'); afterChange(); }
     else if (res.reason === 'sats') toast('Nicht genug Sats.');
     return res;
   },
@@ -351,7 +353,7 @@ const shop = createShopScreen({
   onBuy(id) {
     if (id === 'haunebu') return buyHaunebu();
     const res = buyItem(save, id, Date.now());
-    if (res.ok) { sfx.play('coin'); persist(); toast(id === 'lockmodul' ? `🧲 Lockmodul aktiv! Alle ${CONST.LURE_INTERVAL / 1000} s neue Rüther direkt bei dir.` : '🪙 Super-Münze gekauft'); if (id === 'lockmodul') refreshSpawns(); }
+    if (res.ok) { sfx.play('coin'); persist(); toast(id === 'lockmodul' ? `Lockmodul aktiv! Alle ${CONST.LURE_INTERVAL / 1000} s neue Rüther direkt bei dir.` : 'Super-Münze gekauft', { icon: id === 'lockmodul' ? 'beer' : 'coin' }); if (id === 'lockmodul') refreshSpawns(); }
     else toast('Nicht genug Sats.');
     return res;
   },
@@ -365,7 +367,7 @@ const questsScreen = createQuestsScreen({
     const r = claimQuest(save, id);
     if (!r) return null;
     sfx.play('quest'); haptic(30);
-    toast(`Quest erledigt: +${fmt(r.sats)} 💰, +${r.xp} XP`, { icon: '📋', kind: 'sats' });
+    toast(`Quest erledigt: +${fmt(r.sats)} Sats, +${r.xp} XP`, { icon: 'quest', kind: 'sats' });
     gainXp(r.xp);
     afterChange();
     return r;
@@ -713,7 +715,7 @@ const onboarding = createOnboarding({
     if (first) {
       save.sats += CONST.STARTER_SATS;
       save.items.supercoin = (save.items.supercoin || 0) + CONST.STARTER_SUPERCOINS;
-      toast(`Willkommen, ${nickname}! +${CONST.STARTER_SATS} 💰 und eine Super-Münze.`, { icon: '🎁', kind: 'sats' });
+      toast(`Willkommen, ${nickname}! +${CONST.STARTER_SATS} Sats und eine Super-Münze.`, { icon: 'bag', kind: 'sats' });
     }
     save.seen.onboarding = true;
     persist();
@@ -773,7 +775,7 @@ $('#dbg-lure').addEventListener('click', () => { save.lureUntil = Date.now() + C
 $('#dbg-respawn').addEventListener('click', () => { spawns = []; refreshSpawns(); toast('Spawns neu'); });
 $('#dbg-stops').addEventListener('click', () => { if (!pos) return toast('Keine Ortung.'); stopSeq++; stops = fakeStops(pos, Math.random); renderStops(); toast('3 Fake-Stops'); });
 $('#dbg-catchall').addEventListener('click', () => { for (const r of RUETHERS) if (!save.box.some(i => i.id === r.id)) catchReward(save, r.id, 'normal', Date.now()); afterChange(); toast('Alle gefangen'); });
-$('#dbg-sats').addEventListener('click', () => { save.sats += 1000; persist(); toast('+1000 💰'); });
+$('#dbg-sats').addEventListener('click', () => { save.sats += 1000; persist(); toast('+1000 Sats', { kind: 'sats' }); });
 $('#dbg-xp').addEventListener('click', () => { gainXp(500); afterChange(); toast('+500 XP'); });
 $('#dbg-legendary').addEventListener('click', e => { debugLegendary = !debugLegendary; e.target.textContent = `Nächster Spawn legendär: ${debugLegendary ? 'an' : 'aus'}`; });
 $('#dbg-weakboss').addEventListener('click', e => { debugWeakBoss = !debugWeakBoss; e.target.textContent = `Boss fast tot: ${debugWeakBoss ? 'an' : 'aus'}`; });

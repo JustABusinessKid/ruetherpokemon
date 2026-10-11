@@ -135,10 +135,11 @@
 .q-card-team img { width: 48px; height: 48px; background: var(--paper-2); border: 3px solid var(--rc, var(--r-normal)); outline: 2px solid var(--ink); }
 .q-card .q-go { align-self: stretch; margin-top: 4px; }
 
+/* Endstempel ohne Abdunkeln: Schild oben, Text unten, dazwischen bleibt das Team frei (die Kamera hält es in der Mitte) */
 .q-stamp {
   position: absolute; inset: 0; z-index: 9;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px;
-  text-align: center; background: rgba(27, 43, 75, .6); cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 24px 12px 10px;
+  text-align: center; cursor: pointer;
 }
 .q-stamp b {
   padding: 6px 18px; rotate: -5deg;
@@ -147,8 +148,11 @@
   animation: q-stamp .4s steps(4, end) both;
 }
 .q-stamp.fail b, .q-stamp.abort b { color: #E0634C; }
-.q-stamp p { max-width: 320px; font: 800 15px/1.35 var(--font-body); color: var(--paper); text-shadow: 2px 2px 0 var(--ink); }
-.q-stamp span { font: 800 12px/1 var(--font-body); color: var(--paper-2); animation: q-blink 1.4s steps(2, end) infinite; }
+.q-stamp p {
+  max-width: 360px; margin: auto 0 0; padding: 8px 12px;
+  font: 800 15px/1.35 var(--font-body); color: var(--paper); background: var(--ink); border: 3px solid var(--paper-2); box-shadow: var(--shadow);
+}
+.q-stamp span { padding: 4px 8px; font: 800 12px/1 var(--font-body); color: var(--paper-2); background: var(--ink); animation: q-blink 1.4s steps(2, end) infinite; }
 
 /* ---------- Fuß: Team, Kräfte, Knöpfe ---------- */
 .q-bottom {

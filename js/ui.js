@@ -3,7 +3,7 @@ export const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<':
 
 // ---------- Kit-Icons (art/icon-<name>.png) ----------
 export const KIT = ['coin', 'star', 'trophy', 'lightning', 'quest', 'gear', 'beer', 'profile', 'bag', 'map', 'shop', 'lock', 'haunebu'];
-// Alte Emoji-Aufrufe (app.js, data.js) → Kit-Name. Schlüssel ohne Variationszeichen U+FE0F.
+// Alte Emoji-Icons (data.js) → Kit-Name. Schlüssel ohne Variationszeichen U+FE0F.
 const EMOJI = {
   '💰': 'coin', '🪙': 'coin', '🎯': 'coin', '🧲': 'beer', '🍺': 'beer', '⏰': 'lightning', '⚡': 'lightning', '💥': 'lightning',
   '🔥': 'star', '⬆': 'star', '⭐': 'star', '🌟': 'star', '✨': 'star', '⚗': 'star', '🔵': 'star', '🟣': 'star', '🟡': 'star',
@@ -21,12 +21,6 @@ export const kitHtml = html => String(html).replace(EMOJI_RE, m => {
   return n ? ico(n, 'ico-in') : '';
 });
 export const kitify = text => kitHtml(esc(text));
-// Elemente, deren Text app.js setzt (Sats-Chips, Banner): Emoji nach jeder Änderung durch Icons ersetzen.
-// Umschreiben nur, wenn ein Emoji ersetzt wurde – sonst würde der Observer sich selbst endlos auslösen.
-for (const el of document.querySelectorAll('.sats-chip, .banner')) {
-  new MutationObserver(() => { const t = el.textContent, out = kitify(t); if (out !== esc(t)) el.innerHTML = out; })
-    .observe(el, { childList: true, characterData: true, subtree: true });
-}
 
 // ---------- Screens, Tabs ----------
 let tabHandler = null;
@@ -71,11 +65,11 @@ export function toast(text, { icon = '', kind = 'info' } = {}) {
 // ---------- Popups ----------
 // Warteschlange: das nächste erscheint, wenn das vorige geschlossen ist.
 // html kommt unverändert in die Karte (Nutzerdaten in value/textarea dürfen nicht umgeschrieben werden): Icons per ico().
-// Promise liefert den Index des Knopfs unten oder den data-choice-Wert eines Knopfs im html.
+// icon: Kit-Name vor dem Titel. Promise liefert den Index des Knopfs unten oder den data-choice-Wert eines Knopfs im html.
 const queue = [];
 let open = false;
-export function popup({ title, html = '', buttons = [{ label: 'OK', primary: true }] }) {
-  return new Promise(resolve => { queue.push({ title, html, buttons, resolve }); if (!open) next(); });
+export function popup({ title, icon = '', html = '', buttons = [{ label: 'OK', primary: true }] }) {
+  return new Promise(resolve => { queue.push({ title, icon, html, buttons, resolve }); if (!open) next(); });
 }
 function next() {
   const el = document.getElementById('popup');
@@ -83,7 +77,7 @@ function next() {
   if (!item) { open = false; el.classList.add('hidden'); return; }
   open = true;
   const card = el.querySelector('.popup-card');
-  card.innerHTML = `<h2>${kitify(item.title)}</h2><div class="popup-body">${item.html}</div><div class="popup-buttons"></div>`;
+  card.innerHTML = `<h2>${item.icon ? `${ico(item.icon, 'ico-in')} ` : ''}${kitify(item.title)}</h2><div class="popup-body">${item.html}</div><div class="popup-buttons"></div>`;
   const bb = card.querySelector('.popup-buttons');
   item.buttons.forEach((b, i) => {
     const btn = document.createElement('button');

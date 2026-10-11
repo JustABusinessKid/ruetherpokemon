@@ -6,6 +6,7 @@ import {
 } from '../js/progress.js';
 import { checkAchievements, seededRng } from '../js/quests.js';
 import { lureWave } from '../js/spawn.js';
+import { lureZoom, lureRoom } from '../js/map.js';
 import { distance, offsetPoint } from '../js/geo.js';
 import { makeFighter, makeBoss, createBattle, tick } from '../js/battle.js';
 import { CONST, ARENAS, BOSSES, RUETHERS, RUETHER_BY_ID } from '../js/data.js';
@@ -205,6 +206,52 @@ test('v8: lureWave: am PC Sale kann Micha kommen, Rüther des Tages häufiger', 
   assert.deepEqual([...ids].sort(), ['christian', 'micha', 'viktor']);
   const feat = lureWave({ player: HAGEN, ruethers: RUETHERS, arenas: ARENAS, now: 0, rng: seq(0, 0.3), featured: 'viktor' });
   assert.ok(feat.every(s => s.ruetherId === 'viktor'));
+});
+
+// Bildschirm-Pixel relativ zum Spieler in der Kartenmitte bei lureZoom (Karte genordet, y nach unten)
+const toPx = (pos, p, side) => {
+  const m = (156543 * Math.cos((pos.lat * Math.PI) / 180)) / 2 ** lureZoom(pos.lat, side);
+  const dE = Math.sign(p.lon - pos.lon) * distance({ lat: pos.lat, lon: p.lon }, pos), dN = Math.sign(p.lat - pos.lat) * distance({ lat: p.lat, lon: pos.lon }, pos);
+  return [dE / m, -dN / m];
+};
+// zwei achsenparallele Rechtecke (Mitte, halbe Kantenlänge) überlappen
+const hit = ([ax, ay], ah, [bx, by], bh) => Math.abs(ax - bx) < ah + bh && Math.abs(ay - by) < ah + bh;
+
+test('v8: lureWave an Worringen/Keller: kein Gesicht auf Arena-Schild, Besitzer-Foto, Keller-Plakette oder anderem Gesicht', () => {
+  const W = ARENAS.find(a => a.id === 'worringen'), K = ARENAS.find(a => a.id === 'keller');
+  for (const [at, side] of [[W, 375], [W, 336], [W, 390], [K, 375], [K, 390], [PCSALE, 375]]) { // 336: Karte bei 375×667 mit Haunebu-Chip
+    const pos = offsetPoint(at, 40, 0); // so landet die Haunebu (app.js land)
+    const room = lureRoom(pos, ARENAS, side);
+    let few = 0;
+    for (let i = 0; i < 300; i++) {
+      const list = lureWave({ player: pos, ruethers: RUETHERS, arenas: ARENAS, now: i, rng: seededRng(Math.imul(i + 3, 2654435761)), ...room });
+      if (list.length < CONST.LURE_SPAWN_MIN) few++;
+      assert.ok(list.length >= 2, `nur ${list.length}`);
+      for (const s of list) {
+        for (const a of ARENAS) {
+          const [x, y] = toPx(pos, a, side), c = a.id === 'keller' ? [x + 44, y + 12] : [x, y]; // Keller-Schild rechts versetzt (map.js)
+          assert.ok(!hit(toPx(pos, s, side), 24, c, 34), `Gesicht auf ${a.id} bei ${at.id}/${side}`);
+        }
+        for (const t of list) if (t !== s) assert.ok(distance(s, t) >= 44 && !hit(toPx(pos, s, side), 26, toPx(pos, t, side), 26), `Gesichter decken sich bei ${at.id}/${side}`);
+      }
+    }
+    assert.ok(few < 60, `zu oft unter ${CONST.LURE_SPAWN_MIN}: ${few}/300`);
+  }
+});
+
+test('v8: lureWave: neue Welle hält Abstand zum offenen Spawn und bleibt unter keinem Knopf', () => {
+  const side = 375, fab = { x: 187.5 - 16 - 24, y: 220 - 84 - 24, h: 24 }; // Haunebu-Knopf, Karte 375×440
+  const room = lureRoom(HAGEN, ARENAS, side, [fab]);
+  for (let i = 0; i < 300; i++) {
+    const keep = { id: 'offen', ruetherId: 'viktor', ...offsetPoint(HAGEN, 48 * Math.cos(i), 48 * Math.sin(i)), expires: 9e12, rarity: 'normal' };
+    const list = lureWave({ player: HAGEN, ruethers: RUETHERS, arenas: ARENAS, now: i, rng: seededRng(Math.imul(i + 11, 2654435761)), keep, ...room });
+    assert.equal(list[0], keep);
+    assert.ok(list.length - 1 >= CONST.LURE_SPAWN_MIN - 1, `nur ${list.length - 1}`);
+    for (const s of list.slice(1)) {
+      assert.ok(distance(s, keep) >= 44 && !hit(toPx(HAGEN, s, side), 26, toPx(HAGEN, keep, side), 26), `auf dem offenen Spawn: ${distance(s, keep)}`);
+      assert.ok(!hit(toPx(HAGEN, s, side), 26, [fab.x, fab.y], fab.h), 'unter dem Haunebu-Knopf');
+    }
+  }
 });
 
 // ---------- §5 Quests: Freischaltung, Belohnung, Log ----------
