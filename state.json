@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1791734846,
+ "lastMsgTime": 1791744676,
  "players": {
   "legacy:Josef": {
    "nickname": "Josef",
@@ -61,34 +61,34 @@
   "C-w_CUaEP-FRT271jxj2J9Fpmi7nZRiJBkW7o1pXg3I": {
    "nickname": "Adolf",
    "avatar": "micha",
-   "sats": 110915,
+   "sats": 82075,
    "dex": 20,
-   "trophies": 47,
+   "trophies": 48,
    "mastered": 5,
-   "level": 27,
-   "xp": 2780,
+   "level": 28,
+   "xp": 540,
    "leader": {
     "id": "micha",
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1791734846070
+   "t": 1791744675941
   },
   "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
    "nickname": "BTC",
    "avatar": "christian",
-   "sats": 48500,
+   "sats": 54830,
    "dex": 20,
    "trophies": 59,
    "mastered": 5,
-   "level": 24,
-   "xp": 3140,
+   "level": 25,
+   "xp": 880,
    "leader": {
     "id": "christian",
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1791714546748
+   "t": 1791742738682
   }
  },
  "arenas": {
@@ -103,14 +103,14 @@
    "since": 1791657228380
   },
   "huettenberg": {
-   "ownerId": "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k",
+   "ownerId": "C-w_CUaEP-FRT271jxj2J9Fpmi7nZRiJBkW7o1pXg3I",
    "leader": {
-    "id": "christian",
+    "id": "micha",
     "rarity": "legendaer",
     "level": 20
    },
    "level": 5,
-   "since": 1791706216154
+   "since": 1791742569196
   },
   "worringen": {
    "ownerId": "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k",
@@ -144,6 +144,83 @@
   }
  },
  "events": [
+  {
+   "at": 1791742671286,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Viktor erschaffen!",
+   "m": "7Ug_7uGSks4-3ZsG"
+  },
+  {
+   "at": 1791742669637,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Viktor erschaffen!",
+   "m": "SZTyKMgc-rGRokQK"
+  },
+  {
+   "at": 1791742569196,
+   "nickname": "Adolf",
+   "kind": "arena",
+   "text": "hat Hüttenbergstraße erobert (Lv. 5) und BTC rausgeworfen.",
+   "m": "YgcdCo-Myk_lh7Jz"
+  },
+  {
+   "at": 1791742569179,
+   "nickname": "Adolf",
+   "kind": "achievement",
+   "text": "hat Hüttenbergstraße gemeistert!",
+   "m": "8bCM3ZTQRMnp45K7"
+  },
+  {
+   "at": 1791742487951,
+   "nickname": "Adolf",
+   "kind": "quest",
+   "text": "hat die Haunebu-Quest „Feuer im Bruch“ geschafft!",
+   "m": "yMkDcDw-BZR6DGNr"
+  },
+  {
+   "at": 1791742135650,
+   "nickname": "BTC",
+   "kind": "quest",
+   "text": "hat die Haunebu-Quest „Nie wieder duschen“ geschafft!",
+   "m": "bG1FxrtN5EGvVQuL"
+  },
+  {
+   "at": 1791742070645,
+   "nickname": "Adolf",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Viktor erschaffen!",
+   "m": "mAhawTJlD7MmJCAE"
+  },
+  {
+   "at": 1791742068493,
+   "nickname": "Adolf",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Viktor erschaffen!",
+   "m": "OnZuuwRdUL5jgl2p"
+  },
+  {
+   "at": 1791742047663,
+   "nickname": "Adolf",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Christian erschaffen!",
+   "m": "zLZ2EnPtxQ4xS2pn"
+  },
+  {
+   "at": 1791742045286,
+   "nickname": "Adolf",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Christian erschaffen!",
+   "m": "lKei0Gz238Xr05RU"
+  },
+  {
+   "at": 1791741700103,
+   "nickname": "Adolf",
+   "kind": "quest",
+   "text": "hat die Haunebu-Quest „Nie wieder duschen“ geschafft!",
+   "m": "W5MvyJUkwehRJYHh"
+  },
   {
    "at": 1791714157997,
    "nickname": "BTC",
@@ -416,83 +493,6 @@
    "kind": "arena",
    "text": "hat Keller der Rütherschanze erobert (Lv. 5).",
    "m": "kV6PnG42vOQruB5P"
-  },
-  {
-   "at": 1791657331954,
-   "nickname": "BTC",
-   "kind": "achievement",
-   "text": "hat Keller der Rütherschanze gemeistert!",
-   "m": "9_jxx65Lb0rKwZP2"
-  },
-  {
-   "at": 1791657228380,
-   "nickname": "BTC",
-   "kind": "arena",
-   "text": "hat PC Sale erobert (Lv. 5).",
-   "m": "_Ftx9f7DfU6-Fple"
-  },
-  {
-   "at": 1791657228357,
-   "nickname": "BTC",
-   "kind": "achievement",
-   "text": "hat PC Sale gemeistert!",
-   "m": "sGk85n2QbWQ9wQGg"
-  },
-  {
-   "at": 1791657210293,
-   "nickname": "Adolf",
-   "kind": "arena",
-   "text": "hat Geheime Festung Neuschwabenland erobert (Lv. 5).",
-   "m": "7nTJvDRY8dv0Tmfn"
-  },
-  {
-   "at": 1791657210284,
-   "nickname": "Adolf",
-   "kind": "achievement",
-   "text": "hat Geheime Festung Neuschwabenland gemeistert!",
-   "m": "O8MBruYYn6-lssN5"
-  },
-  {
-   "at": 1791657203452,
-   "nickname": "Adolf",
-   "kind": "arena",
-   "text": "hat Geheime Festung Neuschwabenland erobert (Lv. 4).",
-   "m": "GwxbRoioitppJPay"
-  },
-  {
-   "at": 1791657196667,
-   "nickname": "Adolf",
-   "kind": "arena",
-   "text": "hat Geheime Festung Neuschwabenland erobert (Lv. 3).",
-   "m": "TacLPZ31c3Kul5WI"
-  },
-  {
-   "at": 1791657190019,
-   "nickname": "Adolf",
-   "kind": "arena",
-   "text": "hat Geheime Festung Neuschwabenland erobert (Lv. 2) und BTC rausgeworfen.",
-   "m": "S0a4-QZ9UEkQsVnz"
-  },
-  {
-   "at": 1791657151259,
-   "nickname": "Adolf",
-   "kind": "arena",
-   "text": "hat Hüttenbergstraße erobert (Lv. 5) und BTC rausgeworfen.",
-   "m": "dvxd9fWPyaf9rULm"
-  },
-  {
-   "at": 1791657151250,
-   "nickname": "Adolf",
-   "kind": "achievement",
-   "text": "hat Hüttenbergstraße gemeistert!",
-   "m": "AgN0yd4_ylpk-Xwp"
-  },
-  {
-   "at": 1791657061835,
-   "nickname": "BTC",
-   "kind": "arena",
-   "text": "hat Geheime Festung Neuschwabenland erobert (Lv. 1) und Adolf rausgeworfen.",
-   "m": "Iferwrp797mYHur5"
   }
  ]
 }
