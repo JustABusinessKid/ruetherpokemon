@@ -1,5 +1,6 @@
 import { CONST, RARITIES, RARITY_BY_ID, RUETHERS, RUETHER_BY_ID, SHOP, ARENAS, ARENA_BY_ID } from './data.js';
 import { ringBonus } from './catch-logic.js';
+import { POOLS, FIXED } from './quest/abilities.js';
 
 // ---------- Seltenheit ----------
 export function rollRarity(rng) {
@@ -176,6 +177,60 @@ export function questResult(save, missionId, result, score = 0, alarmFree = fals
   return { sats, xp, best, newBest: score > (prev.best || 0), firstDone: ok && !prev.done, fine };
 }
 
+// ---------- v10: Quest-Fähigkeiten (Spec v10 §1, §3) ----------
+// Gehören dem Rüther an sich, nicht dem Exemplar: save.questAbilities[rid] = { levels: { aid: 1|2|3 }, slot: aid|null }.
+// Feste haben ohne Eintrag Stufe 1, Pool-Fähigkeiten erst nach dem Kauf. Der dritte Slot nimmt nur gekaufte Pool-Fähigkeiten.
+const isFixed = (rid, aid) => !!FIXED[rid]?.includes(aid);
+const isPool = (rid, aid) => !!POOLS[rid]?.includes(aid);
+const abEntry = (save, rid) => ((save.questAbilities ||= {})[rid] ||= { levels: {}, slot: null });
+export function abilityLevel(save, rid, aid) {
+  const lv = save.questAbilities?.[rid]?.levels?.[aid] || 0;
+  return isFixed(rid, aid) ? Math.max(1, lv) : isPool(rid, aid) ? lv : 0;
+}
+export function buyAbility(save, rid, aid) {
+  if (!isPool(rid, aid)) return { ok: false, reason: 'pool' };
+  if (abilityLevel(save, rid, aid)) return { ok: false, reason: 'besitz' };
+  if (save.sats < CONST.ABILITY_BUY) return { ok: false, reason: 'sats' };
+  save.sats -= CONST.ABILITY_BUY;
+  const e = abEntry(save, rid);
+  e.levels[aid] = 1;
+  if (!e.slot) e.slot = aid; // die erste gekaufte wird ausgerüstet
+  return { ok: true, cost: CONST.ABILITY_BUY, level: 1 };
+}
+export function upgradeAbility(save, rid, aid) {
+  const lv = abilityLevel(save, rid, aid);
+  if (!lv) return { ok: false, reason: 'fehlt' };
+  const cost = CONST.ABILITY_UP[lv + 1];
+  if (cost == null) return { ok: false, reason: 'max' };
+  if (save.sats < cost) return { ok: false, reason: 'sats' };
+  save.sats -= cost;
+  abEntry(save, rid).levels[aid] = lv + 1;
+  return { ok: true, cost, level: lv + 1 };
+}
+// Kostenlos; null leert den Slot
+export function equipAbility(save, rid, aid) {
+  if (aid != null && !isPool(rid, aid)) return { ok: false, reason: 'pool' };
+  if (aid != null && !abilityLevel(save, rid, aid)) return { ok: false, reason: 'fehlt' };
+  abEntry(save, rid).slot = aid ?? null;
+  return { ok: true };
+}
+// [fest, fest, Slot|null] mit Stufen, so bekommt createQuest sie pro Einheit
+export function loadoutFor(save, rid) {
+  const slot = save.questAbilities?.[rid]?.slot;
+  const one = aid => ({ id: aid, level: abilityLevel(save, rid, aid) });
+  return [...(FIXED[rid] || []).map(one), isPool(rid, slot) && abilityLevel(save, rid, slot) ? one(slot) : null];
+}
+// Migration: jeder Rüther bekommt einen Eintrag, nur bekannte IDs mit Stufe 1–3, Slot nur mit gekaufter Pool-Fähigkeit
+function cleanQuestAbilities(qa) {
+  const out = {};
+  for (const rid of Object.keys(FIXED)) {
+    const old = qa?.[rid], levels = {};
+    for (const aid of [...FIXED[rid], ...POOLS[rid]]) if ([1, 2, 3].includes(old?.levels?.[aid])) levels[aid] = old.levels[aid];
+    out[rid] = { levels, slot: isPool(rid, old?.slot) && levels[old.slot] ? old.slot : null };
+  }
+  return out;
+}
+
 // ---------- XP / Trainer-Level ----------
 export const xpForLevel = level => CONST.LEVEL_XP_STEP * level;
 export function levelProgress(save) {
@@ -291,7 +346,7 @@ export function levelUpUids(save, uids, n = CONST.WIN_LEVEL_UP) {
 export function emptySaveV3() {
   return {
     version: 3, box: [], team: [], sats: 0, dex: {}, arenaLevels: {}, arenaMastered: {}, arenaOwners: {},
-    items: { lockmodul: 0, supercoin: 0 }, lureUntil: 0, victoryShown: false, haunebuUntil: 0, beam: null, questLog: {},
+    items: { lockmodul: 0, supercoin: 0 }, lureUntil: 0, victoryShown: false, haunebuUntil: 0, beam: null, questLog: {}, questAbilities: cleanQuestAbilities(),
     stats: { catches: 0, arenaWins: 0, stops: 0, fusions: 0, specials: 0, dodges: 0, maxCombo: 0, superHits: 0, haunebuWins: 0, haunebuSummons: 0 },
     nextUid: 1,
     profile: null, xp: 0, trainerLevel: 1,
@@ -318,6 +373,7 @@ function upgradeToV3({ flugscheibe, ...s }) {
     haunebuUntil: Number.isFinite(s.haunebuUntil) ? s.haunebuUntil : 0,
     questLog: s.questLog && typeof s.questLog === 'object' && !Array.isArray(s.questLog) ? s.questLog : {},
     beam: s.beam && typeof s.beam.arenaId === 'string' && typeof s.beam.until === 'number' ? s.beam : null,
+    questAbilities: cleanQuestAbilities(s.questAbilities),
   };
 }
 export function migrate(d) {

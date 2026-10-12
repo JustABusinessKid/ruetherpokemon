@@ -228,7 +228,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .mission-card .m-reward { display: flex; align-items: center; flex-wrap: wrap; gap: 0 5px; font: 700 14px/1.3 var(--font-pixel); }
 .mission-card .m-start { grid-column: 1 / -1; min-height: 44px; }
 
-/* Team-Wahl: Box als Zeilen mit echtem Gesicht, Quest-Kräften und Reihenfolge-Plakette, unten Holzleiste mit Abflug */
+/* Team-Wahl: Box als Zeilen mit echtem Gesicht, Quest-Fähigkeiten und Reihenfolge-Plakette, unten Holzleiste mit Abflug */
 #screen-questteam .qt-scroll { flex: 1; min-height: 0; overflow: auto; padding: 16px 16px 12px; }
 #screen-questteam .section-title { margin: 16px 0 8px; }
 .qt-brief { display: flex; flex-direction: column; gap: 6px; font-size: 14px; line-height: 1.4; }
@@ -244,6 +244,16 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .qt-power { display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px 1px 2px; font: 800 12px/1.2 var(--font-body); background: var(--paper-2); border: 2px solid var(--ink); }
 .qt-row.on .qt-power { background: var(--paper); }
 .qt-power img { width: 20px; height: 20px; }
+.qt-power .ab-dots i { width: 6px; height: 6px; border-width: 1px; }
+/* v10: 3. Slot – Tipp wechselt durch die gekauften Pool-Fähigkeiten; frei = gestrichelt */
+/* eigene Zeile, volle Breite, 44 px: knapp daneben tippen schaltet sonst die Auswahl um, und der Knopf springt beim Wechsel nicht */
+.qt-slot { flex: 1 0 100%; min-height: 44px; padding: 1px 6px 1px 2px; font: 800 12px/1.2 var(--font-body); background: var(--amber); box-shadow: var(--shadow-sm); }
+.qt-row.on .qt-slot { background: var(--amber); }
+/* Zeile und Slot rutschen beim Drücken sonst zusammen 4 px weg: Loslassen am Rand träfe die Zeile und schaltete die Auswahl um */
+.qt-list .qt-row:has(.qt-slot:active), .qt-list .qt-slot:active { transform: none; }
+.qt-swap { margin-left: auto; font: 700 16px/1 var(--font-pixel); }
+.qt-desc { grid-column: 1 / -1; margin: 0; font-size: 13px; line-height: 1.35; }
+.qt-free { border-style: dashed; color: var(--ink-soft); font-weight: 700; }
 .qt-pick { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; font: 700 18px/1 var(--font-pixel); background: var(--paper-2); border: 3px solid var(--ink); }
 .qt-row.on .qt-pick { background: var(--amber); }
 .qt-foot { flex: none; display: flex; align-items: center; gap: 12px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); border-top: 3px solid var(--ink); }

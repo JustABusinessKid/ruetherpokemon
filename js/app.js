@@ -14,7 +14,7 @@ import { makeFighter, makeBoss } from './battle.js';
 import {
   catchReward, arenaWin, arenaReward, arenaScale, powerUp, buyItem, lureActive, dexCount, DEX_TOTAL, addXp, fuse, migrate,
   pickFood, feed, sell, sellDuplicates, levelUpUids, haunebuWin, startBeam, activeBeam, endBeam,
-  haunebuActive, extendHaunebu, questsUnlocked, questResult, fighterStats,
+  haunebuActive, extendHaunebu, questsUnlocked, questResult, fighterStats, buyAbility, upgradeAbility, equipAbility, loadoutFor,
 } from './progress.js';
 import { playSummon, playBeam, playReturn } from './flight.js';
 import { makeWild } from './wild.js';
@@ -28,6 +28,7 @@ import { createOnboarding } from './onboarding.js';
 import { sfx, haptic, setHapticsEnabled } from './audio.js';
 import { createOnline, onlineConfig } from './online.js';
 import { MISSIONS, MISSION_BY_ID, pickSetup } from './quest/missions.js';
+import { ABILITIES, FIXED, POOLS } from './quest/abilities.js';
 
 const $ = s => document.querySelector(s);
 window.addEventListener('error', () => { const p = document.querySelector('#splash p'); if (p) p.textContent = 'Fehler beim Laden. Bitte Seite neu laden.'; }, { once: true });
@@ -357,7 +358,23 @@ const collection = createCollectionScreen({
   },
   onDex() { dex.show(save); show('screen-dex'); },
   onBack() { show('screen-map'); },
+  onBuyAbility: (rid, aid) => abilityPaid(buyAbility(save, rid, aid), aid, () => 'gekauft'),
+  onUpgradeAbility: (rid, aid) => abilityPaid(upgradeAbility(save, rid, aid), aid, r => `Stufe ${r.level}`),
+  onEquipAbility: equipQuestAbility,
 });
+// v10 §1: Quest-Fähigkeiten gehören dem Rüther; Kaufen/Upgrade ziehen Sats ab, Ausrüsten ist gratis. persist speichert und synct.
+const abName = aid => ABILITIES[aid].name.replace(/\u00AD/g, ''); // ohne Trennstellen des Kreismenüs
+function abilityPaid(res, aid, what) {
+  if (res.ok) { sfx.play('levelup'); haptic(30); toast(`${abName(aid)} ${what(res)}! −${fmt(res.cost)} Sats`, { kind: 'level' }); persist(); }
+  else toast(res.reason === 'sats' ? 'Nicht genug Sats.' : res.reason === 'max' ? 'Schon auf Stufe 3.' : 'Das geht nicht.');
+  return res;
+}
+function equipQuestAbility(rid, aid) {
+  const res = equipAbility(save, rid, aid);
+  if (res.ok) { sfx.play('click'); toast(`${abName(aid)} ausgerüstet`); persist(); }
+  else toast('Erst kaufen, dann ausrüsten.');
+  return res;
+}
 const dex = createDexScreen({ el: $('#screen-dex'), onBack() { show('screen-collection'); } });
 const shop = createShopScreen({
   el: $('#screen-shop'),
@@ -668,7 +685,7 @@ $('#beam-chip').addEventListener('click', async () => {
 // v9: Die Quest verbraucht die Haunebu nicht. Ein laufender Arena-Flug bleibt in save.beam stehen (BEAM_WAIT hält den
 // Rückflug an, Neuladen landet wieder an der Arena) und geht danach weiter, solange das Fenster offen ist; sonst nach Hause.
 // questRun = { mission, setup, insts, home, beam: { arenaId, from } | null, ended, kieser (Debug) }; solange bewegt GPS die Karte nicht.
-const questTeam = createQuestTeamScreen({ el: $('#screen-questteam'), onStart: launchQuest, onBack() { show('screen-quests'); } });
+const questTeam = createQuestTeamScreen({ el: $('#screen-questteam'), onStart: launchQuest, onEquip: equipQuestAbility, onBack() { show('screen-quests'); } });
 const questResultScreen = createQuestResultScreen({ el: $('#screen-questresult'), onDone: questHome });
 let questScreen = null, questView = null;
 // Der Quest-Modus (js/quest/view.js) lädt erst beim ersten Abflug
@@ -705,7 +722,10 @@ async function launchQuest(id, uids, { setup = null, kieser = false } = {}) {
   await playBeam(document.body, { map, to: mission, label: mission.place }).catch(() => {});
   flying = false;
   show('screen-quest');
-  await questScreen.start({ mission, setup: questRun.setup, team: insts, fighters: insts.map(i => makeFighter(RUETHER_BY_ID[i.id], i)), rng: Math.random });
+  // v10: je Einheit die ausgerüsteten Fähigkeiten mit Stufe (auch am Kämpfer, so liest createQuest sie als team[i].loadout)
+  const loadouts = insts.map(i => loadoutFor(save, i.id));
+  const fighters = insts.map((i, k) => ({ ...makeFighter(RUETHER_BY_ID[i.id], i), loadout: loadouts[k] }));
+  await questScreen.start({ mission, setup: questRun.setup, team: insts, fighters, loadouts, rng: Math.random });
   if (questRun?.kieser && current === 'screen-quest') { // Debug „Stefan ruft": Briefing zu, dann holt Stefan Viktor sofort
     $('#screen-quest .q-go')?.click();
     questScreen.send?.({ type: 'catch' });
@@ -818,6 +838,11 @@ function dbgQuest(id, kieser = false) {
 }
 $('#dbg-quest').addEventListener('click', () => dbgQuest(dbgMission.value));
 $('#dbg-bernd').addEventListener('click', () => dbgQuest('camping', true));
+// v10: alle Quest-Fähigkeiten gratis auf Stufe 3, die erste Pool-Fähigkeit ausgerüstet
+$('#dbg-abilities').addEventListener('click', () => {
+  for (const rid of Object.keys(FIXED)) save.questAbilities[rid] = { levels: Object.fromEntries([...FIXED[rid], ...POOLS[rid]].map(aid => [aid, 3])), slot: POOLS[rid][0] };
+  persist(); if (current === 'screen-collection') collection.show(save); toast('Alle Fähigkeiten auf Stufe 3');
+});
 $('#dbg-lure').addEventListener('click', () => { save.lureUntil = Date.now() + CONST.LURE_MS; persist(); refreshSpawns(true); toast('Lockmodul an'); });
 $('#dbg-respawn').addEventListener('click', () => { spawns = []; refreshSpawns(true); toast('Spawns neu'); });
 $('#dbg-stops').addEventListener('click', () => { if (!pos) return toast('Keine Ortung.'); stopSeq++; stops = fakeStops(pos, Math.random); renderStops(); toast('3 Fake-Stops'); });

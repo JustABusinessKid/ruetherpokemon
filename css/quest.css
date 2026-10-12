@@ -1,5 +1,5 @@
 /* Haunebu-Quests (Spec §5.5): Vollbild-Kommando-Modus. Oben Ziel, Zeit, Alarm; Mitte Canvas (js/quest/view.js);
-   unten Team-Porträts, Kräfte, Pause/Abheben/Aufgeben. Pixel-Kneipe: harte Kanten, keine weichen Schatten. Keyframes q-*. */
+   unten Team-Porträts, Fähigkeiten, Pause/Abheben/Aufgeben. Pixel-Kneipe: harte Kanten, keine weichen Schatten. Keyframes q-*. */
 
 .q-screen { background: #0d1626; overscroll-behavior: none; }
 
@@ -52,12 +52,33 @@
 }
 .q-aim {
   position: absolute; left: 8px; right: 60px; top: 8px; z-index: 5;
-  display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 8px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 4px 4px 6px 8px;
   color: var(--ink); background: var(--paper); border: 3px solid var(--ink); box-shadow: var(--shadow-sm);
 }
-.q-aim img { flex: none; width: 28px; height: 28px; }
-.q-aim span { flex: 1; min-width: 0; font: 800 13px/1.2 var(--font-body); }
+.q-aim-ico { flex: none; display: grid; place-items: center; }
+.q-aim-ico > img { width: 28px; height: 28px; image-rendering: pixelated; }
+.q-aim-hint { flex: 1; min-width: 0; font: 800 13px/1.2 var(--font-body); }
 .q-aim button { flex: none; min-height: 40px; padding: 4px 10px; font-size: 14px; border-width: 2px; box-shadow: var(--shadow-sm); }
+/* v10: Text der Fähigkeit (Grundtext + Stufen) und Zusatzknöpfe des Schritts */
+.q-aim-txt { flex-basis: 100%; margin: 0; padding-right: 4px; font: 700 11px/1.3 var(--font-body); color: var(--ink-soft); }
+.q-aim-txt b { color: var(--green-2); }
+.q-aim-opts { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px; }
+.q-aim-opts:empty { display: none; }
+.q-aim-opts button { min-height: 40px; }
+.q-aim-opts .q-dir { display: block; background: var(--ink); }
+.q-dir.h { width: 18px; height: 6px; } .q-dir.v { width: 6px; height: 18px; }
+.q-aim .q-aim-face { width: 44px; height: 44px; min-height: 0; padding: 2px; background: var(--paper-2); }
+.q-aim-face img { width: 36px; height: 36px; border: 2px solid var(--rc, var(--r-normal)); image-rendering: auto; }
+.q-aim-face img.r-selten { --rc: var(--r-selten); } .q-aim-face img.r-episch { --rc: var(--r-episch); } .q-aim-face img.r-legendaer { --rc: var(--r-legendaer); }
+.q-aim .q-aim-face.on { background: var(--gold); box-shadow: 0 0 0 2px var(--ink); }
+.q-aim.next .q-aim-txt { display: none; }
+/* Raubkopie: Gesichter oben neben „Abbrechen“, darunter Hinweis und Text (eine Zeile weniger, deckt weniger Karte) */
+.q-aim.faces .q-aim-ico { display: none; }
+.q-aim.faces .q-aim-opts { order: -1; flex: 1 1 auto; }
+.q-aim.faces .q-aim-hint { order: 1; flex-basis: 100%; }
+.q-aim.faces .q-aim-txt { order: 2; }
+.q-aim.low { top: auto; bottom: 8px; right: 8px; }
+.q-aim.low ~ .q-msg { top: 8px; bottom: auto; }
 .q-msg {
   position: absolute; left: 12px; right: 12px; bottom: 10px; z-index: 5;
   max-width: 360px; margin: 0 auto; padding: 8px 12px;
@@ -87,6 +108,8 @@
 .q-ring-item.stop .q-ring-ico { width: 44px; height: 44px; background: var(--paper-2); }
 .q-ring-item.stop .q-ring-ico i { width: 16px; height: 16px; background: var(--red); border: 2px solid var(--ink); }
 .q-ring-item.stop { margin-top: -24px; }
+/* obere Plätze: per bottom verankert (view.js), Name über dem Symbol, damit er nicht in der Gesichtsreihe liegt */
+.q-ring-item.up .q-ring-name { order: -1; }
 
 /* Abklingzeit: harter Tortenausschnitt (kein weicher Verlauf) + Sekunden */
 .q-cd {
@@ -130,6 +153,7 @@
 .q-card-place { font: 800 12px/1.2 var(--font-body); color: var(--ink-soft); letter-spacing: .04em; text-transform: uppercase; }
 .q-card-var { padding: 6px 8px; background: var(--paper-2); border: 2px solid var(--ink); }
 .q-card-hint { font-weight: 800; }
+.q-card-melee { padding: 4px 8px; font-weight: 800; color: var(--paper); background: var(--ink); border-left: 6px solid var(--red); } /* v10 §4 */
 .q-card-meta { font: 700 15px/1.2 var(--font-pixel); color: var(--green-2); }
 .q-card-team { display: flex; gap: 8px; }
 .q-card-team img { width: 48px; height: 48px; background: var(--paper-2); border: 3px solid var(--rc, var(--r-normal)); outline: 2px solid var(--ink); }
@@ -156,7 +180,7 @@
 }
 .q-stamp span { padding: 4px 8px; font: 800 12px/1 var(--font-body); color: var(--paper-2); background: var(--ink); animation: q-blink 1.4s steps(2, end) infinite; }
 
-/* ---------- Fuß: Team, Kräfte, Knöpfe ---------- */
+/* ---------- Fuß: Team, Fähigkeiten, Knöpfe ---------- */
 .q-bottom {
   position: relative; z-index: 10; flex: none;
   display: flex; flex-direction: column; gap: 6px;
@@ -190,7 +214,6 @@
 .q-all { width: 44px; height: 56px; min-height: 0; padding: 0; font-size: 13px; border-width: 2px; box-shadow: var(--shadow-sm); }
 .q-ab { position: relative; width: 50px; height: 50px; min-height: 0; padding: 0; overflow: hidden; border-width: 2px; box-shadow: var(--shadow-sm); }
 .q-ab > img { width: 38px; height: 38px; }
-.q-menu { height: 50px; min-height: 0; padding: 0 8px; font-size: 13px; border-width: 2px; box-shadow: var(--shadow-sm); }
 .q-powers-none { padding: 0 4px; font: 800 12px/1.2 var(--font-body); color: var(--paper-2); }
 .q-ctrl button { flex: 1 1 0; min-width: 0; min-height: 44px; padding: 4px 6px; font-size: 15px; }
 .q-pause.on { background: var(--gold); }
@@ -198,11 +221,11 @@
 
 @media (max-width: 380px) {
   .q-por { width: 44px; } .q-por img, .q-hp { width: 34px; } .q-por img { height: 34px; }
-  .q-all { width: 40px; } .q-ab { width: 46px; } .q-menu { padding: 0 6px; font-size: 12px; }
+  .q-all { width: 40px; } .q-ab { width: 46px; }
 }
 @media (max-height: 700px) {
   .q-por { height: 50px; } .q-por img { height: 32px; width: 32px; } .q-hp { width: 32px; }
-  .q-all { height: 50px; } .q-ab, .q-menu { height: 46px; } .q-ab { width: 46px; }
+  .q-all { height: 50px; } .q-ab { height: 46px; width: 46px; }
   .q-ctrl button { min-height: 40px; }
 }
 
@@ -318,3 +341,17 @@
 .q-over .q-cut { pointer-events: auto; }
 .q-over .q-bottom > .q-row { opacity: .5; }
 .q-fx .fx-dim { display: none; } /* Familientreffen-Banner: die Karte bleibt hell, die Helfer rennen sichtbar herein */
+
+/* ---------- v10: Fähigkeiten mit Stufen-Punkten (●●○ als Pixel-Quadrate) und Ladungen ---------- */
+.q-lv { display: flex; justify-content: center; gap: 2px; pointer-events: none; }
+.q-lv i { display: block; width: 7px; height: 7px; background: var(--paper-2); border: 1px solid var(--ink); }
+.q-lv i.on { background: var(--gold); }
+.q-ab .q-lv { position: absolute; left: 0; right: 0; bottom: 2px; z-index: 1; }
+.q-ab > img, .q-ab > .q-fam { margin-top: -6px; }
+.q-ring-item .q-lv { position: relative; z-index: 1; margin-top: -9px; padding: 2px 3px; background: var(--ink); }
+.q-chg {
+  position: absolute; right: 1px; top: 1px; z-index: 1; padding: 0 2px; pointer-events: none;
+  font: 700 12px/13px var(--font-pixel); color: var(--ink); background: var(--gold); border: 1px solid var(--ink);
+}
+.cool .q-chg { background: var(--paper-2); }
+.q-ab.free { font: 800 11px/1 var(--font-body); color: var(--paper-2); background: transparent; border-style: dashed; border-color: var(--paper-2); box-shadow: none; }

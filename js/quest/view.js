@@ -1,29 +1,35 @@
 // Haunebu-Quests: Kommando-Ansicht wie Commandos 2 (Spec §5.5). Canvas-Draufsicht mit 32-px-Kacheln, HUD als DOM.
-// createQuestScreen({ el, onEnd }) -> { start({ mission, setup, team, fighters, rng, tutorial }), stop(), send(cmd), debug() }
+// createQuestScreen({ el, onEnd }) -> { start({ mission, setup, team, fighters, loadouts, rng, tutorial }), stop(), send(cmd), debug() }
 //   mission: Objekt oder id; setup: { layoutId, variantId, mirror, seed } (leer = gewürfelt; variant geht noch als Kompatibilität).
 //   fighters: makeFighter-Kampfwerte (oder team als Exemplare { id, rarity, level, uid }), 1–3; bei mission.solo das stärkste Exemplar.
-//   tutorial: erzwingen/aus. send(cmd): Befehl an die Engine samt Animationen (Debug „Stefan ruft“: send({ type: 'catch' })).
+//   loadouts[i]: [{id, level}, {id, level}, {id, level}|null] je Kämpfer (progress.loadoutFor), geht als team[i].loadout an createQuest.
+//   tutorial: erzwingen/aus. send(cmd): Befehl an die Engine samt Animationen, liefert die Events (Debug „Stefan ruft“: send({ type: 'catch' })).
 //   onEnd(questSummary + { text, team, setup, kieser, fine }) genau einmal: nach Abheben, Scheitern oder Aufgeben (result 'success'|'fail'|'abort').
 // v9: Kieser- und Erwischt-Cutscene als DOM-Overlay (.q-cut), Minikarte (.q-mini) ab 41 Kacheln Breite.
+// v10: 3 Fähigkeiten je Rüther mit Stufen-Punkten, Abklingzeit und Ladungen (Leiste und Kreismenü); Zielmodi in Schritten
+// (aim.first = erste Wahl): Tür/Gegner/Tresor aus abilityTargets, Punkt, self mit Bestätigen, Wache→Punkt, Punkt→Punkt,
+// Punkt→Richtung, Gesicht+Start→Ziel. Animationen für alle 25, Gegnerzustände (state 'task') und platzierte Objekte (st.effects).
 // Schleife: feste 50-ms-Logik (engine.tick) mit Aufholen, rAF-Zeichnen mit Interpolation zwischen den Schritten.
 // Befehle gehen sofort per tick(st, 0, [cmd]) an die Engine, auch in der taktischen Pause.
 // Uhren: gt = Spielzeit (steht in der Pause, treibt Effekte, Würfe, Blasen), rt = echte Zeit (Auswahl-Puls, Untertasse, Abspann).
 // Bedienung: Antippen wählt/läuft/interagiert, Doppeltipp auf einen Rüther = Kreismenü, Zielmodus mit Reichweite, Ziehen = Kamera,
 // Zwei-Finger-Zoom und ±. Sounds: vorhandene sfx plus step/alarm/steal/gas (audio.js; unbekannte Namen sind stumm).
 import { createQuest, tick, canExtract, visibleCone, abilitiesFor, abilityTargets, ABILITIES, ENEMY_TYPES } from './engine.js';
-import { MISSION_BY_ID } from './missions.js';
+import { MISSION_BY_ID, MELEE_HINT } from './missions.js';
 import { makeFighter } from '../battle.js';
 import { RUETHER_BY_ID } from '../data.js';
 import { QUEST_SATS } from '../progress.js';
 import { sfx, haptic } from '../audio.js';
 import { banner } from '../fx.js';
 import { popup, esc } from '../ui.js';
-import { TILE, INK, PAPER, GOLD, THEMES, loadImg, img, variant, paintMap, paintMini, doorHoriz, drawDoor, faceFrame, bitmap, bubble, dither, hash, flames, smoke, mug, fountain, swatter } from './draw.js';
+import { TILE, INK, PAPER, GOLD, THEMES, BLUE_FIRE, loadImg, img, variant, paintMap, paintMini, doorHoriz, drawDoor, faceFrame, bitmap, bubble, dither, hash, flames, smoke, mug, fountain, swatter,
+  zigzag, phone, eye, suit, glitchFace, wifi, scold, puddle } from './draw.js';
 
 const STEP = 50, MAX_CATCHUP = 1500;
 const ZOOMS = [0.6, 0.8, 1, 1.25, 1.6, 2], ZOOM_MIN = 0.5, ZOOM_MAX = 2.4;
 const TUT_KEY = 'ruether-go-quest-tut';
 const DOUBLE_MS = 350, DOUBLE_PX = 30, DRAG_PX = 10, SPREAD = 0.9; // SPREAD: Mindestabstand der Gesichter in Kacheln (Gesicht 28 px)
+const RING_UP = 30; // Kreismenü: Abstand der oberen Plätze über der Rüther-Mitte (Gesicht bis Zoom 2 frei)
 const SUS_BAR = new Set(['patrol', 'suspicious', 'investigate', 'distracted']); // Misstrauens-Balken nur bei eingeschaltetem Kegel
 const face = id => `sprites/${id}.png`;
 const fxArt = n => `art/fx-${n}.png`;
@@ -36,20 +42,33 @@ const FACE_LEFT = new Set(['dackel']); // Sprite schaut nach links: Spiegeln umg
 const KIESER_LINES = [['bernd', 'Erst Kieser, dann Kaffee!'], ['viktor', 'Ich wollte doch nur nicht duschen …'], ['bernd', 'Danach bin ich so breit, ich pass durch keine Tür mehr!']];
 const MINI_W = 40; // Minikarte ab mehr als 40 Kacheln Breite
 const fmt = n => n.toLocaleString('de-DE');
-const THROWN = { can: 'beer-can', mms: 'mms', controller: 'controller' };
+const THROWN = { can: fxArt('beer-can'), mms: fxArt('mms'), controller: fxArt('controller'), phone: 'art/q-phone.png' };
 const MMS = ['#B03B2B', '#3F8EF5', '#5BB55A', '#F2C94C', '#E0A52B', '#7A4A2A'];
-const RED = '#E0634C', GREEN = '#5BB55A', TEAL = '#3FC1B0', AMBER = '#E0A52B';
-const NOISE = { can: { c: AMBER, t: 'SCHEPPER!' }, hieb: { c: PAPER, t: '' }, alarmanlage: { c: RED, t: 'PIEP PIEP PIEP' } }; // Hieb: „BONK!“ kommt schon vom stun-Event
-const STUN_TXT = { handbag: 'BONK!', controller: 'KLONK!', hack: 'Firmware 0.0.1', gas: '*hust*' };
+const RED = '#E0634C', GREEN = '#5BB55A', TEAL = '#3FC1B0', AMBER = '#E0A52B', PINK = '#F29BC8', LILAC = '#C77DFF', SKY = '#9fd0ea';
+const NOISE = { can: { c: AMBER, t: 'SCHEPPER!' }, alarmanlage: { c: RED, t: 'PIEP PIEP PIEP' }, tuer: { c: PAPER, t: 'KNARZ!' }, familie: { c: GOLD, t: 'RÜTHER!' } };
+const STUN_TXT = { controller: 'KLONK!', hack: 'Firmware 0.0.1', slip: 'RUTSCH!', lizenz: 'ERROR 0x70!' }; // Blase sagt den Rest (WLAN: Blase und blinkendes „kein Netz“)
+// v10: Zielmodus-Hinweise je Schritt (Wahl 0 bzw. 1) und wiederkehrende Sprüche (Schimpfen, Streiten)
+const HINT = {
+  door: ['Verschlossene Tür antippen'], point: ['Ziel wählen: Punkt antippen'], enemy: ['Ziel wählen: Gegner antippen'],
+  vaultOrDrone: ['Tresor oder Drohne antippen'], self: ['Kreis = Reichweite. Tippen zum Auslösen'], selfNoR: ['Tippen oder Los! zum Auslösen'],
+  enemyThenPoint: ['Wache antippen', 'Zielpunkt antippen'], pointThenPoint: ['Startpunkt antippen', 'Ziel wählen: Hier zieht die Horde hin'],
+  pointDir: ['Punkt antippen', 'Richtung tippen: quer oder längs'], teammatePoint: ['Gesicht wählen, dann Startpunkt antippen', 'Zielpunkt antippen: Dahin läuft die Kopie'], teammatePointSolo: ['Startpunkt antippen'],
+};
+const LIST = new Set(['door', 'enemy', 'vaultOrDrone']); // Ziel aus abilityTargets
+const selfR = ab => ab.r ?? ab.range ?? ab.sendR; // Kreis bei self (VP erst ab Stufe 3: „Gehen Sie mal zum Tor!“)
+const SCOLD = ['Wie siehst du denn aus?', 'Zieh dir mal eine Jacke an!', 'Und wann räumst du dein Zimmer auf?', 'So hab ich dich nicht erzogen!', 'Ruf mal wieder an!'];
+const QUARREL = ['Die Grillzange war meine!', 'Du hast doch angefangen!', 'Und dein Vorzelt ist auch hässlich!', 'Das sag ich dem Chef!'];
+const KURS = ['+7 %', '+12 %', '+70 %', '−3 %', '+21 %'], DEPOT = ['−80 %', '−99 %', 'MARGIN CALL', '−42 %'];
+const DISGUISE_END = { zeit: 'Auftritt vorbei', klau: 'Tarnung aufgeflogen!', angriff: 'Tarnung weg!' };
 const TUT = [
   { at: 'team', text: 'Tipp auf ein Gesicht, um einen Rüther zu wählen. „Alle“ wählt das ganze Team.' },
   { at: 'stage', text: 'Tipp auf den Boden: Er läuft hin. Die gestrichelte Linie zeigt seinen Weg.' },
-  { at: 'powers', text: 'Doppeltipp auf einen Rüther öffnet seine Kräfte. Oder unten auf „Kräfte“.' },
+  { at: 'powers', text: 'Unten stehen seine 3 Fähigkeiten. Doppeltipp auf einen Rüther öffnet das Kreismenü.' },
 ];
 const ART = [
   'art/q-coin.png', 'art/q-vault.png', 'art/q-saucer.png', 'art/q-ps3.png', 'art/q-plug.png', 'art/q-valve.png', 'art/q-tree.png', 'art/q-pad.png', 'art/fx-haunebu.png', 'art/fx-tractor-beam.png',
-  ...new Set(Object.values(ENEMY_TYPES).map(t => `art/${t.sprite}.png`)), ...Object.values(ABILITIES).map(a => fxArt(a.icon)),
-  fxArt('beer-can'), fxArt('chart-up'), face('christian'), face('micha'), face('hildegard'),
+  ...new Set(Object.values(ENEMY_TYPES).map(t => `art/${t.sprite}.png`)), ...Object.values(ABILITIES).map(a => a.icon), ...Object.values(THROWN),
+  fxArt('chart-up'), fxArt('wallet'), fxArt('bags'), 'art/q-sign.png', 'art/q-kids.png', 'art/q-box.png', face('christian'), face('micha'), face('hildegard'),
 ];
 
 const HTML = `
@@ -66,7 +85,7 @@ const HTML = `
   <div class="q-mini hidden"><div class="q-mini-box panel"><canvas class="q-mini-cv"></canvas><p>Tipp auf die Karte: Die Kamera springt hin.</p><button class="q-mini-x">Zurück</button></div></div>
   <div class="q-cut hidden"></div>
   <div class="q-paused hidden">Pause · Befehle gehen trotzdem</div>
-  <div class="q-aim hidden"><img alt=""><span></span><button class="q-aim-x">Abbrechen</button></div>
+  <div class="q-aim hidden"><span class="q-aim-ico"></span><span class="q-aim-hint"></span><button class="q-aim-x">Abbrechen</button><p class="q-aim-txt"></p><div class="q-aim-opts"></div></div>
   <div class="q-msg hidden"></div>
   <div class="q-ring hidden"></div>
   <div class="q-tut hidden"><p></p><button>OK</button></div>
@@ -86,10 +105,10 @@ export function createQuestScreen({ el, onEnd }) {
   const goalIco = $('.q-goal-ico'), goalLabel = $('.q-goal-label'), goalN = $('.q-goal-n'), timeEl = $('.q-time');
   const alarmBox = $('.q-alarm'), alarmFill = $('.q-alarm .fill');
   const teamEl = $('.q-team'), powersEl = $('.q-powers'), pauseBtn = $('.q-pause'), extractBtn = $('.q-extract'), quitBtn = $('.q-quit');
-  const aimEl = $('.q-aim'), pausedEl = $('.q-paused'), msgEl = $('.q-msg'), ringEl = $('.q-ring'), tutEl = $('.q-tut'), cardEl = $('.q-card'), stampEl = $('.q-stamp');
+  const aimEl = $('.q-aim'), aimOpts = $('.q-aim-opts'), pausedEl = $('.q-paused'), msgEl = $('.q-msg'), ringEl = $('.q-ring'), tutEl = $('.q-tut'), cardEl = $('.q-card'), stampEl = $('.q-stamp');
   const noteEl = $('.q-note'), mapBtn = $('.q-mapbtn'), miniEl = $('.q-mini'), miniCv = $('.q-mini-cv'), cutEl = $('.q-cut');
 
-  let st = null, th = null, mapCv = null, gasPat = null, seq = 0;
+  let st = null, th = null, mapCv = null, gasPat = null, deoPat = null, seq = 0, abs = []; // abs[i]: abilitiesFor(st.units[i]), fest für die Quest
   let mini = null, cut = null, caught = null, hasWater = false, catcher = {}; // mini: { s, base, was } solange offen; cut: laufende Cutscene
   const valveAt = new Map(), seenE = new Set(); // seenE: Gegner, die schon im Bild waren (Minikarte zeigt nur bekannte)
   let running = false, raf = 0, lastTs = 0, acc = 0, overClock = 0, paused = false, gt = 0, rt = 0, frameDt = 16;
@@ -98,6 +117,7 @@ export function createQuestScreen({ el, onEnd }) {
   let fx = freshFx(), labels = [], doorH = [], pad = null, powersKey = '', quitAsk = false, msgT = 0;
   let prev = new WeakMap(), flash = new WeakMap(), popAt = new WeakMap();
   const doorAt = new Map(), effAt = new Map(), timers = new Set();
+  const scolder = new Map(), chatAt = new Map(); // Junge: Gegner → schimpfende Einheit; nächster Spruch je Gegner (Schimpfen, Streit)
   const ptrs = new Map();
   let gesture = null;
 
@@ -110,6 +130,7 @@ export function createQuestScreen({ el, onEnd }) {
   function snap() {
     for (const u of st.units) prev.set(u, { x: u.x, y: u.y, dir: u.dir });
     for (const e of st.enemies) prev.set(e, { x: e.x, y: e.y, dir: e.dir });
+    for (const f of st.effects) if (f.kind === 'decoy' || f.kind === 'horde') prev.set(f, { x: f.x, y: f.y, dir: f.dir });
   }
   function pos(ent) {
     const p = prev.get(ent), a = acc / STEP;
@@ -148,10 +169,11 @@ export function createQuestScreen({ el, onEnd }) {
     fx.projs.push({ src, x0: x0 * TILE, y0: y0 * TILE, x1: x1 * TILE, y1: y1 * TILE, ms, size, spin, h: h ?? 14 + d * 7, born: now() + delay });
   }
   const pop = (src, x, y, { size = 28, ms = 900, kind = 'pop', delay = 0 } = {}) => fx.sprites.push({ src, x: x * TILE, y: y * TILE, size, ms, kind, born: now() + delay });
-  function burst(x, y, n, { kind = 'sq', colors = [GOLD, PAPER], speed = 60, up = 40, grav = 140, ms = 700, size = 3, src = '' } = {}) {
+  // side ±1: nur nach links bzw. rechts (seitlich am echten Gesicht vorbei)
+  function burst(x, y, n, { kind = 'sq', colors = [GOLD, PAPER], speed = 60, up = 40, grav = 140, ms = 700, size = 3, src = '', side = 0 } = {}) {
     for (let k = 0; k < n; k++) {
-      const a = Math.random() * 2 * Math.PI, v = speed * (0.4 + Math.random() * 0.6);
-      fx.parts.push({ x: x * TILE, y: y * TILE, vx: Math.cos(a) * v, vy: Math.sin(a) * v - up, grav, kind, src, size, color: colors[k % colors.length], ms: ms * (0.7 + Math.random() * 0.5), born: now() });
+      const a = Math.random() * 2 * Math.PI, v = speed * (0.4 + Math.random() * 0.6), cx = Math.cos(a);
+      fx.parts.push({ x: x * TILE, y: y * TILE, vx: (side ? side * Math.abs(cx) : cx) * v, vy: Math.sin(a) * v - up, grav, kind, src, size, color: colors[k % colors.length], ms: ms * (0.7 + Math.random() * 0.5), born: now() });
     }
   }
   const coinsFly = (x0, y0, x1, y1, n, ms = 450) => { for (let k = 0; k < n; k++) throwArc('art/q-coin.png', x0, y0, x1, y1, ms, { size: 12, spin: 0, h: 18, delay: k * 90 }); };
@@ -164,7 +186,8 @@ export function createQuestScreen({ el, onEnd }) {
   function pulseEdge() { edge.classList.remove('pulse'); void edge.offsetWidth; edge.classList.add('pulse'); }
 
   // ---------- Befehle ----------
-  function send(cmd) { if (st && !st.over) handle(tick(st, 0, [cmd])); }
+  function send(cmd) { if (!st || st.over) return []; const ev = tick(st, 0, [cmd]); handle(ev); return ev; }
+  const abOf = (i, id) => abs[i]?.find(a => a.id === id);
   const upUnits = () => st.units.filter(u => !u.down).map(u => u.i);
   const actors = () => sel.filter(i => !st.units[i].down);
   const nearest = (ids, x, y) => ids.reduce((b, i) => (b == null || Math.hypot(st.units[i].x - x, st.units[i].y - y) < Math.hypot(st.units[b].x - x, st.units[b].y - y) ? i : b), null);
@@ -226,7 +249,7 @@ export function createQuestScreen({ el, onEnd }) {
     };
     if (list) { for (const t of list) consider('target', t, t.x * TILE, t.y * TILE); return best; }
     for (const u of st.units) { const p = upos(u); consider(u.down ? 'down' : 'unit', u, p.x * TILE, p.y * TILE - 2, u.down ? 0 : 8); }
-    for (const e of st.enemies) { const p = pos(e); consider('enemy', e, p.x * TILE, p.y * TILE - 4); }
+    for (const e of st.enemies) { if (e.gone) continue; const p = pos(e); consider('enemy', e, p.x * TILE, p.y * TILE - 4); }
     for (const o of st.objs) if (!(o.kind === 'item' && o.taken)) consider('obj', o, (o.x + 0.5) * TILE, (o.y + 0.5) * TILE);
     for (const d of st.doors) if (d.locked && !d.opening) consider('door', d, (d.x + 0.5) * TILE, (d.y + 0.5) * TILE);
     return best;
@@ -254,7 +277,6 @@ export function createQuestScreen({ el, onEnd }) {
     if (hit?.kind === 'enemy') {
       const e = hit.ref;
       inspect = { e: e.i, until: rt + 5000 };
-      if (ids.length === 1 && st.units[ids[0]].id === 'hildegard' && e.state !== 'ko') send({ type: 'ability', unit: ids[0], ability: 'handbag', target: { enemy: e.i } });
       return;
     }
     if (!ids.length) return msg('Erst einen Rüther antippen.');
@@ -269,70 +291,117 @@ export function createQuestScreen({ el, onEnd }) {
       return;
     }
     if (hit?.kind === 'door') {
-      const c = ids.find(i => st.units[i].id === 'christian');
+      const c = ids.find(i => abOf(i, 'plus70'));
       if (c == null) return msg('Verschlossen. Das kann nur Christian: Plus 70 Prozent.');
       return send({ type: 'ability', unit: c, ability: 'plus70', target: { door: hit.ref.id } });
     }
     for (const i of ids) send({ type: 'move', unit: i, to: { x: wx, y: wy } });
   }
 
-  // ---------- Kräfte: Kreismenü und Zielmodus ----------
+  // ---------- Fähigkeiten: Kreismenü, Leiste und Zielmodus ----------
   function abilityBlocked(u, ab) {
     if (u.down) return 'Liegt flach.';
     if (u.item) return 'Mit der PS3 im Arm geht das nicht.';
+    if (ab.charges != null && !(u.charges[ab.id] > 0)) return `${ab.name}: für heute aufgebraucht.`;
     const left = (u.cd[ab.id] || 0) - st.time;
     return left > 0 ? `${ab.name}: noch ${Math.ceil(left / 1000)} s` : '';
   }
   function chooseAbility(i, id) {
     if (briefingOpen()) return; // erst „Los!“
     closeMenu();
-    const u = st.units[i], ab = ABILITIES[id], why = abilityBlocked(u, ab);
+    const u = st.units[i], ab = abOf(i, id);
+    if (!ab) return;
+    const why = abilityBlocked(u, ab);
     if (why) { sfx.play('warn'); return msg(why); }
     select([i], { keepFollow: true });
-    if (ab.target === 'self') return send({ type: 'ability', unit: i, ability: id, target: {} });
-    aim = { unit: i, ab: id };
-    aimEl.querySelector('img').src = fxArt(ab.icon);
-    const what = ab.target === 'point' ? 'Punkt' : ab.target === 'door' ? 'verschlossene Tür' : ab.target === 'vaultOrDrone' ? 'Tresor oder Drohne' : 'Gegner';
-    setText(aimEl.querySelector('span'), `${ab.name}: ${what} antippen`);
+    tutStep(2);
+    aim = { unit: i, ab, first: null, face: i };
+    aimEl.querySelector('.q-aim-ico').innerHTML = abIcon(ab);
+    // Grundtext, ab Stufe 2 die Verbesserungen dazu
+    aimEl.querySelector('.q-aim-txt').innerHTML = esc(ab.texts[0]) + ab.texts.slice(1, ab.level).map((t, k) => ` <b>Stufe ${k + 2}:</b> ${esc(t)}`).join('');
     aimEl.classList.remove('hidden');
+    aimStep(null);
+    if (ab.id === 'feierabend' && !abilityTargets(st, i, id).length) msg('Hier arbeitet keiner, der kündigen darf.', 2600);
   }
+  // Schritt des Zielmodus: Hinweis und Zusatzknöpfe (Los, Quer/Längs, Gesicht der Kopie)
+  function aimStep(first) {
+    aim.first = first; aim.h = 0;
+    const { ab } = aim, T = ab.target, k = first ? 1 : 0;
+    aimEl.classList.toggle('next', !!k); // ab der zweiten Wahl nur noch der Hinweis, der Text ist gelesen
+    // ohne Radius (VP Stufe 1–2) kein Kreis; allein im Team gibt es kein Gesicht zu wählen
+    const H = T === 'self' && !selfR(ab) ? 'selfNoR' : T === 'teammatePoint' && st.units.length < 2 ? 'teammatePointSolo' : T;
+    const hint = (HINT[H][k] ?? HINT[T][k]) + (T === 'enemyThenPoint' && k ? ` (bis ${ab.range2} Kacheln von der Wache)` : '');
+    setText(aimEl.querySelector('.q-aim-hint'), `${ab.name.replace(/­/g, '')}: ${hint}`);
+    const faces = T === 'teammatePoint' && !k && st.units.length > 1;
+    aimEl.classList.toggle('faces', faces); // Gesichter in die erste Zeile neben „Abbrechen“: Leiste niedriger
+    aimOpts.innerHTML = T === 'self' ? '<button class="primary" data-go>Los!</button>'
+      : T === 'pointDir' && k ? '<button data-dir="h"><i class="q-dir h"></i>Quer</button><button data-dir="v"><i class="q-dir v"></i>Längs</button>'
+        : faces ? st.units.map(t => `<button class="q-aim-face${t.i === aim.face ? ' on' : ''}" data-face="${t.i}" aria-label="Gesicht: ${esc(short(t.id))}"><img class="r-${esc(t.rarity)}" src="${face(t.id)}" alt=""></button>`).join('')
+          : '';
+  }
+  aimOpts.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b || !aim) return;
+    if (b.dataset.go != null) return fire({ target: {} });
+    if (b.dataset.dir) return fire({ target: aim.first, dir: b.dataset.dir });
+    if (b.dataset.face) { aim.face = +b.dataset.face; aimStep(aim.first); }
+  });
   function endAim() { aim = null; aimEl.classList.add('hidden'); }
   $('.q-aim-x').addEventListener('click', endAim);
+  // Befehl an die Engine. Scheitert er, bleibt der Zielmodus offen: zu weit = zweiten Punkt neu, sonst von vorn (Wache→Punkt: Punkt neu)
+  function fire(cmd) {
+    const { unit, ab } = aim;
+    const bad = send({ type: 'ability', unit, ability: ab.id, ...cmd }).find(e => e.type === 'fail' && e.unit === unit);
+    if (!bad) return endAim();
+    if (aim?.first && ab.target !== 'enemyThenPoint' && bad.reason !== 'far') aimStep(null);
+  }
   function aimTap(sx, sy) {
-    const { unit, ab: id } = aim, ab = ABILITIES[id];
-    if (ab.target === 'point') {
-      const w = toWorld(sx, sy);
-      endAim();
-      return send({ type: 'ability', unit, ability: id, target: { x: w.x / TILE, y: w.y / TILE } });
+    const { unit, ab } = aim, T = ab.target, w = toWorld(sx, sy), q = { x: w.x / TILE, y: w.y / TILE };
+    if (T === 'self') return fire({ target: {} });
+    if (T === 'point') return fire({ target: q });
+    if (LIST.has(T) || (T === 'enemyThenPoint' && !aim.first)) {
+      const hit = pick(sx, sy, abilityTargets(st, unit, ab.id));
+      if (!hit) {
+        const any = ab.id === 'feierabend' && pick(sx, sy); // Stefan, Ranger & Co.: die Engine sagt „Der kündigt nicht.“
+        if (any?.kind === 'enemy') return fire({ target: { enemy: any.ref.i } });
+        sfx.play('warn'); return msg('Kein gültiges Ziel. Tipp auf ein leuchtendes Ziel.');
+      }
+      const t = hit.ref, target = t.door != null ? { door: t.door } : t.enemy != null ? { enemy: t.enemy } : { obj: t.obj };
+      if (T !== 'enemyThenPoint') return fire({ target });
+      sfx.play('tap');
+      return aimStep(target);
     }
-    const hit = pick(sx, sy, abilityTargets(st, unit, id));
-    if (!hit) { sfx.play('warn'); return msg('Kein gültiges Ziel. Tipp auf ein leuchtendes Ziel.'); }
-    const t = hit.ref;
-    endAim();
-    send({ type: 'ability', unit, ability: id, target: t.door != null ? { door: t.door } : t.enemy != null ? { enemy: t.enemy } : { obj: t.obj } });
+    if (!aim.first) { sfx.play('tap'); return aimStep(q); } // Punkt→Punkt, Punkt→Richtung, Kopie: erst der Startpunkt
+    if (T === 'pointDir') return fire({ target: aim.first, dir: Math.abs(q.x - aim.first.x) >= Math.abs(q.y - aim.first.y) ? 'h' : 'v' });
+    fire({ target: aim.first, target2: q, face: aim.face });
   }
 
   function abIcon(ab) { // Familientreffen: die echten Gesichter von Christian und Micha statt Cartoon
-    return ab.id === 'family' ? `<span class="q-fam"><img src="${face('christian')}" alt=""><img src="${face('micha')}" alt=""></span>` : `<img src="${fxArt(ab.icon)}" alt="">`;
+    return ab.id === 'family' ? `<span class="q-fam"><img src="${face('christian')}" alt=""><img src="${face('micha')}" alt=""></span>` : `<img src="${ab.icon}" alt="">`;
   }
+  const dots = lv => `<span class="q-lv" aria-hidden="true">${[1, 2, 3].map(k => `<i${k <= lv ? ' class="on"' : ''}></i>`).join('')}</span>`;
+  const chg = ab => (ab.charges != null ? '<b class="q-chg"></b>' : '');
   function openMenu(i) {
     const u = st.units[i];
     if (!u || u.down || st.over || briefingOpen()) return;
     select([i], { keepFollow: true });
     endAim();
     menuFor = i;
-    const items = [...abilitiesFor(u.id).map(a => ({ a })), { stop: true }];
-    const ang = [-150, -30, 90], R = 72;
+    // Plätze links/rechts neben dem Rüther, Namen weit genug seitlich: sein echtes Gesicht in der Mitte bleibt frei.
+    // Obere Plätze (ohne y) hängen mit der Unterkante RING_UP px über der Gesichtsreihe, der Name steht über dem Symbol:
+    // so landet kein Name auf den Gesichtern der Teamkameraden daneben (§0)
+    const list = abs[i], at = list.length >= 3 ? [[-78], [78], [-78, 56], [78, 56]] : [[-78], [78], [0, 72]];
     ringEl.innerHTML = '';
-    items.forEach((it, k) => {
+    [...list.map(a => ({ a })), { stop: true }].forEach((it, k) => {
       const b = document.createElement('button');
       b.className = 'q-ring-item';
-      b.style.left = `${Math.round(Math.cos(ang[k] * Math.PI / 180) * R)}px`;
-      b.style.top = `${Math.round(Math.sin(ang[k] * Math.PI / 180) * R)}px`;
+      b.style.left = `${at[k][0]}px`;
+      if (at[k][1] == null) { b.classList.add('up'); b.style.bottom = `${RING_UP}px`; } else b.style.top = `${at[k][1]}px`;
       if (it.stop) { b.classList.add('stop'); b.innerHTML = '<span class="q-ring-ico"><i></i></span><span class="q-ring-name">Stopp</span>'; b.addEventListener('click', () => { closeMenu(); send({ type: 'stop', unit: i }); }); }
       else {
         b.dataset.ab = it.a.id;
-        b.innerHTML = `<span class="q-ring-ico">${abIcon(it.a)}<span class="q-cd"></span></span><span class="q-ring-name">${esc(it.a.name)}</span>`;
+        b.setAttribute('aria-label', `${it.a.name}, Stufe ${it.a.level}`);
+        b.innerHTML = `<span class="q-ring-ico">${abIcon(it.a)}<span class="q-cd"></span>${chg(it.a)}</span>${dots(it.a.level)}<span class="q-ring-name">${esc(it.a.name)}</span>`;
         b.addEventListener('click', () => chooseAbility(i, it.a.id));
       }
       ringEl.appendChild(b);
@@ -372,27 +441,30 @@ export function createQuestScreen({ el, onEnd }) {
     powersKey = key;
     powersEl.innerHTML = '';
     if (!one) { powersEl.innerHTML = '<span class="q-powers-none">Ganzes Team gewählt</span>'; return; }
-    for (const ab of abilitiesFor(one.id)) {
+    for (const ab of abs[one.i]) {
       const b = document.createElement('button');
       b.className = 'q-ab';
       b.dataset.ab = ab.id;
-      b.setAttribute('aria-label', ab.name);
-      b.innerHTML = `${abIcon(ab)}<span class="q-cd"></span>`;
+      b.setAttribute('aria-label', `${ab.name}, Stufe ${ab.level}`);
+      b.innerHTML = `${abIcon(ab)}<span class="q-cd"></span>${chg(ab)}${dots(ab.level)}`;
       b.addEventListener('click', () => { if (st && !st.over) chooseAbility(one.i, ab.id); });
       powersEl.appendChild(b);
     }
-    const m = document.createElement('button');
-    m.className = 'q-menu';
-    m.textContent = 'Kräfte';
-    m.addEventListener('click', () => { if (st && !st.over) openMenu(one.i); });
-    powersEl.appendChild(m);
+    if (abs[one.i].length < 3) { // dritter Slot leer: Hinweis auf die Sammlung
+      const b = document.createElement('button');
+      b.className = 'q-ab free';
+      b.textContent = 'frei';
+      b.addEventListener('click', () => msg('Dritter Slot frei. Kauf in der Sammlung eine Fähigkeit aus seinem Pool.', 2600));
+      powersEl.appendChild(b);
+    }
   }
-  function cdView(node, u, id) {
-    const ab = ABILITIES[id], left = Math.max(0, (u.cd[id] || 0) - st.time), cd = node.querySelector('.q-cd');
-    const off = left > 0 || u.item || u.down;
-    node.classList.toggle('cool', off);
-    node.style.setProperty('--cd', (left / ab.cd).toFixed(3));
-    setText(cd, left > 0 ? `${Math.ceil(left / 1000)}` : '');
+  // Abklingzeit als Tortenstück und Sekunden, Ladungen als Zahl (Feierabend: 0 = aufgebraucht)
+  function cdView(node, u, ab) {
+    const left = Math.max(0, (u.cd[ab.id] || 0) - st.time), n = ab.charges != null ? u.charges[ab.id] || 0 : null;
+    node.classList.toggle('cool', left > 0 || n === 0 || !!u.item || u.down);
+    node.style.setProperty('--cd', ab.cd ? (left / ab.cd).toFixed(3) : '0');
+    setText(node.querySelector('.q-cd'), left > 0 ? `${Math.ceil(left / 1000)}` : '');
+    if (n != null) setText(node.querySelector('.q-chg'), `${n}×`);
   }
   // HUD-Hinweis aus den Fänger-Typen der Karte: Kieser-Zähler mit aktuellem Belohnungsstand bzw. die Strafe fürs Erwischtwerden
   const kieserReward = n => { const r = QUEST_SATS[st.missionId]; return r?.kieser ? Math.max(r.min || 0, r.base - r.kieser * n) : null; };
@@ -428,8 +500,8 @@ export function createQuestScreen({ el, onEnd }) {
     }
     buildPowers();
     const one = sel.length === 1 ? st.units[sel[0]] : null;
-    if (one) for (const b of powersEl.querySelectorAll('.q-ab')) cdView(b, one, b.dataset.ab);
-    if (menuFor >= 0) for (const b of ringEl.querySelectorAll('[data-ab]')) cdView(b, st.units[menuFor], b.dataset.ab);
+    if (one) for (const b of powersEl.querySelectorAll('.q-ab[data-ab]')) cdView(b, one, abOf(one.i, b.dataset.ab));
+    if (menuFor >= 0) for (const b of ringEl.querySelectorAll('[data-ab]')) cdView(b, st.units[menuFor], abOf(menuFor, b.dataset.ab));
     el.classList.toggle('q-over', st.over);
     extractBtn.disabled = !canExtract(st);
     extractBtn.classList.toggle('ready', !extractBtn.disabled);
@@ -471,7 +543,7 @@ export function createQuestScreen({ el, onEnd }) {
     const where = st.layoutId != null && st.layout?.name ? `<span class="q-card-layout">Karte: ${esc(st.layout.name)}${st.mirror ? ' · gespiegelt' : ''}</span>` : '';
     const warn = catcher.fine ? `<p class="q-card-warn">Erwischt = −${fmt(catcher.fine)} Sats Strafe</p>` : '';
     cardEl.innerHTML = `<p class="q-card-place">${esc(m.place)}</p><h2>${esc(m.name)}</h2>`
-      + `<p class="q-card-var">${where}<b>Variante: ${esc(v.name)}.</b> ${esc(v.desc)}</p><p>${esc(m.intro)}</p><p class="q-card-hint">${esc(m.hint)}</p>${warn}`
+      + `<p class="q-card-var">${where}<b>Variante: ${esc(v.name)}.</b> ${esc(v.desc)}</p><p>${esc(m.intro)}</p><p class="q-card-hint">${esc(m.hint)}</p><p class="q-card-melee">${esc(MELEE_HINT)}</p>${warn}`
       + `<div class="q-card-team">${st.units.map(u => `<img class="r-${esc(u.rarity)}" src="${face(u.id)}" alt="${esc(short(u.id))}">`).join('')}</div>`
       + `<p class="q-card-meta">${esc(m.objective.label)} · ${st.timeLimit == null ? 'Keine Eile' : mmss(st.timeLimit)}${solo}</p><button class="primary q-go">Los!</button>`;
     cardEl.classList.remove('hidden');
@@ -517,8 +589,9 @@ export function createQuestScreen({ el, onEnd }) {
           break;
         case 'steal':
           if (!e.instant) coinsFly(e.x, e.y, U.x, U.y - 0.6, 1);
+          if (e.shared) coinsFly(e.x, e.y, U.x, U.y - 0.6, e.n, 420); // Wallet Stufe 3: Teamkamerad kriegt mit
           sfx.play('steal');
-          text({ x: e.x, y: e.y - 0.5 }, `+${e.n}`, GOLD, 16);
+          if (!e.instant || e.shared) text({ x: e.x, y: e.y - 0.5 }, `+${e.n}`, GOLD, 16); // Wallet: das „+n“ steht schon am Rüther (case 'wallet')
           break;
         case 'vaultEmpty': text({ x: e.x, y: e.y - 0.4 }, 'leer', PAPER, 13); break;
         case 'sabotage':
@@ -555,6 +628,7 @@ export function createQuestScreen({ el, onEnd }) {
         case 'doorOpen':
           burst(e.x, e.y, 8, { colors: [GOLD, TEAL], speed: 40, up: 30, ms: 600 });
           if (e.by != null) say({ u: e.by }, 'Plus 70 Prozent. Auch auf Türen.', 2000);
+          if (e.silent) text({ x: e.x, y: e.y - 1.6 }, 'lautlos', PAPER, 12, 1300);
           if (miniBase) miniBase.cv = paintMini(st, th, miniBase.s); // Minikarte zeigt die Tür offen
           sfx.play('coin');
           break;
@@ -569,11 +643,18 @@ export function createQuestScreen({ el, onEnd }) {
         case 'baitTaken': say({ e: e.enemy }, e.say); break;
         case 'stun': {
           flash.set(st.enemies[e.enemy], now() + 140);
-          if (e.reason === 'handbag' || e.reason === 'controller') { burst(e.x, e.y - 0.3, 6, { kind: 'star', colors: [GOLD], speed: 50, up: 30, ms: 700, size: 1.3 }); }
-          if (STUN_TXT[e.reason] && e.reason !== 'gas') text({ e: e.enemy }, STUN_TXT[e.reason], e.reason === 'hack' ? TEAL : GOLD, 16);
-          if (e.reason === 'eat') burst(e.x, e.y, 6, { colors: ['#7FD36B', '#4E9A3C'], speed: 20, up: 20, grav: -30, ms: 1000 });
+          if (e.bounce != null) throwArc(THROWN.controller, e.fromX, e.fromY - 0.3, e.x, e.y, 320, { size: 22, spin: 5 * Math.PI }); // Abpraller
+          if (e.reason === 'controller' || e.reason === 'slip') burst(e.x, e.y - 0.3, 6, { kind: 'star', colors: [GOLD], speed: 50, up: 30, ms: 700, size: 1.3 });
+          if (STUN_TXT[e.reason]) text({ e: e.enemy }, STUN_TXT[e.reason], e.reason === 'hack' || e.reason === 'lizenz' ? TEAL : GOLD, 16);
+          if (e.reason === 'eat') {
+            burst(e.x, e.y, 6, { colors: ['#7FD36B', '#4E9A3C'], speed: 20, up: 20, grav: -30, ms: 1000 });
+            if (e.left > 0) text({ x: e.x, y: e.y - 1.3 }, 'Da ist noch eine Portion!', MMS[3], 13, 1600);
+          }
+          if (e.reason === 'slip') burst(e.x, e.y + 0.2, 12, { colors: [GOLD, PAPER, AMBER], speed: 50, up: 40, grav: 160, ms: 700, size: 3 });
+          if (e.reason === 'lizenz') burst(e.x, e.y - 0.3, 10, { kind: 'spark', colors: [TEAL, PINK], speed: 60, up: 20, grav: 0, ms: 600, size: 1.3 });
+          if (e.listener) text({ x: e.x, y: e.y - 1.4 }, 'hört zu …', PAPER, 13, 1500);
           say({ e: e.enemy }, e.say);
-          if (e.reason === 'controller' || e.reason === 'handbag') sfx.play('hit');
+          if (e.reason === 'controller' || e.reason === 'slip') sfx.play('hit');
           break;
         }
         case 'wake': say({ e: e.enemy }, e.say); break;
@@ -588,6 +669,7 @@ export function createQuestScreen({ el, onEnd }) {
           popAt.set(en, now());
           say({ e: e.enemy }, e.say);
           if (e.megafon) { for (let k = 0; k < 3; k++) ring(e.x, e.y, 3, RED, 700, k * 180); text({ e: e.enemy }, 'MEGAFON!', RED, 18, 1300); }
+          if (e.muted) { text({ x: e.x, y: e.y - 1.5 }, 'Funkloch: keiner hört ihn', '#9AA0A6', 13, 1800); sfx.play('warn'); break; } // WLAN Stufe 3
           pulseEdge(); sfx.play('alarm'); haptic([60, 40, 60]);
           break;
         }
@@ -614,9 +696,7 @@ export function createQuestScreen({ el, onEnd }) {
           text({ x: e.x, y: e.y - 0.5 }, 'Verstärkung!', RED, 18, 1500);
           sfx.play('rage');
           break;
-        case 'effectEnd':
-          if (e.kind === 'gas') burst(e.x, e.y, 10, { colors: ['#9BE36B', '#5BB55A'], speed: 30, up: 10, grav: -20, ms: 900, size: 4 });
-          break;
+        case 'effectEnd': effectEnd(e); break;
         // ---------- v9 ----------
         case 'valve':
           valveAt.set(e.obj, now());
@@ -665,48 +745,174 @@ export function createQuestScreen({ el, onEnd }) {
         }
         case 'caught': caught = e; haptic([120, 60, 120]); break;
         case 'end': endSequence(e); break;
+        default: v10Event(e);
       }
     }
   }
 
+  // v10: neue Engine-Events (Verhalten, platzierte Objekte, Tarnung)
+  function v10Event(e) {
+    const en = e.enemy != null ? st.enemies[e.enemy] : null;
+    switch (e.type) {
+      case 'task': say({ e: e.enemy }, e.say); if (e.kind === 'sale' || e.kind === 'raubkopie') popAt.set(en, now()); break;
+      case 'taskEnd':
+        say({ e: e.enemy }, e.say);
+        if (e.reason === 'wach') { popAt.set(en, now()); text({ e: e.enemy }, 'WACH!', RED, 18, 1200); sfx.play('warn'); }
+        scolder.delete(e.enemy);
+        break;
+      case 'phone':
+        for (let k = 0; k < 2; k++) ring(e.x, e.y, e.r, GREEN, 900, k * 260);
+        text({ x: e.x, y: e.y - 1 }, 'KURS-ALARM!', GREEN, 16, 1400);
+        sfx.play('coin');
+        break;
+      case 'puddle':
+        burst(e.x, e.y, 14, { colors: [GOLD, PAPER, AMBER], speed: 45, up: 50, grav: 180, ms: 700, size: 3 });
+        text({ x: e.x, y: e.y - 0.8 }, 'Pfütze!', GOLD, 14);
+        break;
+      case 'disguiseEnd':
+        if (DISGUISE_END[e.reason]) text({ u: e.unit }, DISGUISE_END[e.reason], e.reason === 'zeit' ? PAPER : RED, 14, 1500);
+        for (const sd of [-1, 1]) burst(e.x + sd * 0.65, e.y - 0.2, 4, { kind: 'spark', colors: [GOLD, PAPER], speed: 50, up: 20, grav: 0, ms: 600, size: 1.3, side: sd });
+        break;
+      case 'vpSend': say({ u: e.unit }, e.say, 2200); text({ e: e.enemy }, 'Zum Tor!', GOLD, 15, 1500); break;
+      case 'routesSwapped': for (const i of e.enemies) text({ e: i }, 'Runde getauscht!', AMBER, 13, 1700); sfx.play('tap'); break;
+      case 'gone':
+        burst(e.x, e.y, 14, { colors: ['#8a8f94', PAPER], speed: 50, up: 40, grav: -20, ms: 800, size: 4 });
+        pop('art/q-box.png', e.x, e.y - 0.4, { size: 26, ms: 1300, kind: 'rise' });
+        text({ x: e.x, y: e.y - 1.2 }, 'Gekündigt!', GOLD, 16, 1600);
+        say({ x: e.x, y: e.y }, e.say, 2200);
+        sfx.play('quest');
+        break;
+      case 'alarmDrop': msg(`Der Kurs hat sich erholt: alle tiefenentspannt, Alarm −${Math.round(e.drop * 100)} %.`, 2800); sfx.play('quest'); break;
+      case 'heard': popAt.set(en, now()); say({ e: e.enemy }, e.say); break;
+    }
+  }
+  function effectEnd(e) {
+    if (e.kind === 'gas') burst(e.x, e.y, 10, { colors: ['#9BE36B', '#5BB55A'], speed: 30, up: 10, grav: -20, ms: 900, size: 4 });
+    else if (e.kind === 'deo') burst(e.x, e.y, 12, { colors: [PINK, '#FFD3EA'], speed: 40, up: 10, grav: -20, ms: 1000, size: 4 });
+    else if (e.kind === 'wlan') text({ x: e.x, y: e.y - 0.5 }, 'Netz wieder da', TEAL, 13, 1300);
+    else if (e.kind === 'firewall') burst(e.x, e.y, 12, { kind: 'spark', colors: [TEAL, '#BFF5EC'], speed: 60, up: 30, grav: 40, ms: 700, size: 1.3 });
+    else if (e.kind === 'decoy') { burst(e.x, e.y, 12, { colors: [TEAL, PINK, PAPER], speed: 50, up: 20, grav: 0, ms: 600, size: 3 }); text({ x: e.x, y: e.y - 0.8 }, 'verpufft', PINK, 13); }
+    else if (e.kind === 'sale' || e.kind === 'horde') burst(e.x, e.y, 10, { colors: e.kind === 'sale' ? ['#8a8f94', PAPER] : [RED, GOLD, TEAL, '#3F8EF5'], speed: 50, up: 40, grav: 60, ms: 700, size: 3 });
+  }
+
   function ability(e, u) {
-    const x = e.x, y = e.y;
+    const x = e.x, y = e.y, ens = ids => ids.filter(i => i >= 0).map(i => st.enemies[i]);
+    if (e.say) say({ u: e.unit }, e.say, e.ability === 'argue' ? 3200 : 2600);
     switch (e.ability) {
       case 'plus70':
         doorAt.set(e.door, now());
         pop(fxArt('chart-up'), e.tx, e.ty - 0.4, { size: 48, ms: 1300, kind: 'rise' });
         for (let k = 0; k < 10; k++) fx.parts.push({ x: (e.tx + (Math.random() - 0.5) * 2.4) * TILE, y: (e.ty - 2.2) * TILE, vx: (Math.random() - 0.5) * 20, vy: 10, grav: 260, kind: 'img', src: 'art/q-coin.png', size: 10, ms: 900 + Math.random() * 300, born: now() + k * 60 });
         text({ x: e.tx, y: e.ty - 1 }, '+70 %', GOLD, 24, 1500);
+        if (e.quick) text({ u: e.unit }, 'Nächster Klau: sofort!', GOLD, 13, 1800);
         sfx.play('special');
         break;
-      case 'beer': case 'mms': case 'controller':
-        throwArc(fxArt(THROWN[e.item]), x, y - 0.3, e.tx, e.ty, e.ms, { size: e.item === 'controller' ? 24 : 22, spin: e.item === 'mms' ? Math.PI : 5 * Math.PI });
+      case 'beer': case 'mms': case 'controller': case 'kursalarm':
+        throwArc(THROWN[e.item], x, y - 0.3, e.tx, e.ty, e.ms, { size: e.item === 'controller' ? 24 : 22, spin: e.item === 'mms' ? Math.PI : e.item === 'phone' ? 2 * Math.PI : 5 * Math.PI });
+        if (e.portions > 1) text({ u: e.unit }, 'Familienpackung!', MMS[3], 14, 1500);
+        if (e.ability === 'kursalarm') say({ u: e.unit }, 'Schaut mal, der Kurs!', 2000);
         sfx.play('throw');
+        break;
+      case 'vp':
+        for (const sd of [-1, 1]) burst(x + sd * 0.65, y - 0.2, 7, { kind: 'spark', colors: [GOLD, PAPER], speed: 70, up: 30, grav: 0, ms: 800, size: 1.4, side: sd });
+        text({ u: e.unit }, 'Vice President', GOLD, 15, 1600);
+        sfx.play('special');
+        break;
+      case 'wlan':
+        for (let k = 0; k < 3; k++) ring(e.tx, e.ty, e.size / 2, TEAL, 800, k * 220);
+        text({ x: e.tx, y: e.rect.y0 - 0.9 }, 'WLAN-STÖRUNG', TEAL, 15, 1600); // über der Zone, nicht auf der Drohne; „FUNKLOCH“ steht dauerhaft am Rand darunter
+        say({ u: e.unit }, 'Moment, ich starte mal kurz den Router neu.', 2200);
+        sfx.play('special');
         break;
       case 'family':
         banner(fxLayer, { title: 'Familientreffen', sub: 'Christian! Micha! Kommt sofort her!', portrait: face(u.id), rarity: u.rarity, ms: 1500 });
         for (const h of e.helpers) fx.helpers.push({ id: h.id, x0: h.x * TILE, y0: h.y * TILE, x1: h.tx * TILE, y1: h.ty * TILE, ms: e.ms, born: now(), enemy: h.enemy });
+        if (e.silent) text({ u: e.unit }, 'ganz leise', PAPER, 12, 1500);
         sfx.play('special'); haptic(40);
         break;
-      case 'handbag':
-        pop(fxArt('handbag'), (x + e.tx) / 2, (y + e.ty) / 2 - 0.3, { size: 26, ms: 450, kind: 'swing' });
-        if (e.silent) text({ x: e.tx, y: e.ty - 0.9 }, 'leise', PAPER, 12);
+      case 'junge':
+        scolder.set(e.enemy, e.unit); chatAt.delete(e.enemy);
+        popAt.set(st.enemies[e.enemy], now());
+        ring(e.tx, e.ty, 1, AMBER, 600);
+        sfx.play('warn');
+        break;
+      case 'mittag': case 'crash':
+        for (let k = 0; k < 2; k++) ring(x, y, e.r, e.ability === 'mittag' ? SKY : RED, 1100, k * 300);
+        for (const en of ens(e.enemies)) {
+          if (e.ability === 'mittag') text({ e: en.i }, 'Zzz', SKY, 15, 1500);
+          else pop('art/ab-crash.png', en.x, en.y - 1.1, { size: 22, ms: 1200, kind: 'rise' });
+        }
+        sfx.play(e.ability === 'mittag' ? 'tap' : 'warn');
+        break;
+      case 'tratsch':
+        for (const en of ens(e.enemies)) ring(en.x, en.y, 0.9, AMBER, 700);
+        pop('art/ab-tratsch.png', e.meet.x, e.meet.y - 0.8, { size: 28, ms: 1400, kind: 'rise' });
+        sfx.play('tap');
+        break;
+      case 'mutter':
+        pop('art/ab-mutter.png', e.tx, e.ty - 1.1, { size: 26, ms: 1400, kind: 'rise' });
+        for (let k = 0; k < 3; k++) ring(e.tx, e.ty, 1.4, RED, 500, k * 180);
+        text({ e: e.enemy }, 'RING RING!', RED, 16, 1500);
+        sfx.play('warn');
         break;
       case 'gas':
         say({ u: e.unit }, 'Riecht ihr das? Ich nicht.', 2000);
         sfx.play('gas');
         break;
-      case 'argue': say({ u: e.unit }, e.say, 3200); sfx.play('special'); break;
+      case 'argue': sfx.play('special'); break;
+      case 'insider':
+        pop('art/ab-insider.png', e.tx, e.ty - 1.1, { size: 24, ms: 1300, kind: 'rise' });
+        ring(e.to.x, e.to.y, 1, GOLD, 900);
+        sfx.play('tap');
+        break;
+      case 'deo':
+        throwArc('art/ab-deo.png', x, y - 0.3, e.tx, e.ty, 380, { size: 22, spin: 2 * Math.PI });
+        say({ u: e.unit }, 'Duschen? Ich hab Deo.', 2000);
+        if (e.mute) text({ x: e.tx, y: e.ty - e.size / 2 - 0.3 }, 'gedämpft', PINK, 13, 1500);
+        sfx.play('gas');
+        break;
       case 'wallet':
         pop(fxArt('wallet'), e.tx, e.ty - 0.5, { size: 28, ms: 800 });
         if (e.mode === 'vault') { coinsFly(e.tx, e.ty, x, y - 0.6, e.coins, 420); text({ u: e.unit }, `+${e.coins}`, GOLD, 18); sfx.play('coin'); }
         else { fx.bolts.push({ x0: x * TILE, y0: y * TILE, x1: e.tx * TILE, y1: e.ty * TILE, ms: 500, born: now() }); sfx.play('special'); }
         break;
+      case 'firewall':
+        fx.bolts.push({ x0: x * TILE, y0: y * TILE, x1: e.tx * TILE, y1: e.ty * TILE, ms: 450, born: now() });
+        text({ x: e.tx, y: e.ty - 1.3 }, e.opaque ? 'FIREWALL: BLICKDICHT' : 'FIREWALL', TEAL, 15, 1500);
+        say({ u: e.unit }, 'Zugriff verweigert. Nur für Rüther.', 2200);
+        sfx.play('special');
+        break;
+      case 'raubkopie':
+        burst(e.from.x, e.from.y, 12, { kind: 'spark', colors: [TEAL, PINK], speed: 60, up: 20, grav: 0, ms: 600, size: 1.4 });
+        text({ x: e.from.x, y: e.from.y - 1 }, 'RAUBKOPIE', PINK, 15, 1500);
+        say({ u: e.unit }, 'Die ist nicht ganz legal.', 2000);
+        sfx.play('special');
+        break;
+      case 'vibra':
+        for (const en of ens([e.enemy, e.second])) { ring(en.x, en.y, 1, TEAL, 500); ring(en.x, en.y, 1, TEAL, 500, 200); }
+        sfx.play('tap');
+        break;
       case 'credits':
         coinsFly(x, y - 0.3, e.tx, e.ty - 0.3, 5, 380);
         pop(fxArt('bags'), e.tx, e.ty - 0.8, { size: 26, ms: 1000, delay: 380 });
+        if (e.spy) text({ e: e.enemy }, 'Spitzel!', LILAC, 15, 1600);
         say({ u: e.unit }, 'Unlimited Credits. Kauf dir was Schönes.', 2200);
         sfx.play('coin');
+        break;
+      case 'horde':
+        burst(e.tx, e.ty, 16, { colors: [RED, GOLD, TEAL, '#3F8EF5'], speed: 70, up: 50, grav: 120, ms: 800, size: 3 });
+        say({ u: e.unit }, 'Kinder! Da drüben gibt’s Eis!', 2000);
+        sfx.play('rage');
+        break;
+      case 'sale':
+        text({ x: e.tx, y: e.ty - 1.2 }, 'SALE!', RED, 18, 1500);
+        say({ u: e.unit }, 'Alles muss raus!', 1800);
+        sfx.play('coin');
+        break;
+      case 'feierabend':
+        pop('art/q-box.png', e.tx, e.ty - 0.6, { size: 24, ms: 900 });
+        text({ u: e.unit }, `Feierabend: noch ${e.charges}×`, PAPER, 12, 1600);
+        sfx.play('quest');
         break;
     }
   }
@@ -820,7 +1026,7 @@ export function createQuestScreen({ el, onEnd }) {
       box((o.x + 0.5) * s, (o.y + 0.5) * s, Math.max(3, Math.round(s * 0.7)), o.kind === 'tree' && o.done ? (Math.floor(rt / 220) % 2 ? RED : AMBER) : open ? GOLD : '#8a8f94');
     }
     for (const e of st.enemies) {
-      if (!seenE.has(e.i)) continue;
+      if (!seenE.has(e.i) || e.gone) continue;
       const p = pos(e), T = ENEMY_TYPES[e.type], z = Math.max(14, s * 3), im = e.state === 'ko' ? variant(`art/${T.sprite}.png`, 'grey') : img(`art/${T.sprite}.png`);
       if (e.state === 'alert') box(p.x * s, p.y * s, Math.round(z / 2), RED);
       if (im) { m.imageSmoothingEnabled = true; m.drawImage(im, p.x * s - z / 2, p.y * s - z / 2, z, z); m.imageSmoothingEnabled = false; }
@@ -889,7 +1095,7 @@ export function createQuestScreen({ el, onEnd }) {
     if (sw > 0 && sh > 0) g.drawImage(mapCv, sx, sy, sw, sh, sx, sy, sw, sh);
     if (hasWater) drawWater(view);
     drawDoors(); drawObjs(); drawSaucer(); drawEffects(); drawCones(inView); drawPaths(); drawAim();
-    drawEnemies(inView); drawUnits(); drawFx();
+    drawEnemies(inView); drawOverlay(); drawDecoys(); drawUnits(); drawFx();
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     drawScreen();
     placeMenu();
@@ -976,8 +1182,10 @@ export function createQuestScreen({ el, onEnd }) {
     sprite(img('art/fx-haunebu.png'), x, y, 78 * sc);
   }
 
+  // Platzierte Objekte am Boden (unter den Figuren); Deo-Nebel und Kinderhorde liegen darüber (drawOverlay)
   function drawEffects() {
     for (const f of st.effects) {
+      const kin = clamp(age(f.until - (f.ms || 0)) / 600), kout = clamp((f.until - gt) / 800);
       if (f.kind === 'gas') {
         const kin = clamp(age(f.until - f.ms) / 700), kout = clamp((f.until - gt) / 900);
         g.fillStyle = gasPat;
@@ -996,13 +1204,108 @@ export function createQuestScreen({ el, onEnd }) {
         }
         g.globalAlpha = 1;
       } else if (f.kind === 'mms') {
-        const k = clamp(age(effAt.get(f.id) ?? now()) / 350);
-        for (let j = 0; j < 12; j++) {
-          const a = hash(f.id, j) * 2 * Math.PI, d = (3 + hash(f.id, j, 2) * 10) * k;
+        const k = clamp(age(effAt.get(f.id) ?? now()) / 350), n = f.portions > 1 ? 18 : 12;
+        for (let j = 0; j < n; j++) {
+          const a = hash(f.id, j) * 2 * Math.PI, d = (3 + hash(f.id, j, 2) * (n > 12 ? 13 : 10)) * k;
           g.fillStyle = INK; g.fillRect(Math.round(f.x * TILE + Math.cos(a) * d) - 2, Math.round(f.y * TILE + Math.sin(a) * d) - 2, 5, 5);
           g.fillStyle = MMS[j % MMS.length]; g.fillRect(Math.round(f.x * TILE + Math.cos(a) * d) - 2, Math.round(f.y * TILE + Math.sin(a) * d) - 2, 4, 4);
         }
-      }
+      } else if (f.kind === 'wlan') drawWlan(f, kin * kout, kout);
+      else if (f.kind === 'puddle') { g.globalAlpha = kout; puddle(g, f.x * TILE, f.y * TILE + 6, gt, kin); g.globalAlpha = 1; }
+      else if (f.kind === 'phone') drawPhoneFx(f, kout);
+      else if (f.kind === 'sale') drawSign(f, kin, kout);
+      else if (f.kind === 'firewall') drawFirewall(f, kin, kout);
+    }
+  }
+  const rectPx = f => ({ x: f.x0 * TILE, y: f.y0 * TILE, w: (f.x1 - f.x0 + 1) * TILE, h: (f.y1 - f.y0 + 1) * TILE });
+  // WLAN-Störung: dunkle Zone mit Rauschen, Wellen aus der Mitte, gestörtes WLAN-Symbol; Funkloch beschriftet
+  function drawWlan(f, a, kout) {
+    const r = rectPx(f), fr = Math.floor(gt / 120);
+    g.globalAlpha = 0.38 * a; g.fillStyle = INK; g.fillRect(r.x, r.y, r.w, r.h);
+    g.globalAlpha = 0.6 * a; g.fillStyle = '#0d1626';
+    for (let k = 0; k < 18; k++) g.fillRect(Math.round(r.x + hash(fr, k, f.id) * (r.w - 4)), Math.round(r.y + hash(fr, k, f.id + 1) * (r.h - 4)), 4, 2);
+    g.strokeStyle = TEAL; g.lineWidth = 2;
+    for (let k = 0; k < 2; k++) { const ph = (gt / 1400 + k / 2) % 1; g.globalAlpha = (1 - ph) * 0.7 * a; g.beginPath(); g.arc(f.x * TILE, f.y * TILE, 6 + ph * r.w / 2, 0, 2 * Math.PI); g.stroke(); }
+    g.globalAlpha = 0.85 * kout; g.setLineDash([4, 4]); g.lineDashOffset = -gt / 80; g.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2); g.setLineDash([]);
+    g.globalAlpha = kout; wifi(g, f.x * TILE, f.y * TILE + 4, gt);
+    g.globalAlpha = 1;
+    if (f.funkloch) label(f.x * TILE, r.y - 8, 'FUNKLOCH', AMBER, 12);
+  }
+  // Kurs-Alarm: Handy mit Chart am Boden, grüner Puls, wechselnde Kurse
+  function drawPhoneFx(f, kout) {
+    const x = f.x * TILE, y = f.y * TILE, ph = (gt / 900) % 1;
+    g.globalAlpha = (1 - ph) * 0.7 * kout; g.strokeStyle = GREEN; g.lineWidth = 2;
+    g.beginPath(); g.arc(x, y, 8 + ph * 22, 0, 2 * Math.PI); g.stroke();
+    g.globalAlpha = 1;
+    shadow(x, y + 9, 18);
+    sprite(img('art/q-phone.png'), x, y - 2 + Math.round(Math.sin(rt / 200)), 24, { alpha: kout });
+    if ((gt / 800) % 1 < 0.55) label(x, y - 22, KURS[Math.floor(gt / 800) % KURS.length], GREEN, 12);
+  }
+  // Sale-Schild mit Wirkkreis
+  function drawSign(f, kin, kout) {
+    const x = f.x * TILE, y = f.y * TILE;
+    g.globalAlpha = 0.4 * kout; g.setLineDash([3, 5]); g.strokeStyle = GOLD; g.lineWidth = 2;
+    g.beginPath(); g.arc(x, y, f.r * TILE, 0, 2 * Math.PI); g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
+    shadow(x, y + 13, 24);
+    sprite(img('art/q-sign.png'), x, y - 4, 34 * (0.5 + 0.5 * kin), { rot: Math.sin(gt / 500) * 0.05, alpha: kout });
+    if (Math.floor(rt / 300) % 3 === 0) bitmap(g, 'spark', x + 13, y - 18, 1, GOLD);
+  }
+  // Firewall: Flammen-Pixel in Blau-Teal je Kachel, Schild in der Mitte; blickdicht (Stufe 3) mit dunklem Grund
+  function drawFirewall(f, kin, kout) {
+    for (const t of f.tiles) {
+      const tx = t.x * TILE, ty = t.y * TILE;
+      g.globalAlpha = (f.opaque ? 0.65 : 0.3) * kin * kout; g.fillStyle = '#123247'; g.fillRect(tx, ty, TILE, TILE);
+      g.globalAlpha = kout; g.fillStyle = INK; g.fillRect(tx + 1, ty + TILE - 9, TILE - 2, 6); g.fillStyle = '#1F5E8A'; g.fillRect(tx + 2, ty + TILE - 8, TILE - 4, 4);
+      flames(g, tx + TILE / 2, ty + TILE - 6, gt + t.x * 137 + t.y * 71, kin * (f.opaque ? 1.35 : 1.15), 4, 26, BLUE_FIRE);
+    }
+    g.globalAlpha = 1;
+    sprite(img('art/ab-firewall.png'), f.x * TILE, f.y * TILE - 10 + Math.sin(gt / 300) * 2, 28 * kin, { alpha: kout });
+  }
+  // Über den Gegnern, unter den Rüthern (echte Gesichter bleiben frei): rosa Deo-Nebel, Kinderhorde
+  function drawOverlay() {
+    for (const f of st.effects) {
+      const kin = clamp(age(f.until - (f.ms || 0)) / 700), kout = clamp((f.until - gt) / 900);
+      if (f.kind === 'deo') {
+        g.fillStyle = deoPat; g.globalAlpha = 0.9 * kout;
+        for (const t of f.tiles) for (let k = 0; k < 2; k++) {
+          const ph = gt / 700 + k * 2.4 + t.x * 1.1 + t.y * 0.6, r = (19 + 3 * Math.sin(ph * 1.7)) * (0.25 + 0.75 * kin);
+          g.beginPath(); g.arc((t.x + 0.5 + Math.cos(ph) * 0.18) * TILE, (t.y + 0.5 + Math.sin(ph * 1.2) * 0.18) * TILE, r, 0, 2 * Math.PI); g.fill();
+        }
+        g.fillStyle = '#FFE3F2'; // Duft-Glitzer
+        for (let k = 0; k < 10; k++) {
+          const ph = (gt / 1700 + hash(f.id, k)) % 1;
+          g.globalAlpha = (1 - ph) * kout * kin;
+          g.fillRect(Math.round((f.x + (hash(f.id, k, 1) - 0.5) * (f.x1 - f.x0 + 1)) * TILE), Math.round((f.y + 0.4) * TILE - ph * 50), 2, 2);
+        }
+        g.globalAlpha = 1;
+      } else if (f.kind === 'horde') drawHorde(f, kin, kout);
+    }
+  }
+  // Trollkids: Gruppen rennen von außen herein und toben im Quadrat herum, Konfetti; Stufe 3 zieht mit
+  function drawHorde(f, kin, kout) {
+    const p = pos(f), W = (2 * f.half + 1) * TILE, cx = p.x * TILE, cy = p.y * TILE, kid = img('art/q-kids.png');
+    g.globalAlpha = 0.5 * kout; g.setLineDash([5, 4]); g.lineDashOffset = -gt / 60; g.strokeStyle = AMBER; g.lineWidth = 2;
+    g.strokeRect(cx - W / 2, cy - W / 2, W, W); g.setLineDash([]); g.globalAlpha = 1;
+    for (let k = 0; k < 5; k++) {
+      const a = gt / (600 + k * 70) + k * 2.1, run = (1 - kin) * (k % 2 ? 1 : -1) * W;
+      const kx = cx + (hash(f.id, k) - 0.5) * (W - 30) * kin + Math.cos(a) * 9 + run, ky = cy + (hash(f.id, k, 1) - 0.5) * (W - 30) * kin + Math.sin(a * 1.3) * 6;
+      shadow(kx, ky + 12, 18);
+      sprite(kid, kx, ky - Math.abs(Math.sin(gt / 110 + k)) * 4, 28, { flip: Math.cos(a) < 0, alpha: kout });
+    }
+    for (let k = 0; k < 8; k++) {
+      const ph = (gt / 900 + hash(f.id, k, 2)) % 1;
+      g.globalAlpha = (1 - ph) * kout; g.fillStyle = [RED, GOLD, TEAL, '#3F8EF5'][k % 4];
+      g.fillRect(Math.round(cx + (hash(f.id, k, 3) - 0.5) * W), Math.round(cy - W / 4 - ph * 30), 3, 3);
+    }
+    g.globalAlpha = 1;
+  }
+  // Raubkopie: das echte Gesicht des gewählten Teammitglieds, halbtransparent und geglitcht (vor den echten Rüthern gezeichnet)
+  function drawDecoys() {
+    for (const f of st.effects) {
+      if (f.kind !== 'decoy') continue;
+      const p = pos(f), k = clamp(age(f.until - f.ms) / 400) * clamp((f.until - gt) / 500), x = p.x * TILE, y = p.y * TILE, src = face(f.face);
+      shadow(x, y + 13, 22);
+      glitchFace(g, img(src), x, y - 2 - (p.moved ? Math.abs(Math.sin(gt / 105)) * 3 : 0), 28, st.units[f.faceUnit]?.rarity || 'normal', gt, k, src);
     }
   }
 
@@ -1057,34 +1360,78 @@ export function createQuestScreen({ el, onEnd }) {
     g.globalAlpha = 0.9; g.setLineDash([6, 4]); g.lineDashOffset = -rt / 60; g.strokeStyle = color; g.lineWidth = 2; g.stroke();
     g.setLineDash([]); g.globalAlpha = 1;
   }
+  function corners(x, y, on) { // leuchtendes Ziel: türkis = sofort, gelb = er läuft erst hin
+    const k = 11 + Math.sin(rt / 140) * 2;
+    g.fillStyle = INK;
+    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) g.fillRect(x + sx * k - 3, y + sy * k - 3, 6, 6);
+    g.fillStyle = on ? TEAL : AMBER;
+    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) g.fillRect(x + sx * k - 2, y + sy * k - 2, 4, 4);
+  }
+  function ghost(r, color, txt, lx, ly) { // Vorschau einer Fläche (Wand, Horde)
+    g.globalAlpha = 0.2; g.fillStyle = color; g.fillRect(r.x, r.y, r.w, r.h);
+    g.globalAlpha = 0.9; g.setLineDash([5, 4]); g.lineDashOffset = -rt / 60; g.strokeStyle = color; g.lineWidth = 2; g.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+    g.setLineDash([]); g.globalAlpha = 1;
+    if (txt) label(lx, ly, txt, color, 13);
+  }
+  // Wand für Punkt q und Richtung d wie rectEffect in der Engine (um die Kachel von q): Gas 3×5, Firewall len×1
+  function dirRect(ab, q, d) {
+    const [w, h] = ab.id === 'firewall' ? (d === 'v' ? [1, ab.len] : [ab.len, 1]) : d === 'v' ? [ab.w, ab.h] : [ab.h, ab.w];
+    return { x: (Math.floor(q.x) - Math.floor(w / 2)) * TILE, y: (Math.floor(q.y) - Math.floor(h / 2)) * TILE, w: w * TILE, h: h * TILE };
+  }
+  // Zielmodus: Reichweitenkreis um den Rüther und leuchtende Ziele; nach der ersten Wahl deren Marke, zweiter Kreis bzw. Vorschau
   function drawAim() {
     if (!aim) return;
     const u = st.units[aim.unit];
     if (!u || u.down) return endAim();
-    const ab = ABILITIES[aim.ab], p = pos(u);
-    circle(p.x * TILE, p.y * TILE, ab.range * TILE, TEAL, 0.08);
-    if (ab.vaultRange) circle(p.x * TILE, p.y * TILE, ab.vaultRange * TILE, GOLD, 0.06);
-    const k = 11 + Math.sin(rt / 140) * 2;
-    for (const t of abilityTargets(st, aim.unit, ab.id)) {
-      const tp = t.enemy != null ? pos(st.enemies[t.enemy]) : t, x = tp.x * TILE, y = tp.y * TILE;
-      g.fillStyle = INK;
-      for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { g.fillRect(x + sx * k - 3, y + sy * k - 3, 6, 6); }
-      g.fillStyle = t.inRange ? TEAL : AMBER;
-      for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { g.fillRect(x + sx * k - 2, y + sy * k - 2, 4, 4); }
+    const { ab, first } = aim, T = ab.target, p = pos(u);
+    if (!first) {
+      const r = T === 'self' ? selfR(ab) : ab.range;
+      if (Number.isFinite(r)) circle(p.x * TILE, p.y * TILE, r * TILE, TEAL, 0.08);
+      if (ab.vaultRange) circle(p.x * TILE, p.y * TILE, ab.vaultRange * TILE, GOLD, 0.06);
+      if (!(LIST.has(T) || T === 'self' || T === 'enemyThenPoint')) return;
+      const tps = abilityTargets(st, aim.unit, ab.id).map(t => (t.enemy != null ? { ...pos(st.enemies[t.enemy]), on: t.inRange } : { ...t, on: t.inRange }));
+      for (const t of tps) corners(t.x * TILE, t.y * TILE, t.on);
+      if (ab.id === 'tratsch' && tps.length === 2) { // Treffpunkt der beiden Streithähne (Mitte, wie in der Engine)
+        const [a, b] = tps, mx = (a.x + b.x) / 2 * TILE, my = (a.y + b.y) / 2 * TILE;
+        g.globalAlpha = 0.8; g.setLineDash([3, 5]); g.strokeStyle = AMBER; g.lineWidth = 2;
+        g.beginPath(); g.moveTo(a.x * TILE, a.y * TILE); g.lineTo(b.x * TILE, b.y * TILE); g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
+        bitmap(g, 'spark', mx, my, 1.4, AMBER);
+        label(mx, my - 14, 'Treffpunkt', AMBER, 11);
+      }
+      return;
     }
+    const q = first.enemy != null ? pos(st.enemies[first.enemy]) : first, qx = q.x * TILE, qy = q.y * TILE;
+    if (ab.range2) circle(qx, qy, ab.range2 * TILE, GOLD, 0.06);
+    if (T === 'pointDir') {
+      const h = dirRect(ab, q, 'h'), v = dirRect(ab, q, 'v');
+      ghost(h, TEAL, 'quer', h.x + h.w + 18, qy);
+      ghost(v, GOLD, 'längs', qx, v.y + v.h + 10);
+    } else if (T === 'pointThenPoint') { const n = ab.size * TILE; ghost({ x: (Math.floor(q.x) + 0.5) * TILE - n / 2, y: (Math.floor(q.y) + 0.5) * TILE - n / 2, w: n, h: n }, AMBER); }
+    else if (T === 'teammatePoint') { const t = st.units[aim.face], src = face(t.id); glitchFace(g, img(src), qx, qy - 2, 28, t.rarity, gt, 0.9, src); }
+    corners(qx, qy, true);
   }
 
+  const NO_STARS = new Set(['gas', 'argue', 'hack', 'wlan', 'lizenz']);
   function drawEnemies(inView) {
     for (const e of st.enemies) {
+      if (e.gone) continue; // gekündigt: für die Mission weg
       const p = pos(e);
       if (!inView(p.x, p.y, 1)) continue;
       seenE.add(e.i);
       const T = ENEMY_TYPES[e.type], src = `art/${T.sprite}.png`, boss = T.sprite.startsWith('boss'), s = boss ? 36 : 30;
-      const hacked = e.state === 'stunned' && e.reason === 'hack', ko = e.state === 'ko', buzz = !ko && e.buzzUntil > st.time;
-      const jit = buzz ? Math.floor(rt / 45) : 0; // koffeiniert: Zittern
-      const x = p.x * TILE + (buzz ? Math.round((hash(jit, e.i) - 0.5) * 3) : 0), y = p.y * TILE + (buzz ? Math.round((hash(jit, e.i, 1) - 0.5) * 2) : 0), ph = gt / 95 + e.i * 1.9;
+      const stun = e.state === 'stunned' ? e.reason : null, task = e.state === 'task' ? e.task : null;
+      const hacked = stun === 'hack' || stun === 'wlan', ko = e.state === 'ko', buzz = !ko && e.buzzUntil > st.time;
+      const shake = task && (task.kind === 'vibra' || task.kind === 'horde' || task.kind === 'panik');
+      const jit = buzz || shake ? Math.floor(rt / 45) : 0; // koffeiniert, Handy brummt, Kinder zerren: Zittern
+      const x = p.x * TILE + apart(e) + (jit ? Math.round((hash(jit, e.i) - 0.5) * 3) : 0), y = p.y * TILE + (jit ? Math.round((hash(jit, e.i, 1) - 0.5) * 2) : 0), ph = gt / 95 + e.i * 1.9;
       const fly = T.flying && !hacked && !ko, lift = fly ? 9 + Math.sin(rt / 260 + e.i) * 2 : 0;
-      const walk = p.moved && !fly && !ko ? Math.sin(ph) * (e.type === 'pinguin' ? 0.2 : 0.1) : 0;
+      const lying = ko || stun === 'slip', doze = task?.kind === 'mittag';
+      const walk = p.moved && !fly && !lying ? Math.sin(ph) * (e.type === 'pinguin' ? 0.2 : 0.1) : 0;
+      if (e.melee) { // Nahkampf: roter Schadens-Indikator
+        const k = Math.floor(rt / 140) % 2;
+        g.globalAlpha = k ? 0.95 : 0.55; g.beginPath(); g.arc(x, y - 2, 18 + k, 0, 2 * Math.PI);
+        g.strokeStyle = INK; g.lineWidth = 5; g.stroke(); g.strokeStyle = RED; g.lineWidth = 3; g.stroke(); g.globalAlpha = 1;
+      }
       shadow(x, y + 12, fly ? 16 : 22);
       if (buzz) { // Aura und gelbe Speed-Linien hinter ihm
         g.globalAlpha = Math.floor(rt / 120) % 2 ? 0.75 : 0.4; g.strokeStyle = GOLD; g.lineWidth = 2;
@@ -1098,11 +1445,15 @@ export function createQuestScreen({ el, onEnd }) {
       }
       let im = img(src);
       if (ko || hacked) im = variant(src, 'grey');
-      else if (e.state === 'eating' || (e.state === 'stunned' && e.reason === 'gas')) im = variant(src, 'tint', '#5BB55A', 0.45);
+      else if (e.state === 'eating' || stun === 'gas') im = variant(src, 'tint', '#5BB55A', 0.45);
+      else if (stun === 'lizenz' && Math.floor(rt / 90) % 3 === 0) im = variant(src, 'tint', TEAL, 0.5);
       if ((flash.get(e) || 0) > gt) im = variant(src, 'tint', '#FFFFFF', 0.75);
       const left = Math.cos(p.dir) < 0;
-      sprite(im, x, y - 3 - lift - (p.moved && !fly ? Math.abs(Math.sin(ph)) * 2 : 0), s, { rot: ko ? Math.PI / 2 : walk, flip: left !== FACE_LEFT.has(e.type) });
+      if (stun === 'slip') puddle(g, x, y + 8, gt, 0.9); // liegt in der Bierpfütze
+      sprite(im, x, y - 3 - lift - (p.moved && !fly ? Math.abs(Math.sin(ph)) * 2 : 0), s, { rot: lying ? Math.PI / 2 : doze ? (left ? -0.35 : 0.35) : walk, flip: left !== FACE_LEFT.has(e.type) });
       const head = y - s / 2 - 6 - lift;
+      const bounce = 1 + 0.5 * Math.max(0, 1 - age(popAt.get(e) ?? -1e9) / 250); // ? und ! hüpfen beim Wechsel
+      if (e.melee) { const k = Math.floor(rt / 140) % 2; bitmap(g, 'spark', x + Math.cos(p.dir) * 17, y - 4 + Math.sin(p.dir) * 10, 1.2, k ? RED : GOLD); }
       if (e.state === 'coffee') { // Bulletproof Coffee: Becher an den Mund, Dampf, *schlürf*
         mug(g, x + (left ? -10 : 10), y - 9, rt);
         if ((rt / 1600 + e.i * 0.3) % 1 < 0.55) label(x, head - 4, '*schlürf*', PAPER, 12);
@@ -1115,24 +1466,105 @@ export function createQuestScreen({ el, onEnd }) {
       }
       if (ko && e.tied) { g.fillStyle = '#8a5a2b'; g.fillRect(x - 14, y - 6, 28, 3); g.fillRect(x - 14, y + 2, 28, 3); g.fillStyle = INK; g.fillRect(x - 2, y - 8, 4, 12); }
       if (ko) label(x, y - 16, 'KO', GOLD, 13);
-      else if (e.state === 'stunned' && e.reason !== 'gas' && e.reason !== 'argue' && !hacked) {
-        for (let k = 0; k < 3; k++) { const a = rt / 260 + k * 2.09; bitmap(g, 'star', x + Math.cos(a) * 11, head + 2 + Math.sin(a) * 3, 1, GOLD); }
+      else if (stun && !NO_STARS.has(stun)) {
+        for (let k = 0; k < 3; k++) { const a = rt / 260 + k * 2.09; bitmap(g, 'star', x + Math.cos(a) * 11, (lying ? y - 8 : head + 2) + Math.sin(a) * 3, 1, GOLD); }
       }
       if (hacked && Math.floor(rt / 110) % 3 === 0) bitmap(g, 'spark', x + 7, y - 8, 1, TEAL);
-      if (e.state === 'stunned' && e.reason === 'argue') label(x, head, '…', PAPER, 18);
-      if (e.state === 'stunned' && e.reason === 'gas' && (gt / 1300 + e.i * 0.3) % 1 < 0.35) label(x + 10, head, '*hust*', '#9BE36B', 12);
+      if (stun === 'wlan' && blink(e, 1200, 0.5)) label(x, head, 'kein Netz', '#9AA0A6', 11);
+      if (stun === 'lizenz') { label(x, head, '?', TEAL, 18); if (Math.floor(rt / 120) % 2) bitmap(g, 'spark', x - 9, y - 10, 1, PINK); }
+      if (stun === 'argue') label(x, head, '…', PAPER, 18);
+      if (stun === 'gas' && (gt / 1300 + e.i * 0.3) % 1 < 0.35) label(x + 10, head, '*hust*', '#9BE36B', 12);
       if (e.state === 'eating') { g.fillStyle = '#7FD36B'; for (let k = 0; k < 5; k++) g.fillRect(Math.round(x - 8 + k * 4), Math.round(head + Math.sin(rt / 120 + k) * 2), 3, 2); } // Pixel-Übelkeit
       if (e.state === 'bribed') { const sx = Math.abs(Math.cos(rt / 160)); const c = img('art/q-coin.png'); if (c) g.drawImage(c, x - 6 * sx, head - 8, 12 * sx, 12); }
-      // ? und ! mit kleinem Hüpfer beim Wechsel
-      const bounce = 1 + 0.5 * Math.max(0, 1 - age(popAt.get(e) ?? -1e9) / 250);
+      if (task) taskFx(e, task, x, y, head, left, bounce);
+      moodFx(e, x, y, head);
       if (e.state === 'alert') label(x, head - 2, '!', RED, Math.round(22 * bounce));
       else if (e.state === 'suspicious' || e.state === 'investigate') label(x, head - 2, '?', GOLD, Math.round(20 * bounce));
       else if (e.state === 'distracted' && e.reason !== 'fire') label(x, head - 2, '?', PAPER, 16);
-      if (e.suspicion > 0.02 && SUS_BAR.has(e.state)) bar(x, y + 15, 20, e.suspicion, GOLD);
+      if (e.suspicion > 0.02 && (SUS_BAR.has(e.state) || task?.cone)) bar(x, y + 15, 20, e.suspicion, GOLD);
       if (!ko && e.hp < e.maxHp) bar(x, y + 19, 20, e.hp / e.maxHp, RED);
       if (inspect?.e === e.i && rt < inspect.until) label(x, y + 30, e.name, PAPER, 13);
     }
   }
+  // Tratsch: Streithähne auf derselben Stelle seitlich auseinander zeichnen, damit beide und die Blitze dazwischen zu sehen sind
+  function apart(e) {
+    const o = e.state === 'task' && e.task.kind === 'tratsch' ? st.enemies[e.task.pair] : null;
+    if (!o) return 0;
+    const a = pos(e), b = pos(o), d = Math.hypot(a.x - b.x, a.y - b.y);
+    return d < 1.2 ? (e.i < o.i ? -1 : 1) * (1.2 - d) / 2 * TILE : 0;
+  }
+  const blink = (e, period, duty) => (gt / period + e.i * 0.37) % 1 < duty; // Spruch blitzt in Abständen auf
+  // Verhalten aus Fähigkeiten über dem Gegner: Handys, Zzz, Schimpf-Blase, Streit-Blitze, Wegweiser, Karton …
+  function taskFx(e, k, x, y, head, left, bounce) {
+    const stay = k.phase === 'stay', hand = x + (left ? -11 : 11), own = ENEMY_TYPES[e.type].labels?.[k.kind]; // Stefan: eigene Beschriftung
+    switch (k.kind) {
+      case 'kursalarm': if (!stay) label(x, head - 2, '!', GREEN, 18); else if (blink(e, 1100, 0.45)) label(x, head - 2, 'Kurs!', GREEN, 12); break;
+      case 'junge': {
+        if (!stay) { label(x, head - 2, '!', AMBER, 18); break; }
+        scold(g, x + (left ? 20 : -20), y - 12, gt); // Schimpf-Wolke neben ihm, die Blasen darüber gehören Hildegard
+        const u = st.units[scolder.get(e.i)];
+        if (u && !u.down && gt >= (chatAt.get(e.i) ?? 0)) { chatAt.set(e.i, gt + 2800); say({ u: u.i }, SCOLD[Math.floor(gt / 2800) % SCOLD.length], 2400); }
+        break;
+      }
+      case 'mittag': for (let j = 0; j < 3; j++) { const ph = (gt / 1800 + j / 3) % 1; label(x + 8 + ph * 10, head - ph * 22, 'z', SKY, Math.round(9 + ph * 8)); } break;
+      case 'tratsch': {
+        if (!stay) { label(x, head - 2, '!', AMBER, 18); break; }
+        const o = st.enemies[k.pair];
+        if (o && e.i < o.i && o.state === 'task' && o.task.kind === 'tratsch' && o.task.phase === 'stay') { const q = pos(o); zigzag(g, x, y - 12, q.x * TILE + apart(o), q.y * TILE - 12, rt, GOLD, 6, 10); }
+        if (gt >= (chatAt.get(e.i) ?? 0)) { chatAt.set(e.i, gt + 3400); say({ e: e.i }, QUARREL[(Math.floor(gt / 1700) + e.i) % QUARREL.length], 2200); }
+        break;
+      }
+      case 'mutter': sprite(img('art/ab-mutter.png'), hand, y - 12, 16); if (blink(e, 1500, 0.4)) label(x, head - 2, 'Ja, Mama …', PAPER, 11); break;
+      case 'crash': phone(g, hand, y - 6, false, gt); if (blink(e, 1200, 0.45)) label(x, head - 2, own || DEPOT[Math.floor(gt / 1200 + e.i) % DEPOT.length], own ? GOLD : RED, 12); break;
+      case 'panik': drops(x + 10, head + 6, SKY); if (blink(e, 900, 0.5)) label(x, head - 2, own || 'VERKAUFEN!', RED, 12); break;
+      case 'insider': if (!stay) signpost(x, y, k.to); else if (blink(e, 1400, 0.45)) label(x, head - 2, own || 'Freibier?', GOLD, 12); break;
+      case 'vp': if (!stay && k.to) signpost(x, y, { x: k.to.x + 0.5, y: k.to.y + 0.5 }); break;
+      case 'vibra': vibes(x, y - 6); phone(g, hand, y - 6, true, gt); if (blink(e, 700, 0.5)) label(x, head - 2, '*brrr*', TEAL, 12); break;
+      case 'sale': label(x, head - 2, '%', GOLD, Math.round(18 * bounce)); break;
+      case 'horde': if (blink(e, 1000, 0.5)) label(x, head - 2, 'Hilfe!', AMBER, 12); break;
+      case 'raubkopie': label(x, head - 2, '!', AMBER, Math.round(20 * bounce)); break;
+      case 'feierabend': sprite(img('art/q-box.png'), hand, y + 1, 18); if (blink(e, 1600, 0.4)) label(x, head - 2, 'Tschüss!', PAPER, 12); break;
+    }
+  }
+  // Nachwirkungen: verheult, gereizt, brav, Spitzel-Auge, aufgedeckt
+  function moodFx(e, x, y, head) {
+    if (e.tearyUntil > st.time) { drops(x - 5, head + 12, SKY); if (blink(e, 1800, 0.35)) label(x, head - 14, '*schnief*', SKY, 11); }
+    if (e.grumpyUntil > st.time) bitmap(g, 'vein', x + 11, head + 4, 1.2, RED);
+    if (e.calmUntil > st.time && blink(e, 2200, 0.4)) label(x, head - 14, 'brav', TEAL, 11);
+    if (e.state === 'bribed' && e.spyUntil > st.time) {
+      eye(g, x, head - 12, rt);
+      g.globalAlpha = 0.5; g.setLineDash([2, 5]); g.strokeStyle = LILAC; g.lineWidth = 2;
+      g.beginPath(); g.arc(x, y, e.spyR * TILE, 0, 2 * Math.PI); g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
+    }
+    if (e.revealed) {
+      eye(g, x - 15, head + 4, rt, 1);
+      g.globalAlpha = Math.floor(rt / 300) % 2 ? 0.9 : 0.5; g.setLineDash([3, 3]); g.strokeStyle = LILAC; g.lineWidth = 2;
+      g.strokeRect(x - 17, y - 22, 34, 36); g.setLineDash([]); g.globalAlpha = 1;
+    }
+  }
+  function drops(x, y, c) { // Tränen bzw. Schweiß
+    for (let j = 0; j < 2; j++) {
+      const ph = (gt / 700 + j / 2) % 1, dx = Math.round(x + j * 10), dy = Math.round(y + ph * 10);
+      g.globalAlpha = 1 - ph; g.fillStyle = INK; g.fillRect(dx - 1, dy - 1, 4, 5); g.fillStyle = c; g.fillRect(dx, dy, 2, 3);
+    }
+    g.globalAlpha = 1;
+  }
+  function vibes(x, y) { // Vibrations-Wellen links und rechts
+    const k = Math.floor(rt / 120) % 2;
+    g.strokeStyle = TEAL; g.lineWidth = 2;
+    for (const sd of [0, Math.PI]) for (let j = 0; j < 2; j++) { g.beginPath(); g.arc(x, y, 13 + j * 5 + k * 2, sd - 0.45, sd + 0.45); g.stroke(); }
+  }
+  // Wegweiser-Pfeil: gestrichelte Linie zum Ziel mit Pfeilspitze (Insider-Tipp, „Gehen Sie mal zum Tor!“)
+  function signpost(x, y, to) {
+    if (!to) return;
+    const tx = to.x * TILE, ty = to.y * TILE, a = Math.atan2(ty - y, tx - x);
+    g.globalAlpha = 0.85; g.setLineDash([4, 6]); g.lineDashOffset = -gt / 50;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(tx, ty); g.strokeStyle = INK; g.lineWidth = 4; g.stroke(); g.strokeStyle = GOLD; g.lineWidth = 2; g.stroke();
+    g.setLineDash([]); g.globalAlpha = 1;
+    g.beginPath(); g.moveTo(tx, ty); g.lineTo(tx - Math.cos(a - 0.5) * 11, ty - Math.sin(a - 0.5) * 11); g.lineTo(tx - Math.cos(a + 0.5) * 11, ty - Math.sin(a + 0.5) * 11); g.closePath();
+    g.fillStyle = GOLD; g.fill(); g.strokeStyle = INK; g.lineWidth = 2; g.stroke();
+  }
+
   function bar(x, y, w, k, color, h = 3) {
     g.fillStyle = INK; g.fillRect(Math.round(x - w / 2 - 1), Math.round(y - 1), w + 2, h + 2);
     g.fillStyle = '#E8D7A8'; g.fillRect(Math.round(x - w / 2), Math.round(y), w, h);
@@ -1159,10 +1591,16 @@ export function createQuestScreen({ el, onEnd }) {
       g.globalAlpha = alpha;
       g.translate(Math.round(x), Math.round(y + bob - 2 - rise));
       g.rotate(u.down ? Math.PI / 2 : tilt);
+      const vp = u.disguiseUntil > st.time && !u.down;
+      if (vp) suit(g, 0, 0); // Vice President: Anzug unterm echten Gesicht
       faceFrame(g, img(src), 0, 0, 28, u.rarity, { grey: u.down, src });
       if ((flash.get(u) || 0) > gt) { g.fillStyle = 'rgba(224,99,76,.55)'; g.fillRect(-14, -14, 28, 28); }
       g.restore();
       const top = y - 22 + bob - rise;
+      if (vp) for (let k = 0; k < 4; k++) { // Anzug-Glitzer links und rechts neben dem Gesicht
+        const f = Math.floor(rt / 240) + k * 7, h = hash(f, u.i, k);
+        if (h < 0.55) bitmap(g, 'spark', x + (k % 2 ? 1 : -1) * (18 + h * 8), y - 14 + hash(f, u.i, k + 9) * 30, 1, k % 2 ? GOLD : PAPER);
+      }
       if (u.down) {
         const k = Math.sin(rt / 200) > 0;
         bitmap(g, 'plus', x + 15, y - 14, 1.6, INK); bitmap(g, 'plus', x + 15, y - 14, 1.2, k ? RED : '#F07A8A');
@@ -1228,14 +1666,7 @@ export function createQuestScreen({ el, onEnd }) {
       g.globalAlpha = 1;
     }
     fx.bolts = fx.bolts.filter(b => t - b.born < b.ms);
-    for (const b of fx.bolts) { // Hack-Blitz: Zickzack in Türkis, neu gewürfelt alle 50 ms
-      const seed = Math.floor(rt / 50);
-      g.beginPath(); g.moveTo(b.x0, b.y0);
-      for (let k = 1; k < 8; k++) g.lineTo(b.x0 + (b.x1 - b.x0) * k / 8 + (hash(seed, k) - 0.5) * 12, b.y0 + (b.y1 - b.y0) * k / 8 + (hash(seed, k, 1) - 0.5) * 12);
-      g.lineTo(b.x1, b.y1);
-      g.strokeStyle = INK; g.lineWidth = 4; g.stroke();
-      g.strokeStyle = TEAL; g.lineWidth = 2; g.stroke();
-    }
+    for (const b of fx.bolts) zigzag(g, b.x0, b.y0, b.x1, b.y1, rt, TEAL); // Hack-Blitz, Firewall
   }
 
   // Bildschirmraum: Beschriftungen, schwebende Texte, Sprechblasen (Schrift bleibt bei jedem Zoom gleich groß)
@@ -1251,8 +1682,19 @@ export function createQuestScreen({ el, onEnd }) {
   function drawScreen() {
     // nur Anker auf dem Schirm: sonst zöge pixelText/bubble Texte unsichtbarer Figuren an den Rand
     const vis = (s, m = 8) => s.x > -m && s.x < vw + m && s.y > -m && s.y < vh + m;
-    for (const l of labels) { const s = toScreen(l.wx, l.wy); if (vis(s)) pixelText(l.t, Math.round(s.x), Math.round(s.y), l.color, l.size); }
     const faces = st.units.map(u => { const p = upos(u), s = toScreen(p.x * TILE, p.y * TILE), r = 17 * zoom; return { i: u.i, down: u.down, x: s.x - r, y: s.y - r, w: 2 * r, h: 2 * r }; });
+    for (const l of labels) { // Gegner-Beschriftungen rutschen über ein echtes Gesicht, statt es zu verdecken
+      const s = toScreen(l.wx, l.wy);
+      if (!vis(s)) continue;
+      const hw = l.t.length * l.size * 0.3 + 2, hh = l.size / 2 + 2;
+      let y = s.y;
+      for (let n = 0; n < 4; n++) { // auch über mehrere übereinanderstehende Gesichter hinweg
+        const f = faces.find(r => !r.down && s.x + hw > r.x && s.x - hw < r.x + r.w && y + hh > r.y && y - hh < r.y + r.h);
+        if (!f) break;
+        y = f.y - hh - 2;
+      }
+      pixelText(l.t, Math.round(s.x), Math.round(y), l.color, l.size);
+    }
     fx.bubbles = fx.bubbles.filter(b => gt - b.born < b.ms);
     // Gesichter der Rüther freihalten: Blasen weichen ihnen nach oben aus
     const avoid = faces.filter(f => !f.down).map(({ x, y, w, h }) => ({ x, y, w, h })), nFaces = avoid.length;
@@ -1283,10 +1725,28 @@ export function createQuestScreen({ el, onEnd }) {
     }
   }
 
+  // Zielleiste oben oder unten: auf die Seite, wo im Streifen der Leiste (Höhe + Abstand + halbe Zielmarke) weniger Ziele liegen
+  // (Liste: leuchtende Ziele, sonst Mitte und Rand des Reichweitenkreises); Gleichstand: unten, wenn der Rüther oben im Bild steht.
+  // Höhe je Schritt nur wachsend gemerkt: oben/unten ändert die Breite, sonst kippte die Wahl hin und her
+  function placeAim() {
+    const { ab, first } = aim, T = ab.target, me = upos(st.units[aim.unit]), sp = q => toScreen(q.x * TILE, q.y * TILE), pts = [sp(me)];
+    if (!first && (LIST.has(T) || T === 'enemyThenPoint')) {
+      const ts = abilityTargets(st, aim.unit, ab.id), near = ts.filter(t => t.inRange);
+      for (const t of near.length ? near : ts) pts.push(sp(t.enemy != null ? pos(st.enemies[t.enemy]) : t));
+    } else {
+      const c = sp(first ? (first.enemy != null ? pos(st.enemies[first.enemy]) : first) : me), r = (first ? ab.range2 : T === 'self' ? selfR(ab) : ab.range) * TILE * zoom;
+      pts.push(c);
+      if (Number.isFinite(r)) for (const k of [-1, -0.5, 0.5, 1]) pts.push({ x: c.x, y: c.y + k * r });
+    }
+    const h = aim.h = Math.max(aim.h || 0, aimEl.offsetHeight + 28), on = pts.filter(q => q.x >= 0 && q.x <= vw);
+    const top = on.filter(q => q.y >= 0 && q.y < h).length, low = on.filter(q => q.y > vh - h && q.y <= vh).length;
+    aimEl.classList.toggle('low', top !== low ? top > low : pts[0].y < vh * 0.45);
+  }
   function placeMenu() {
+    if (aim) placeAim();
     if (menuFor < 0) return;
     const p = upos(st.units[menuFor]), s = toScreen(p.x * TILE, p.y * TILE);
-    const x = clamp(s.x, 118, vw - 118), y = clamp(s.y, 112, vh - 96);
+    const four = abs[menuFor].length >= 3, x = clamp(s.x, 130, vw - 130), y = clamp(s.y, RING_UP + 106, vh - (four ? 124 : 104)); // oben: Symbol, Punkte, zweizeiliger Name
     ringEl.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
   }
 
@@ -1307,12 +1767,16 @@ export function createQuestScreen({ el, onEnd }) {
     raf = requestAnimationFrame(frame);
   }
 
-  async function start({ mission, setup, variant, team, fighters, rng = Math.random, tutorial } = {}) {
+  async function start({ mission, setup, variant, team, fighters, loadouts, rng = Math.random, tutorial } = {}) {
     stop();
     const run = seq, m = typeof mission === 'string' ? MISSION_BY_ID[mission] : mission;
-    let squad = (fighters?.length ? fighters : team || []).map(f => (f.maxBtc ? f : makeFighter(RUETHER_BY_ID[f.id], f)));
+    let squad = (fighters?.length ? fighters : team || []).map((f, i) => {
+      const x = f.maxBtc ? f : makeFighter(RUETHER_BY_ID[f.id], f), lo = loadouts?.[i] ?? f.loadout;
+      return lo ? { ...x, loadout: lo } : x; // v10: createQuest liest team[i].loadout
+    });
     if (m?.solo) { const own = squad.filter(f => f.id === m.solo).sort((a, b) => b.maxBtc - a.maxBtc); if (own.length) squad = own; } // sein stärkstes Exemplar
     st = createQuest({ mission: m, setup, variant, team: squad.slice(0, 3), rng });
+    abs = st.units.map(u => abilitiesFor(u));
     th = THEMES[st.theme] || THEMES.neuschwabenland;
     el.dataset.theme = st.theme;
     goalIco.src = GOAL_ART[st.objective.type] || GOAL_ART.steal;
@@ -1333,6 +1797,7 @@ export function createQuestScreen({ el, onEnd }) {
     if (run !== seq) return; // inzwischen gestoppt oder neu gestartet
     mapCv = paintMap(st, th);
     gasPat = dither(g, 'rgba(91,181,90,.95)', 'rgba(155,227,107,.6)');
+    deoPat = dither(g, 'rgba(242,155,200,.95)', 'rgba(255,214,235,.8)');
     doorH = st.doors.map(d => doorHoriz(st, d));
     const xs = st.pads.map(p => p.x), ys = st.pads.map(p => p.y);
     pad = st.pads.length ? { x: (Math.min(...xs) + Math.max(...xs) + 1) / 2, y: (Math.min(...ys) + Math.max(...ys) + 1) / 2, y0: Math.min(...ys), y1: Math.max(...ys) + 1 } : null;
@@ -1352,7 +1817,7 @@ export function createQuestScreen({ el, onEnd }) {
     window.removeEventListener('keydown', onKey);
     document.removeEventListener('visibilitychange', onHide);
     fx = freshFx(); labels = []; fxLayer.innerHTML = '';
-    prev = new WeakMap(); flash = new WeakMap(); popAt = new WeakMap(); doorAt.clear(); effAt.clear(); ptrs.clear(); gesture = null;
+    prev = new WeakMap(); flash = new WeakMap(); popAt = new WeakMap(); doorAt.clear(); effAt.clear(); scolder.clear(); chatAt.clear(); ptrs.clear(); gesture = null;
     acc = 0; overClock = 0; gt = 0; paused = false; ending = null; ended = false; inspect = null; lastTap = {}; reached = false; warned = false; quitAsk = false;
     tut = -1; endAim(); closeMenu();
     mini = null; caught = null; valveAt.clear(); seenE.clear(); closeCut();

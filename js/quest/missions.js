@@ -272,7 +272,7 @@ export const MISSIONS = [
     fetchMs: 5000, pickupNoise: 7,
     objective: { type: 'fetch', label: 'Michas PS3 befreien' },
     intro: 'Der Ladendetektiv hat Michas PS3 im Lager eingeschlossen. Angeblich „Fundsache“. Holt sie raus und bringt sie zur Haunebu auf dem Parkplatz.',
-    hint: 'Aufheben dauert 5 s, die Warensicherung piept dabei. Wer die PS3 trägt, ist 40 % langsamer und kann keine Kräfte einsetzen.',
+    hint: 'Aufheben dauert 5 s, die Warensicherung piept dabei. Wer die PS3 trägt, ist 40 % langsamer und kann keine Fähigkeiten einsetzen.',
     texts: {
       success: 'Die PS3 ist frei. Micha baut sie noch im Flug zur Hardware-Wallet um.',
       fail: 'Die PS3 bleibt im Regal. Neues Preisschild: plus 70 Prozent.',
@@ -819,6 +819,9 @@ export const MISSIONS = [
 ];
 
 export const MISSION_BY_ID = Object.fromEntries(MISSIONS.map(m => [m.id, m]));
+
+// v10 §4: Hinweis im Briefing jeder Mission
+export const MELEE_HINT = 'Nahkampf ist gefährlich – schleich dich durch!';
 
 // Kompatibilität (v8): Variante aus Layout 1
 export const pickVariant = (m, rng = Math.random) => { const vs = m.layouts[0].variants; return vs[Math.floor(rng() * vs.length) % vs.length]; };

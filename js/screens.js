@@ -1,11 +1,11 @@
 import { CONST, RUETHERS, RUETHER_BY_ID, RARITIES, RARITY_BY_ID, SHOP, QUESTS, ACHIEVEMENTS, ARENAS } from './data.js';
 import { fighterStats, levelCost, DEX_TOTAL, dexCount, arenaReward, canFuse, nextRarity, levelProgress, pickFood, sell, sellDuplicates,
-  summonCost, haunebuActive, questsUnlocked, QUEST_SATS } from './progress.js';
+  summonCost, haunebuActive, questsUnlocked, QUEST_SATS, abilityLevel, buyAbility, upgradeAbility, loadoutFor } from './progress.js';
 import { esc, popup, ico, kitName } from './ui.js';
 import { hashrateText } from './format.js';
 import { playSheet, btcRain } from './fx.js';
 import { MISSIONS } from './quest/missions.js';
-import { abilitiesFor, ENEMY_TYPES } from './quest/engine.js';
+import { abilitiesFor, ENEMY_TYPES, ABILITIES, FIXED, POOLS } from './quest/engine.js';
 
 const fmt = n => n.toLocaleString('de-DE');
 // Restzeit „7:41"
@@ -22,6 +22,9 @@ function haunebuTicker(el, getSave, render) {
 }
 const rarityRank = id => RARITIES.findIndex(r => r.id === id);
 const spriteOf = id => `sprites/${RUETHER_BY_ID[id] ? id : 'unknown'}.png`;
+// v10: Fähigkeits-Icon (Familientreffen: die echten Gesichter von Christian und Micha, §0) und Stufen-Punkte ●●○ als Pixel-Quadrate
+const abIcon = a => a.id === 'family' ? `<span class="q-fam"><img src="${spriteOf('christian')}" alt=""><img src="${spriteOf('micha')}" alt=""></span>` : `<img src="${a.icon}" alt="">`;
+const abDots = lv => `<span class="ab-dots" role="img" aria-label="Stufe ${lv} von 3">${[1, 2, 3].map(k => `<i${k <= lv ? ' class="on"' : ''}></i>`).join('')}</span>`;
 const avatarGrid = active => RUETHERS.map(r =>
   `<button class="avatar-opt${r.id === active ? ' active' : ''}" data-id="${r.id}" title="${esc(r.name)}"><img src="sprites/${r.id}.png" alt="${esc(r.name)}"></button>`).join('');
 
@@ -55,12 +58,13 @@ const emptyState = (icon, text, sub = '') =>
 // onTeamChange(teamUids); onPowerUp(uid) -> { ok, reason, level }; onFuse(id, rarityId) -> { ok, inst, used, newDex };
 // onFeed(targetUid) -> { ok, reason, level, foodUid }; onSell(uid) -> { ok, reason, sats };
 // onSellDuplicates(id) -> { count, sats } (Bestätigung hier per popup vor dem Aufruf); onDex(); onBack()
-export function createCollectionScreen({ el, onTeamChange, onPowerUp, onFuse, onFeed, onSell, onSellDuplicates, onDex, onBack }) {
+// v10: onBuyAbility / onUpgradeAbility / onEquipAbility (rid, aid) -> { ok, reason } (Toast, Sats und Speichern macht der App-Code)
+export function createCollectionScreen({ el, onTeamChange, onPowerUp, onFuse, onFeed, onSell, onSellDuplicates, onDex, onBack, onBuyAbility, onUpgradeAbility, onEquipAbility }) {
   const box = el.querySelector('.box');
   el.querySelector('.back')?.addEventListener('click', () => onBack?.());
   el.querySelector('.dex-btn').addEventListener('click', onDex);
   let save = null;
-  const open = new Set(); // ausgeklappte Rüther-ids
+  const open = new Set(), abOpen = new Set(); // ausgeklappte Rüther-ids (Exemplare bzw. Quest-Fähigkeiten)
   const dry = (fn, ...a) => fn(structuredClone(save), ...a); // Regeln aus progress.js probeweise, ohne den Spielstand zu ändern
   const statLine = inst => {
     const st = fighterStats(RUETHER_BY_ID[inst.id], inst);
@@ -119,7 +123,52 @@ export function createCollectionScreen({ el, onTeamChange, onPowerUp, onFuse, on
       render();
     });
     if (isOpen) for (const inst of mine) div.querySelector('.insts').appendChild(instRow(inst));
+    const qab = abilityBox(def.id);
+    if (qab) div.querySelector('.ractions').after(qab);
     return div;
+  }
+
+  // v10 §3: „Quest-Fähigkeiten“ – 2 feste und 3 Pool mit Stufen, Texte bis zur aktuellen und die nächste Stufe (die Texte
+  // bauen aufeinander auf), Kaufen/Upgrade/Ausrüsten.
+  // Gehören dem Rüther an sich (alle Exemplare gleich). Zugeklappt zeigt die Zeile die 3 ausgerüsteten.
+  function abilityBox(rid) {
+    if (!FIXED[rid]) return null;
+    const lo = loadoutFor(save, rid), slot = lo[2]?.id;
+    const row = aid => {
+      const a = ABILITIES[aid], lv = abilityLevel(save, rid, aid), pool = a.kind === 'pool', on = pool && aid === slot, up = CONST.ABILITY_UP[lv + 1];
+      const main = !lv ? `<button class="primary" data-act="buy" ${dry(buyAbility, rid, aid).ok ? '' : 'disabled'}>Kaufen ${fmt(CONST.ABILITY_BUY)}${ico('coin')}</button>`
+        : up ? `<button data-act="up" ${dry(upgradeAbility, rid, aid).ok ? '' : 'disabled'}>Upgrade ${fmt(up)}${ico('coin')}</button>`
+        : '<button disabled>Max. Stufe</button>';
+      return `<div class="qab-row${on ? ' on' : ''}${lv ? '' : ' locked'}" data-aid="${aid}">
+        <div class="qab-ico">${abIcon(a)}</div>
+        <div class="qab-meta">
+          <div class="qab-name">${esc(a.name)} ${abDots(lv)}${pool ? on ? '<span class="qab-tag on">Ausgerüstet</span>' : '' : '<span class="qab-tag">Fest</span>'}</div>
+          ${a.texts.slice(0, lv).map((t, k) => `<p class="qab-text"><b>Stufe ${k + 1}:</b> ${esc(t)}</p>`).join('')}
+          ${lv < 3 ? `<p class="qab-text next"><b>${lv ? 'Nächste' : 'Stufe 1'}:</b> ${esc(a.texts[lv])}</p>` : ''}
+        </div>
+        <div class="qab-btns">${main}${pool && lv && !on ? '<button data-act="equip">Ausrüsten</button>' : ''}</div>
+      </div>`;
+    };
+    const det = document.createElement('details');
+    det.className = 'qab';
+    det.open = abOpen.has(rid);
+    det.innerHTML = `
+      <summary><span class="qab-title">Quest-Fähigkeiten</span><span class="qab-load">${lo.map(x => x ? abIcon(ABILITIES[x.id]) : '<span class="qab-empty"></span>').join('')}</span></summary>
+      <div class="qab-list">
+        <p class="sub qab-hint">Fähigkeiten gehören dem Rüther, nicht dem Exemplar. 2 feste, der 3. Slot nimmt eine gekaufte aus dem Pool.</p>
+        ${FIXED[rid].map(row).join('')}
+        <div class="qab-pool">Pool für den 3. Slot</div>
+        ${POOLS[rid].map(row).join('')}
+      </div>`;
+    det.addEventListener('toggle', () => { if (det.open) abOpen.add(rid); else abOpen.delete(rid); });
+    det.addEventListener('click', e => {
+      const b = e.target.closest('button[data-act]');
+      if (!b) return;
+      const aid = b.closest('.qab-row').dataset.aid;
+      const res = { buy: onBuyAbility, up: onUpgradeAbility, equip: onEquipAbility }[b.dataset.act]?.(rid, aid);
+      if (res?.ok) render();
+    });
+    return det;
   }
 
   function instRow(inst) {
@@ -417,11 +466,9 @@ export function createQuestsScreen({ el, onClaim, onQuestStart, onShop }) {
 }
 
 // ---------- v8 §5.1: Team für die Haunebu-Quest ----------
-// Box mit echten Gesichtern, 1–3 wählbar (vorausgewählt: aktuelles Team), je Rüther seine Quest-Kräfte.
-// onStart(missionId, uids); onBack()
-// Familientreffen: die echten Gesichter von Christian und Micha statt Cartoon (§0, wie abIcon in quest/view.js)
-const powerIcon = a => a.id === 'family' ? `<span class="q-fam"><img src="${spriteOf('christian')}" alt=""><img src="${spriteOf('micha')}" alt=""></span>` : `<img src="art/fx-${a.icon}.png" alt="">`;
-export function createQuestTeamScreen({ el, onStart, onBack }) {
+// Box mit echten Gesichtern, 1–3 wählbar (vorausgewählt: aktuelles Team), je Rüther seine 3 Quest-Fähigkeiten mit Stufe.
+// v10: Tipp auf den 3. Slot wechselt durch die gekauften Pool-Fähigkeiten. onStart(missionId, uids); onEquip(rid, aid) -> { ok }; onBack()
+export function createQuestTeamScreen({ el, onStart, onEquip, onBack }) {
   let save = null, mission = null, picked = [];
   el.innerHTML = `
     <header class="topbar wood"><button class="back">‹ Quests</button><h2 class="qt-title"></h2></header>
@@ -434,13 +481,39 @@ export function createQuestTeamScreen({ el, onStart, onBack }) {
   const listEl = el.querySelector('.qt-list'), go = el.querySelector('.qt-go');
   el.querySelector('.back').addEventListener('click', () => onBack?.());
   go.addEventListener('click', () => { if (picked.length) onStart?.(mission.id, [...picked]); });
-  listEl.addEventListener('click', e => {
-    const row = e.target.closest('.qt-row');
-    if (!row) return;
-    const uid = row.dataset.uid, i = picked.indexOf(uid);
+  const toggle = uid => {
+    const i = picked.indexOf(uid);
     if (i >= 0) picked.splice(i, 1); else if (picked.length < CONST.TEAM_SIZE) picked.push(uid); else return;
     render();
+  };
+  listEl.addEventListener('click', e => {
+    const slot = e.target.closest('.qt-slot');
+    if (slot) { // nächste gekaufte Pool-Fähigkeit, gilt für alle Exemplare dieses Rüthers
+      const rid = slot.dataset.rid, owned = (POOLS[rid] || []).filter(aid => abilityLevel(save, rid, aid));
+      if (onEquip?.(rid, owned[(owned.indexOf(loadoutFor(save, rid)[2]?.id) + 1) % owned.length])?.ok) render();
+      return;
+    }
+    const row = e.target.closest('.qt-row');
+    if (row) toggle(row.dataset.uid);
   });
+  listEl.addEventListener('keydown', e => {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('qt-row')) { e.preventDefault(); toggle(e.target.dataset.uid); }
+  });
+  const power = a => `${abIcon(a)}<span>${esc(a.name)}</span>${abDots(a.level)}`;
+  // Zeile ist kein <button>, weil der 3. Slot selbst ein Knopf ist
+  function powers(rid) {
+    const lo = loadoutFor(save, rid), [a, b, c] = abilitiesFor({ abilities: lo.filter(Boolean) });
+    const owned = (POOLS[rid] || []).filter(aid => abilityLevel(save, rid, aid)).length;
+    const slot = !lo[2] ? '<span class="qt-power qt-free">3. Slot frei · Kaufen in der Sammlung</span>'
+      : owned > 1 ? `<button class="qt-power qt-slot" data-rid="${rid}" aria-label="3. Slot wechseln, jetzt ${esc(c.name)}">${power(c)}<span class="qt-swap">›</span></button>`
+      : `<span class="qt-power">${power(c)}</span>`;
+    return [a, b].filter(Boolean).map(x => `<span class="qt-power">${power(x)}</span>`).join('') + (FIXED[rid] ? slot : '');
+  }
+  // §2: Text des 3. Slots (Grundtext + erreichte Stufen) nur bei gewählten Zeilen, sonst wird die Liste zu lang
+  const slotText = rid => {
+    const c = loadoutFor(save, rid)[2], a = c && ABILITIES[c.id];
+    return a ? `<p class="qt-desc"><b>${esc(a.name)}:</b> ${esc(a.texts.slice(0, c.level).join(' '))}</p>` : '';
+  };
   function render() {
     const now = Date.now(), active = haunebuActive(save, now);
     el.querySelector('.qt-title').textContent = mission.name;
@@ -451,14 +524,15 @@ export function createQuestTeamScreen({ el, onStart, onBack }) {
     const insts = [...save.box].sort((a, b) => order(a.uid) - order(b.uid) || rarityRank(b.rarity) - rarityRank(a.rarity) || b.level - a.level);
     listEl.innerHTML = insts.length ? insts.map(inst => {
       const def = RUETHER_BY_ID[inst.id], n = picked.indexOf(inst.uid), st = fighterStats(def, inst);
-      return `<button class="qt-row${n >= 0 ? ' on' : ''}" data-uid="${inst.uid}" aria-pressed="${n >= 0}">
+      return `<div class="qt-row btn${n >= 0 ? ' on' : ''}" data-uid="${inst.uid}" role="button" tabindex="0" aria-pressed="${n >= 0}">
         <div class="frame r-${inst.rarity}"><img src="${spriteOf(inst.id)}" alt=""><span class="shine"></span></div>
         <div class="qt-meta">
           <div class="qt-name">${esc(def.name)} <span class="badge-pixel">Lv. ${inst.level}</span> <span class="sub">${fmt(st.btc)} BTC</span></div>
-          <div class="qt-powers">${abilitiesFor(inst.id).map(a => `<span class="qt-power">${powerIcon(a)}${esc(a.name)}</span>`).join('')}</div>
+          <div class="qt-powers">${powers(inst.id)}</div>
         </div>
         <span class="qt-pick">${n >= 0 ? n + 1 : ''}</span>
-      </button>`;
+        ${n >= 0 ? slotText(inst.id) : ''}
+      </div>`;
     }).join('') : emptyState('bag', 'Noch keine Rüthers gefangen.');
     el.querySelector('.qt-hb').innerHTML = active ? `${ico('haunebu', 'ico-in')}noch <span class="hb-left">${clock(save.haunebuUntil - now)}</span>` : `${ico('haunebu', 'ico-in')}Haunebu weg`;
     go.disabled = !picked.length || !active;

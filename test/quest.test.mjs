@@ -140,15 +140,17 @@ test('suspicion: ? ab 0,3, ! bei 1, Alarm +0,34; nah = schneller; Himmler doppel
   assert.ok(until('himmler', 3) < until('pinguin', 3));
 });
 
-test('Goebbels: Megafon = sofort Voll-Alarm, Verstärkung alle 20 s am Tor, Kegel +25 %', () => {
+test('Goebbels: Megafon = sofort Voll-Alarm, Verstärkung alle 15 s am Tor, Kegel +25 %', () => {
   const st = Q(ROOM, [{ type: 'goebbels', at: [5, 4], dir: 0 }], { gate: [18, 8], team: ['christian', 'hildegard'] });
   place(st.units[0], 7, 4);
   let ev = run(st, 3000);
   assert.equal(find(ev, 'alert').megafon, true);
-  assert.ok(has(ev, 'fullAlarm'));
+  const fa = find(ev, 'fullAlarm');
   assert.equal(st.alarm, 1);
   assert.ok(st.fullAlarm);
-  ev = run(st, 20_000);
+  ev = run(st, fa.reinforceAt - st.time - 100);
+  assert.ok(!has(ev, 'reinforce'));
+  ev = run(st, 200);
   const r = find(ev, 'reinforce');
   assert.equal(r.enemies.length, 2);
   for (const i of r.enemies) {
@@ -156,6 +158,7 @@ test('Goebbels: Megafon = sofort Voll-Alarm, Verstärkung alle 20 s am Tor, Kege
     assert.equal(e.type, 'pinguin');
     assert.ok(e.reinforcement);
   }
+  assert.equal(st.reinforceAt, fa.reinforceAt + 15_000); // nächste Welle 15 s später
   // Kegel im Voll-Alarm 25 % weiter
   const s2 = Q(ROOM, [{ type: 'pinguin', at: [2, 4], dir: 0 }]);
   assert.ok(Math.abs(coneLen(s2, 0) - 5) < 1e-6);
@@ -173,28 +176,31 @@ test('Alarm sinkt ohne Sichtkontakt um 0,02/s, Voll-Alarm endet unter 0,5', () =
   assert.equal(st.fullAlarm, false);
 });
 
-test('Alarmierter Gegner jagt und schlägt zu, Rüther wehrt sich mit 8 × power, Gegner-KO bei 0 HP', () => {
-  const st = Q(ROOM, [{ type: 'drohne', at: [6, 4], dir: 180 }]);
-  const c = st.units[0], e = st.enemies[0];
-  place(c, 4, 4);
-  const ev = run(st, 8000);
-  assert.ok(has(ev, 'hit', h => h.from === 'enemy' && h.damage === ENEMY_TYPES.drohne.dps));
-  assert.ok(has(ev, 'hit', h => h.from === 'unit' && h.damage === Math.round(8 * c.power)));
+test('Alarmierter Gegner jagt und schlägt zu (dps × 2,5), Rüther wehrt sich mit 5 × power, Gegner hat HP × 1,6, KO bei 0 HP', () => {
+  const st = Q(ROOM, [{ type: 'drohne', at: [6, 4], dir: 180 }], { team: ['christian', 'micha', 'viktor'] });
+  const [c, m, v] = st.units, e = st.enemies[0];
+  assert.equal(e.maxHp, Math.round(ENEMY_TYPES.drohne.hp * 1.6));
+  place(c, 4, 4); place(m, 4, 3); place(v, 4, 5); // zu dritt gegen eine Drohne
+  const ev = run(st, 25_000);
+  assert.ok(has(ev, 'hit', h => h.from === 'enemy' && h.damage === Math.round(ENEMY_TYPES.drohne.dps * 2.5 * st.dmgScale)));
+  assert.ok(has(ev, 'hit', h => h.from === 'unit' && h.damage === Math.round(5 * c.power)));
   assert.ok(has(ev, 'ko', k => k.by === 'kampf'));
   assert.equal(e.state, 'ko');
-  assert.ok(c.hp < c.maxHp && c.hp > 0);
 });
 
 // ---------- Kräfte ----------
 
-test('abilitiesFor: jeder Rüther genau 2 Kräfte, unbekannt keine', () => {
+test('abilitiesFor: ohne Loadout die 2 festen auf Stufe 1, unbekannt keine; 25 Fähigkeiten', () => {
   for (const r of RUETHERS) {
     const list = abilitiesFor(r.id);
     assert.equal(list.length, 2, r.id);
-    for (const a of list) assert.ok(a.name && a.icon && a.cd > 0 && a.range > 0 && a.desc);
+    for (const a of list) assert.ok(a.name && a.icon && a.cd > 0 && a.level === 1 && a.text && a.kind === 'fixed', a.id);
+    const st = Q(ROOM, [], { team: [r.id] });
+    assert.deepEqual(abilitiesFor(st.units[0]).map(a => a.id), list.map(a => a.id)); // kein dritter Slot
   }
   assert.deepEqual(abilitiesFor('hitler'), []);
-  assert.equal(Object.keys(ABILITIES).length, 10);
+  assert.equal(Object.keys(ABILITIES).length, 25);
+  assert.equal(ABILITIES.handbag, undefined);
 });
 
 test('Kraft Plus 70 Prozent: L wird nach 900 ms offen, Abklingzeit, läuft erst hin', () => {
@@ -266,25 +272,6 @@ test('Kraft Familientreffen: die 2 nächsten Gegner in 5 Kacheln dauerhaft KO, n
   place(s2.units[0], 4, 4);
   assert.ok(has(tick(s2, 50, [ab(0, 'family', {})]), 'fail', f => f.reason === 'noEnemy'));
   assert.equal(s2.units[0].cd.family, undefined);
-});
-
-test('Kraft Handtaschen-Hieb: 15 s KO, leise von hinten, laut von vorn', () => {
-  const st = Q(ROOM, [{ type: 'pinguin', at: [8, 4], dir: 0 }, { type: 'pinguin', at: [8, 7], dir: 90 }], { team: ['hildegard'] });
-  place(st.units[0], 7, 4);
-  let ev = run(st, 100, [ab(0, 'handbag', { enemy: 0 })]);
-  assert.equal(find(ev, 'ability').silent, true);
-  assert.ok(!has(ev, 'noise'));
-  assert.equal(st.enemies[0].state, 'stunned');
-  assert.equal(st.enemies[0].reason, 'handbag');
-  assert.deepEqual(visibleCone(st, 0), []);
-  run(st, 15_000);
-  assert.notEqual(st.enemies[0].state, 'stunned');
-  // von vorn: Geräusch
-  const s2 = Q(ROOM, [{ type: 'pinguin', at: [8, 4], dir: 180 }, { type: 'pinguin', at: [10, 2], dir: 0 }], { team: ['hildegard'] });
-  place(s2.units[0], 7, 4);
-  ev = run(s2, 100, [ab(0, 'handbag', { enemy: 0 })]);
-  assert.equal(find(ev, 'ability').silent, false);
-  assert.ok(has(ev, 'noise', n => n.kind === 'hieb' && n.enemies.includes(1)));
 });
 
 test('Kraft Giftgas: Gegner darin husten (betäubt), Drohne nicht, nach 10 s vorbei', () => {
@@ -751,15 +738,15 @@ test('Zeitablauf mit erfülltem Ziel: eigener Text statt „Heizung brummt weite
   assert.ok(find(run(st2, 1100), 'end').text.endsWith('nein'));
 });
 
-test('Gegnerschaden wächst mit der Teamstärke (Ø maxBtc × power / 100)', () => {
+test('Gegnerschaden wächst linear mit der Teamstärke (Ø maxBtc / 170) und ist im Nahkampf × 2,5', () => {
   const c = makeFighter(RUETHER_BY_ID.christian, { rarity: 'legendaer', level: 20 });
   const st = Q(ROOM, [{ type: 'pinguin', at: [6, 4], dir: 180 }], { team: [c] });
   const u = st.units[0], e = st.enemies[0];
   place(u, 5, 4);
   Object.assign(e, { state: 'alert', lastSeen: { x: u.x, y: u.y } });
   const hit = find(run(st, 1500), 'hit', h => h.from === 'enemy');
-  assert.equal(hit.damage, Math.round(ENEMY_TYPES.pinguin.dps * c.maxBtc * c.power / 100));
-  assert.ok(hit.damage >= 40);
+  assert.equal(hit.damage, Math.round(ENEMY_TYPES.pinguin.dps * 2.5 * c.maxBtc / 170));
+  assert.ok(hit.damage >= 20 && hit.damage < c.maxBtc / 4, `${hit.damage} pro Schlag`); // tut weh, legt aber nicht in 1 s um
 });
 
 // ---------- v9: neue Kacheln, Ziele, Bernd, Ranger, Dackel, Platzwart ----------
@@ -1156,4 +1143,99 @@ test('Fixes Runde 1: Stefan heißt sichtbar Stefan und ist nach resume wieder he
   run(f, 5000);
   assert.ok(f.enemies.every(e => e.reason === 'fire' && !e.path.length && Math.hypot(e.x - 10.5, e.y - 3.5) < 1.6), 'alle am Baum');
   assert.equal(new Set(f.enemies.map(e => `${Math.floor(e.x)},${Math.floor(e.y)}`)).size, 3);
+});
+
+// ---------- v10 Fixes Runde 1 (quest) ----------
+const L = (id, lv) => Object.assign(F(id), { loadout: Object.entries(lv).map(([a, level]) => ({ id: a, level })) });
+const abx = (unit, ability, target = {}, extra = {}) => ({ type: 'ability', unit, ability, target, ...extra });
+
+test('v10 Fix: Wache auf der Randkachel des Deo-Nebels sieht nicht raus; blickdichte Firewall nur für Gegner', () => {
+  const st = Q(ROOM, [{ type: 'pinguin', at: [8, 4], dir: 180 }], { team: [L('viktor', { deo: 1 })] });
+  place(st.units[0], 11, 7);
+  assert.deepEqual(find(run(st, 100, [abx(0, 'deo', { x: 10.5, y: 4.5 })]), 'ability').rect, { x0: 8, y0: 2, x1: 12, y1: 6 });
+  assert.deepEqual(visibleCone(st, 0), [], 'Kegel aus, die Wache steht selbst im Nebel');
+  place(st.units[0], 5, 4); // 3 Kacheln vor ihr, außerhalb des Nebels
+  const ev = run(st, 1500);
+  assert.equal(st.enemies[0].suspicion, 0);
+  assert.ok(!has(ev, 'alert'));
+  // Firewall Stufe 3: Micha wirft den Controller durch die eigene Wand (Rüther sehen durch), statt hindurchzulaufen
+  const f = Q(ROOM, [{ type: 'pinguin', at: [14, 3], dir: 0 }], { team: [L('micha', { firewall: 3, controller: 1 })] });
+  place(f.units[0], 10, 3);
+  assert.ok(find(tick(f, 0, [abx(0, 'firewall', { x: 12.5, y: 3.5 }, { dir: 'v' })]), 'ability').opaque);
+  assert.ok(has(tick(f, 0, [abx(0, 'controller', { enemy: 0 })]), 'ability', a => a.ability === 'controller'));
+  assert.deepEqual(f.units[0].path, []);
+});
+
+test('v10 Fix: M&Ms – sperrt die Firewall den Weg, isst die Wache nicht durch die Wand', () => {
+  const MAP = ['####################', '#PPP......#........#', '#.........#........#', '#.........#........#', '#..................#', '#.........#........#', '####################'];
+  const st = Q(MAP, [{ type: 'pinguin', at: [13, 4], dir: 180 }], { team: [L('ramona', { mms: 1 }), L('micha', { firewall: 1 })] });
+  place(st.units[0], 5, 4); place(st.units[1], 6, 2);
+  let ev = run(st, 1500, [abx(0, 'mms', { x: 8.5, y: 4.5 })]);
+  assert.ok(has(ev, 'baitTaken'));
+  ev = tick(st, 0, [abx(1, 'firewall', { x: 10.5, y: 4.5 }, { dir: 'v' })]);
+  assert.deepEqual(find(ev, 'ability').tiles, [{ x: 10, y: 4 }]);
+  place(st.units[0], 1, 1); place(st.units[1], 2, 1);
+  ev = run(st, 3000);
+  const e = st.enemies[0];
+  assert.ok(!has(ev, 'stun', s => s.reason === 'eat'), 'kein Essen hinter der Wand');
+  assert.ok(e.x > 10 && e.state !== 'eating');
+  assert.equal(st.effects.find(x => x.kind === 'mms')?.portions, 1, 'Portion bleibt liegen');
+  ev = run(st, 16_000); // Firewall weg: jetzt kommt er hin
+  assert.ok(has(ev, 'stun', s => s.reason === 'eat' && Math.hypot(s.x - 8.5, s.y - 4.5) <= 1.5));
+});
+
+test('v10 Fix: eigene Fehltexte für Mittagsruhe/Crash, Insider-Tipp ohne Weg ohne Abklingzeit, Schild und Horde nicht ins Wasser', () => {
+  const st = Q(ROOM, [{ type: 'pinguin', at: [17, 8] }], { team: [L('hildegard', { mittag: 1 }), L('viktor', { crash: 1 })] });
+  const m = find(tick(st, 0, [abx(0, 'mittag')]), 'fail'), c = find(tick(st, 0, [abx(1, 'crash')]), 'fail');
+  assert.deepEqual([m.reason, c.reason], ['noDoze', 'noRumor']);
+  for (const t of [m.text, c.text]) assert.ok(/Wache/.test(t) && !/Familie/.test(t), t);
+  // Insider-Tipp: Zielpunkt hinter verschlossener Tür, kein anderer Weg
+  const MAP = ['####################', '#PPP.....#.........#', '#........L.........#', '#........#.........#', '####################'];
+  const s = Q(MAP, [{ type: 'pinguin', at: [6, 2], dir: 180 }], { team: [L('viktor', { insider: 1 })] });
+  place(s.units[0], 4, 2);
+  const f = find(tick(s, 0, [abx(0, 'insider', { enemy: 0 }, { target2: { x: 14.5, y: 2.5 } })]), 'fail');
+  assert.deepEqual([f.reason, f.text], ['noWay', 'Da kommt die Wache nicht hin.']);
+  assert.ok(!(s.units[0].cd.insider > s.time), 'keine Abklingzeit');
+  assert.ok(!has(tick(s, 0, [abx(0, 'insider', { enemy: 0 }, { target2: { x: 6.5, y: 3.5 } })]), 'fail'));
+  // Sale-Schild und Horde: Wasser ist kein Startpunkt, das Ufer schon
+  for (const id of ['sale', 'horde']) {
+    const w = Q(['############', '#PPP.......#', '#....WW....#', '#..........#', '############'], [], { team: [L('ramona', { [id]: 1 })] });
+    place(w.units[0], 4, 1);
+    assert.ok(has(tick(w, 0, [abx(0, id, { x: 5.5, y: 2.5 })]), 'fail', x => x.reason === 'target'), id);
+    assert.ok(!has(tick(w, 0, [abx(0, id, { x: 5.5, y: 3.5 })]), 'fail'), id);
+  }
+});
+
+test('v10 Fix: Tratsch – Hildegard zwischen den Streithähnen wird nicht gesehen', () => {
+  const MAP = ['####################', '#PPP...............#', '#..................#', '#..................#', '#..................#', '#..................#', '####################'];
+  for (const level of [1, 3]) {
+    const st = Q(MAP, [{ type: 'pinguin', at: [5, 3], dir: 180 }, { type: 'pinguin', at: [15, 3], dir: 0 }], { team: [L('hildegard', { tratsch: level })] });
+    place(st.units[0], 10, 4);
+    const ev = run(st, 4000, [abx(0, 'tratsch')]);
+    assert.ok(!has(ev, 'taskEnd') && !has(ev, 'alert') && !has(ev, 'suspicious'), `Stufe ${level}`);
+    assert.equal(st.units[0].hp, st.units[0].maxHp);
+    assert.ok(st.enemies.every(e => e.task?.kind === 'tratsch' && e.task.phase === 'stay'));
+  }
+});
+
+test('v10 Fix: Stefan redet auch bei Crash-Gerücht, Panik und Klappern nur über Kieser und Bulletproof Coffee', () => {
+  const B = ENEMY_TYPES.bernd.lines;
+  const st = Q(ROOM, [{ type: 'bernd', at: [8, 3], dir: 0 }, { type: 'pinguin', at: [5, 6], dir: 0 }], { team: [L('viktor', { crash: 3 })] });
+  st.enemies[0].coffeeAt = Infinity;
+  place(st.units[0], 5, 3);
+  let ev = run(st, 100, [abx(0, 'crash')]);
+  assert.ok(B.crash.includes(find(ev, 'task', t => t.enemy === 0).say));
+  assert.equal(find(ev, 'task', t => t.enemy === 1).say, 'Mein Depot! Alles rot!'); // andere Wachen wie gehabt
+  place(st.units[0], 1, 8);
+  ev = run(st, 7500); // Stufe 3: 14 s, Stefan halb so lang
+  assert.ok(B.taskEnd.includes(find(ev, 'taskEnd', t => t.enemy === 0).say));
+  assert.ok(B.panik.includes(find(ev, 'task', t => t.enemy === 0 && t.kind === 'panik').say));
+  assert.deepEqual(ENEMY_TYPES.bernd.labels, { crash: '+20 kg', panik: 'ZU KIESER!', insider: 'Kaffee?' });
+  // Klappern am Tresor hört Stefan mit seinen Hantelscheiben
+  const v = Q(VAULT, [{ type: 'bernd', at: [7, 3], dir: 0 }], { team: ['viktor'] });
+  v.enemies[0].coffeeAt = Infinity;
+  place(v.units[0], 5, 3);
+  ev = run(v, 2500, [{ type: 'interact', unit: 0, obj: 0 }]);
+  assert.ok(B.heard.includes(find(ev, 'heard').say));
+  for (const t of [...B.crash, ...B.panik, ...B.insider, ...B.task, ...B.taskEnd, ...B.heard]) assert.ok(/Kieser|Coffee|Kaffee|Beinpresse|Hantel/.test(t), t);
 });

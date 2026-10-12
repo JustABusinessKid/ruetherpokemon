@@ -403,7 +403,7 @@ export function faceFrame(g, face, x, y, size, rarity, { grey = false, src = '' 
 }
 
 // Pixel-Bitmaps für Herzen und Sterne (1 = Pixel)
-const BITMAPS = { heart: ['01010', '11111', '11111', '01110', '00100'], star: ['00100', '01110', '11011', '01110', '00100'], spark: ['10001', '01010', '00100', '01010', '10001'], plus: ['00100', '00100', '11111', '00100', '00100'] };
+const BITMAPS = { heart: ['01010', '11111', '11111', '01110', '00100'], star: ['00100', '01110', '11011', '01110', '00100'], spark: ['10001', '01010', '00100', '01010', '10001'], plus: ['00100', '00100', '11111', '00100', '00100'], vein: ['01010', '11011', '00000', '11011', '01010'] };
 export function bitmap(g, kind, x, y, s, color) {
   const b = BITMAPS[kind];
   g.fillStyle = color;
@@ -474,17 +474,19 @@ export function paintMini(st, t, s) {
   return c;
 }
 
-// Pixel-Flammen über (x, y): k = Stärke 0…1, flackern in 90-ms-Schritten
-export function flames(g, x, y, t, k = 1, n = 8, spread = 26) {
+// Pixel-Flammen über (x, y): k = Stärke 0…1, flackern in 90-ms-Schritten; pal = [außen, Mitte, Kern] (Firewall: BLUE_FIRE)
+const FIRE = ['#B03B2B', '#E0A52B', GOLD];
+export const BLUE_FIRE = ['#1F5E8A', '#3FC1B0', '#BFF5EC'];
+export function flames(g, x, y, t, k = 1, n = 8, spread = 26, pal = FIRE) {
   const f = Math.floor(t / 90);
   for (let j = 0; j < n; j++) {
     const fx = Math.round(x + (hash(j, 3) - 0.5) * spread), fy = Math.round(y + (hash(j, 4) - 0.5) * spread * 0.5);
     const h = Math.round((8 + hash(j, f) * 11) * k), sw = hash(j, f, 1) < 0.5 ? -1 : 1, lo = Math.ceil(h * 0.55); // sw: Spitze flackert seitlich
     if (h < 3) continue;
     g.fillStyle = INK; g.fillRect(fx - 4, fy - lo - 1, 8, lo + 2); g.fillRect(fx - 3 + sw, fy - h - 1, 6, h - lo + 1);
-    g.fillStyle = '#B03B2B'; g.fillRect(fx - 3, fy - lo, 6, lo); g.fillRect(fx - 2 + sw, fy - h, 4, h - lo);
-    g.fillStyle = '#E0A52B'; g.fillRect(fx - 2, fy - Math.round(h * 0.45), 4, Math.round(h * 0.45)); g.fillRect(fx - 1 + sw, fy - Math.round(h * 0.72), 2, Math.round(h * 0.27));
-    g.fillStyle = GOLD; g.fillRect(fx - 1, fy - Math.round(h * 0.3), 2, Math.round(h * 0.3));
+    g.fillStyle = pal[0]; g.fillRect(fx - 3, fy - lo, 6, lo); g.fillRect(fx - 2 + sw, fy - h, 4, h - lo);
+    g.fillStyle = pal[1]; g.fillRect(fx - 2, fy - Math.round(h * 0.45), 4, Math.round(h * 0.45)); g.fillRect(fx - 1 + sw, fy - Math.round(h * 0.72), 2, Math.round(h * 0.27));
+    g.fillStyle = pal[2]; g.fillRect(fx - 1, fy - Math.round(h * 0.3), 2, Math.round(h * 0.3));
   }
 }
 // Rauchsäule und Funken über einem brennenden Baum
@@ -536,4 +538,100 @@ export function swatter(g, x, y, a) {
   g.fillStyle = '#3a3a3a'; g.fillRect(15, -5, 8, 10);
   g.fillStyle = '#5a5a5a'; g.fillRect(15, -5, 8, 2);
   g.restore();
+}
+
+// ---------- v10: Requisiten der Quest-Fähigkeiten (t = Zeit in ms) ----------
+// Zickzack-Blitz von (x0,y0) nach (x1,y1), alle 50 ms neu gewürfelt (Hack-Blitz, Streit-Blitze)
+export function zigzag(g, x0, y0, x1, y1, t, color, n = 8, amp = 12) {
+  const seed = Math.floor(t / 50);
+  g.beginPath(); g.moveTo(x0, y0);
+  for (let k = 1; k < n; k++) g.lineTo(x0 + (x1 - x0) * k / n + (hash(seed, k) - 0.5) * amp, y0 + (y1 - y0) * k / n + (hash(seed, k, 1) - 0.5) * amp);
+  g.lineTo(x1, y1);
+  g.strokeStyle = INK; g.lineWidth = 4; g.stroke();
+  g.strokeStyle = color; g.lineWidth = 2; g.stroke();
+}
+// Handy in der Hand: Chart steigt (up, grün) oder stürzt ab (rot)
+export function phone(g, x, y, up, t) {
+  x = Math.round(x); y = Math.round(y);
+  g.fillStyle = INK; g.fillRect(x - 4, y - 6, 9, 13);
+  g.fillStyle = up ? '#E3F4D8' : '#F6DCD5'; g.fillRect(x - 3, y - 5, 7, 10);
+  g.fillStyle = up ? '#2F9E44' : '#B03B2B';
+  const k = Math.floor(t / 180) % 2, pts = up ? [[-3, 3], [-1, 1], [1, 2], [2, -2 - k]] : [[-3, -3], [-1, -1], [1, -2], [2, 2 + k]];
+  for (const [dx, dy] of pts) g.fillRect(x + dx, y + dy, 2, 2);
+}
+// Spitzel-Auge (Unlimited Credits Stufe 3), blinzelt ab und zu; s = Kunst-Pixel
+export function eye(g, x, y, t, s = 2) {
+  x = Math.round(x); y = Math.round(y);
+  const shut = (t / 2600) % 1 < 0.06;
+  g.fillStyle = INK; g.fillRect(x - 4 * s, y - 2 * s, 8 * s, 4 * s); g.fillRect(x - 3 * s, y - 3 * s, 6 * s, 6 * s);
+  if (shut) { g.fillStyle = '#C77DFF'; g.fillRect(x - 3 * s, y, 6 * s, s); return; }
+  g.fillStyle = PAPER; g.fillRect(x - 3 * s, y - s, 6 * s, 2 * s); g.fillRect(x - 2 * s, y - 2 * s, 4 * s, 4 * s);
+  g.fillStyle = '#C77DFF'; g.fillRect(x - s, y - s, 2 * s, 2 * s);
+  g.fillStyle = INK; g.fillRect(x - Math.ceil(s / 2), y - Math.ceil(s / 2), s, s);
+}
+// Anzug unterm echten Gesicht (Vice-President-Auftritt): Schultern und Brust mit Hemd, roter Krawatte und Goldknöpfen
+export function suit(g, x, y) {
+  x = Math.round(x); y = Math.round(y);
+  g.fillStyle = INK; g.fillRect(x - 19, y + 3, 38, 23);
+  g.fillStyle = '#22305A'; g.fillRect(x - 18, y + 4, 36, 21);
+  g.fillStyle = '#34477F'; g.fillRect(x - 18, y + 4, 3, 21); g.fillRect(x + 15, y + 4, 3, 21);
+  g.fillStyle = PAPER; g.fillRect(x - 5, y + 14, 10, 4); g.fillRect(x - 3, y + 18, 6, 3); g.fillRect(x - 1, y + 21, 2, 2);
+  g.fillStyle = '#B03B2B'; g.fillRect(x - 1, y + 14, 3, 9);
+  g.fillStyle = GOLD; g.fillRect(x - 9, y + 20, 2, 2); g.fillRect(x + 7, y + 20, 2, 2);
+}
+// Raubkopie: echtes Gesicht im Rahmen, halbtransparent, mit Glitch-Streifen und Farbversatz; k = Sichtbarkeit 0…1
+export function glitchFace(g, face, x, y, size, rarity, t, k = 1, src = '') {
+  const s = Math.round(size), x0 = Math.round(x - s / 2), y0 = Math.round(y - s / 2), f = Math.floor(t / 70);
+  g.save();
+  g.globalAlpha = 0.8 * k;
+  faceFrame(g, face, x + (hash(f, 1) < 0.2 ? 2 : 0), y, size, rarity, { src });
+  if (face) { // versetzte Zeilen aus dem Foto
+    const iw = face.naturalWidth || face.width, ih = face.naturalHeight || face.height;
+    g.imageSmoothingEnabled = true;
+    for (let j = 0; j < 3; j++) {
+      if (hash(f, j, 2) < 0.35) continue;
+      const h = 2 + Math.floor(hash(f, j, 4) * 5), sy = Math.floor(hash(f, j, 3) * (s - 4 - h)), dx = Math.round((hash(f, j, 5) - 0.5) * 10);
+      g.drawImage(face, 0, sy / (s - 4) * ih, iw, h / (s - 4) * ih, x0 + 2 + dx, y0 + 2 + sy, s - 4, h);
+    }
+    g.imageSmoothingEnabled = false;
+  }
+  g.globalAlpha = 0.45 * k; // Farbversatz und Streifen
+  g.fillStyle = '#3FC1B0'; g.fillRect(x0 - 3, y0 + Math.floor(hash(f, 6) * s), s, 2);
+  g.fillStyle = '#E0559B'; g.fillRect(x0 + 3, y0 + Math.floor(hash(f, 7) * s), s, 2);
+  g.globalAlpha = 0.16 * k; g.fillStyle = INK;
+  for (let r = 1; r < s; r += 3) g.fillRect(x0, y0 + r, s, 1); // Zeilenraster
+  g.restore();
+}
+// WLAN-Symbol mit Störung: Bögen gehen nacheinander aus, roter Schrägstrich
+export function wifi(g, x, y, t) {
+  const on = Math.floor(t / 260) % 4;
+  for (let k = 0; k < on; k++) {
+    g.beginPath(); g.arc(x, y, 5 + k * 5, -Math.PI * 0.78, -Math.PI * 0.22);
+    g.strokeStyle = INK; g.lineWidth = 5; g.stroke(); g.strokeStyle = '#3FC1B0'; g.lineWidth = 3; g.stroke();
+  }
+  g.fillStyle = INK; g.fillRect(Math.round(x) - 3, Math.round(y) - 2, 6, 5); g.fillStyle = '#3FC1B0'; g.fillRect(Math.round(x) - 2, Math.round(y) - 1, 4, 3);
+  g.beginPath(); g.moveTo(x - 13, y - 16); g.lineTo(x + 13, y + 4);
+  g.strokeStyle = INK; g.lineWidth = 5; g.stroke(); g.strokeStyle = '#B03B2B'; g.lineWidth = 3; g.stroke();
+}
+// Schimpf-Blase: zackige rote Wolke mit Kritzel (Hildegard schimpft)
+export function scold(g, x, y, t) {
+  const n = 9, f = Math.floor(t / 160);
+  g.beginPath();
+  for (let k = 0; k <= 2 * n; k++) { const a = k / (2 * n) * 2 * Math.PI, r = k % 2 ? 9 : 14 + (hash(f, k) < 0.3 ? 2 : 0); g.lineTo(x + Math.cos(a) * r * 1.3, y + Math.sin(a) * r * 0.8); }
+  g.closePath();
+  g.fillStyle = '#B03B2B'; g.fill(); g.strokeStyle = INK; g.lineWidth = 2; g.stroke();
+  g.beginPath(); g.moveTo(x - 9, y);
+  for (let k = 1; k < 7; k++) g.lineTo(x - 9 + k * 3, y + (hash(f, k, 9) - 0.5) * 9);
+  g.strokeStyle = INK; g.lineWidth = 2; g.stroke();
+}
+// Bierpfütze: Pixel-Lache mit Schaum; k = Größe 0…1
+export function puddle(g, x, y, t, k = 1) {
+  x = Math.round(x); y = Math.round(y);
+  const w = Math.round(17 * k), h = Math.round(6 * k);
+  if (w < 6) return;
+  g.fillStyle = INK; g.fillRect(x - w - 1, y - h + 1, 2 * w + 2, 2 * h); g.fillRect(x - w + 4, y - h - 2, 2 * w - 8, 2 * h + 6);
+  g.fillStyle = '#C98A1E'; g.fillRect(x - w, y - h + 2, 2 * w, 2 * h - 2); g.fillRect(x - w + 5, y - h - 1, 2 * w - 10, 2 * h + 4);
+  g.fillStyle = GOLD; g.fillRect(x - w + 6, y - h, Math.round(w * 0.6), 2);
+  g.fillStyle = PAPER;
+  for (let j = 0; j < 4; j++) if ((t / 700 + hash(j, 11)) % 1 < 0.6) g.fillRect(x - w + 4 + Math.floor(hash(j, 12) * (2 * w - 8)), y - 1 + Math.floor(hash(j, 13) * h), 2, 2);
 }

@@ -41,6 +41,38 @@
 .inst .iactions { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .inst .iactions button { min-width: 0; min-height: 44px; padding: 4px 6px; gap: 2px; font-size: 14px; white-space: nowrap; }
 .inst .iactions .ico { width: 20px; height: 20px; }
+/* v10 Quest-Fähigkeiten: zuklappbar (<details>), zu zeigt die 3 ausgerüsteten; Zeile = Icon, Name ●●○, Text jetzt/nächste, Knöpfe */
+.qab { margin-top: 10px; background: var(--paper-2); border: 2px solid var(--ink); }
+.qab summary { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 4px 8px; cursor: pointer; list-style: none; }
+.qab summary::-webkit-details-marker { display: none; }
+.qab summary::after { content: '+'; flex: none; width: 24px; font: 700 20px/1 var(--font-pixel); text-align: center; }
+.qab[open] summary::after { content: '−'; }
+.qab summary:focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+.qab-title { flex: 1; font: 700 16px/1.2 var(--font-pixel); }
+.qab-load { display: flex; gap: 4px; }
+.qab-load > img, .qab-empty { width: 28px; height: 28px; border: 2px solid var(--ink); background: var(--paper); }
+.qab-empty { border-style: dashed; }
+.qab-load .q-fam img { width: 20px; height: 20px; }
+.qab-list { display: flex; flex-direction: column; gap: 6px; padding: 0 8px 8px; }
+.rcard .qab-hint { display: block; margin: 0; }
+.qab-pool { margin-top: 4px; font: 800 12px/1.2 var(--font-body); text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft); }
+.qab-row { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 4px 8px; padding: 6px; background: var(--paper); border: 2px solid var(--ink); }
+.qab-row.on { box-shadow: 0 0 0 3px var(--amber); }
+.qab-row.locked .qab-ico { opacity: .6; }
+.qab-ico > img { width: 40px; height: 40px; }
+.qab-ico .q-fam img { width: 20px; height: 20px; }
+.qab-name { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 6px; font: 800 15px/1.2 var(--font-body); }
+.ab-dots { display: inline-flex; gap: 2px; }
+.ab-dots i { width: 8px; height: 8px; border: 2px solid var(--ink); background: var(--paper); }
+.ab-dots i.on { background: var(--green); }
+.qab-tag { padding: 0 5px; font: 800 11px/16px var(--font-body); background: var(--paper-2); border: 2px solid var(--ink); }
+.qab-tag.on { background: var(--amber); }
+.qab-text { margin: 2px 0 0; font-size: 13px; line-height: 1.35; }
+.qab-text.next { color: var(--ink-soft); }
+.qab-btns { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px; }
+.qab-btns button { min-width: 0; min-height: 44px; padding: 4px 8px; gap: 2px; font-size: 14px; white-space: nowrap; }
+.qab-btns .ico { width: 20px; height: 20px; }
+
 /* Power-Up / Füttern: Rahmen blinkt gold, Pixel-Sterne steigen auf (--x/--d setzt JS), Levelzahl springt */
 .inst.level-up .frame { animation: sc-level 1.2s steps(1, end); }
 .inst .lvl-pop { font: 700 16px/1 var(--font-pixel); color: var(--green); animation: sc-lvl-pop 1.2s steps(4, end) forwards; }
