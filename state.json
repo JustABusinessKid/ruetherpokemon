@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1791893073,
+ "lastMsgTime": 1791921833,
  "players": {
   "legacy:Josef": {
    "nickname": "Josef",
@@ -77,18 +77,18 @@
   "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
    "nickname": "BTC",
    "avatar": "christian",
-   "sats": 14770,
+   "sats": 2130,
    "dex": 20,
    "trophies": 59,
    "mastered": 5,
    "level": 25,
-   "xp": 2050,
+   "xp": 2470,
    "leader": {
     "id": "christian",
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1791893073302
+   "t": 1791921833069
   }
  },
  "arenas": {
@@ -144,6 +144,13 @@
   }
  },
  "events": [
+  {
+   "at": 1791921155932,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Christian erschaffen!",
+   "m": "4REwQ7aaYLaA7yGQ"
+  },
   {
    "at": 1791742671286,
    "nickname": "BTC",
@@ -486,13 +493,6 @@
    "kind": "quest",
    "text": "hat die Haunebu-Quest „Der Tachionenraub“ geschafft!",
    "m": "2A79eZPJWGgU6zcU"
-  },
-  {
-   "at": 1791657331979,
-   "nickname": "BTC",
-   "kind": "arena",
-   "text": "hat Keller der Rütherschanze erobert (Lv. 5).",
-   "m": "kV6PnG42vOQruB5P"
   }
  ]
 }
