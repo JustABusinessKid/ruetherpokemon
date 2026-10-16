@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1792135208,
+ "lastMsgTime": 1792152013,
  "players": {
   "legacy:Josef": {
    "nickname": "Josef",
@@ -77,18 +77,18 @@
   "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
    "nickname": "BTC",
    "avatar": "christian",
-   "sats": 6360,
+   "sats": 9270,
    "dex": 20,
    "trophies": 59,
    "mastered": 5,
-   "level": 25,
-   "xp": 3520,
+   "level": 26,
+   "xp": 350,
    "leader": {
     "id": "christian",
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1792135207490
+   "t": 1792152011862
   }
  },
  "arenas": {
@@ -144,6 +144,34 @@
   }
  },
  "events": [
+  {
+   "at": 1792151716743,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Viktor erschaffen!",
+   "m": "f22xyCpArYC-2TWH"
+  },
+  {
+   "at": 1792151715058,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Viktor erschaffen!",
+   "m": "nZkSdMBLCli1wsAT"
+  },
+  {
+   "at": 1792151708858,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Christian erschaffen!",
+   "m": "1Jsf-Y-wd9WU5yLz"
+  },
+  {
+   "at": 1792151702936,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Christian erschaffen!",
+   "m": "_zj0ZbMZLT1tmsCE"
+  },
   {
    "at": 1791921155932,
    "nickname": "BTC",
@@ -465,34 +493,6 @@
    "kind": "arena",
    "text": "hat Geheime Festung Neuschwabenland erobert (Lv. 4).",
    "m": "JcMB7CEzdnfYm_U3"
-  },
-  {
-   "at": 1791657408077,
-   "nickname": "BTC",
-   "kind": "arena",
-   "text": "hat Geheime Festung Neuschwabenland erobert (Lv. 3).",
-   "m": "fcCnVn4wQElvTYgW"
-  },
-  {
-   "at": 1791657399751,
-   "nickname": "Adolf",
-   "kind": "achievement",
-   "text": "hat die Haunebu erbeutet und fliegt 10 Minuten lang frei zu jeder Arena!",
-   "m": "rzwEEvZ4mBSnPWjD"
-  },
-  {
-   "at": 1791657396983,
-   "nickname": "BTC",
-   "kind": "arena",
-   "text": "hat Geheime Festung Neuschwabenland erobert (Lv. 2) und Adolf rausgeworfen.",
-   "m": "n6MPPX6pWaLBy1_B"
-  },
-  {
-   "at": 1791657359064,
-   "nickname": "Adolf",
-   "kind": "quest",
-   "text": "hat die Haunebu-Quest „Der Tachionenraub“ geschafft!",
-   "m": "2A79eZPJWGgU6zcU"
   }
  ]
 }
