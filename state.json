@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1792176488,
+ "lastMsgTime": 1792177582,
  "players": {
   "legacy:Josef": {
    "nickname": "Josef",
@@ -77,18 +77,18 @@
   "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
    "nickname": "BTC",
    "avatar": "christian",
-   "sats": 10420,
+   "sats": 11300,
    "dex": 20,
-   "trophies": 60,
+   "trophies": 61,
    "mastered": 5,
    "level": 26,
-   "xp": 1600,
+   "xp": 2310,
    "leader": {
     "id": "christian",
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1792176487400
+   "t": 1792177581588
   }
  },
  "arenas": {
@@ -103,14 +103,14 @@
    "since": 1792171946454
   },
   "huettenberg": {
-   "ownerId": "C-w_CUaEP-FRT271jxj2J9Fpmi7nZRiJBkW7o1pXg3I",
+   "ownerId": "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k",
    "leader": {
-    "id": "micha",
+    "id": "christian",
     "rarity": "legendaer",
     "level": 20
    },
    "level": 5,
-   "since": 1791742569196
+   "since": 1792176783639
   },
   "worringen": {
    "ownerId": "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k",
@@ -144,6 +144,20 @@
   }
  },
  "events": [
+  {
+   "at": 1792176783639,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat Hüttenbergstraße erobert (Lv. 5) und Adolf rausgeworfen.",
+   "m": "jJydjfRxHutwlJQE"
+  },
+  {
+   "at": 1792176783620,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat Hüttenbergstraße gemeistert!",
+   "m": "18zNDhztWOq8WNaP"
+  },
   {
    "at": 1792171982490,
    "nickname": "BTC",
@@ -479,20 +493,6 @@
    "kind": "quest",
    "text": "hat die Haunebu-Quest „Michas PS3“ geschafft!",
    "m": "PPxnkuNO_LJZO4K7"
-  },
-  {
-   "at": 1791657732311,
-   "nickname": "BTC",
-   "kind": "achievement",
-   "text": "hat die Haunebu erbeutet und fliegt 10 Minuten lang frei zu jeder Arena!",
-   "m": "hE_xy7Yx7-PeFUj7"
-  },
-  {
-   "at": 1791657704548,
-   "nickname": "BTC",
-   "kind": "quest",
-   "text": "hat die Haunebu-Quest „Der Tachionenraub“ geschafft!",
-   "m": "LRHrIiFQJ84i2rZ1"
   }
  ]
 }
