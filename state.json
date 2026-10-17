@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1792214305,
+ "lastMsgTime": 1792244786,
  "players": {
   "legacy:Josef": {
    "nickname": "Josef",
@@ -30,22 +30,6 @@
    },
    "t": 1791485415682
   },
-  "legacy:Test": {
-   "nickname": "Test",
-   "avatar": "christian",
-   "sats": 9760,
-   "dex": 2,
-   "trophies": 0,
-   "mastered": 0,
-   "level": 2,
-   "xp": 90,
-   "leader": {
-    "id": "christian",
-    "rarity": "normal",
-    "level": 2
-   },
-   "t": 1791485555912
-  },
   "legacy:Büro": {
    "nickname": "Büro",
    "avatar": "christian",
@@ -61,34 +45,66 @@
   "C-w_CUaEP-FRT271jxj2J9Fpmi7nZRiJBkW7o1pXg3I": {
    "nickname": "Adolf",
    "avatar": "micha",
-   "sats": 7625,
+   "sats": 7715,
    "dex": 20,
    "trophies": 48,
    "mastered": 5,
    "level": 28,
-   "xp": 1740,
+   "xp": 1820,
    "leader": {
     "id": "micha",
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1791830559086
+   "t": 1792241828607
   },
   "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
    "nickname": "BTC",
    "avatar": "christian",
-   "sats": 11500,
+   "sats": 17130,
    "dex": 20,
    "trophies": 61,
    "mastered": 5,
-   "level": 26,
-   "xp": 2310,
+   "level": 27,
+   "xp": 570,
    "leader": {
     "id": "christian",
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1792214304462
+   "t": 1792244784984
+  },
+  "-pWtFGooNqrAhm2bZJVG-34XXqMnpAewbhOBWZCkxAc": {
+   "nickname": "Tester",
+   "avatar": "christian",
+   "sats": 20050,
+   "dex": 0,
+   "trophies": 0,
+   "mastered": 0,
+   "level": 5,
+   "xp": 0,
+   "leader": {
+    "id": "christian",
+    "rarity": "legendaer",
+    "level": 20
+   },
+   "t": 1792231940791
+  },
+  "mXmOzZWJHUV4Y4lmdBoCRKAn2u2qsCswMSKw6Q-rqPQ": {
+   "nickname": "Test",
+   "avatar": "christian",
+   "sats": 9810,
+   "dex": 2,
+   "trophies": 0,
+   "mastered": 0,
+   "level": 2,
+   "xp": 90,
+   "leader": {
+    "id": "christian",
+    "rarity": "normal",
+    "level": 2
+   },
+   "t": 1792233268007
   }
  },
  "arenas": {
@@ -144,6 +160,20 @@
   }
  },
  "events": [
+  {
+   "at": 1792235481474,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Onkel Micha erschaffen!",
+   "m": "diCMQaNOu-Zg3RC-"
+  },
+  {
+   "at": 1792228544439,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Ramona Rüther erschaffen!",
+   "m": "sdLbBQ3RGOzsapkv"
+  },
   {
    "at": 1792176783639,
    "nickname": "BTC",
@@ -479,20 +509,6 @@
    "kind": "quest",
    "text": "hat die Haunebu-Quest „Kalter Keller“ geschafft!",
    "m": "puMK5q0cYPHuY_dw"
-  },
-  {
-   "at": 1791657834693,
-   "nickname": "BTC",
-   "kind": "quest",
-   "text": "hat die Haunebu-Quest „Kalter Keller“ geschafft!",
-   "m": "H89_r_eBJT_El0-c"
-  },
-  {
-   "at": 1791657736756,
-   "nickname": "Adolf",
-   "kind": "quest",
-   "text": "hat die Haunebu-Quest „Michas PS3“ geschafft!",
-   "m": "PPxnkuNO_LJZO4K7"
   }
  ]
 }
