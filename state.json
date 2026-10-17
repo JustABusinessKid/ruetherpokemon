@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1792244786,
+ "lastMsgTime": 1792247580,
  "players": {
   "legacy:Josef": {
    "nickname": "Josef",
@@ -56,23 +56,23 @@
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1792241828607
+   "t": 1792247401080
   },
   "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
    "nickname": "BTC",
    "avatar": "christian",
-   "sats": 17130,
+   "sats": 17160,
    "dex": 20,
    "trophies": 61,
    "mastered": 5,
    "level": 27,
-   "xp": 570,
+   "xp": 620,
    "leader": {
     "id": "christian",
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1792244784984
+   "t": 1792247408948
   },
   "-pWtFGooNqrAhm2bZJVG-34XXqMnpAewbhOBWZCkxAc": {
    "nickname": "Tester",
@@ -105,6 +105,18 @@
     "level": 2
    },
    "t": 1792233268007
+  },
+  "gTapMs5sRCFzTzUaLJ6L6QzjA7LunVNTJzWB4HZ8Kqs": {
+   "nickname": "4t",
+   "avatar": "christian",
+   "sats": 150,
+   "dex": 0,
+   "trophies": 0,
+   "mastered": 0,
+   "level": 1,
+   "xp": 0,
+   "leader": null,
+   "t": 1792247567561
   }
  },
  "arenas": {
