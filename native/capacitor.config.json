@@ -1,0 +1,6 @@
+{
+  "appId": "de.ruether.go",
+  "appName": "Rüther GO",
+  "webDir": "www",
+  "android": { "allowMixedContent": false }
+}

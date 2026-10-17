@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Rüther GO</string>
+    <string name="title_activity_main">Rüther GO</string>
+    <string name="package_name">de.ruether.go</string>
+    <string name="custom_url_scheme">de.ruether.go</string>
+</resources>

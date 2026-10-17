@@ -1,0 +1,14 @@
+{
+  "name": "ruether-go-native",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "www": "node build-www.mjs",
+    "sync": "node build-www.mjs && npx cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.2",
+    "@capacitor/cli": "^6.2.2",
+    "@capacitor/core": "^6.2.2"
+  }
+}
