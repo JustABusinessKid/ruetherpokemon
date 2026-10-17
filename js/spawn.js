@@ -1,6 +1,7 @@
 import { CONST } from './data.js';
 import { distance, offsetPoint, randomPointInRing } from './geo.js';
 import { rollRarity } from './progress.js';
+import { signRoom, faceGap } from './map.js';
 
 function makeSpawn(r, pos, now, rng, forceRarity) {
   return {
@@ -27,8 +28,13 @@ function spawnPool(player, arenas, ruethers, featured) {
 
 // Reine Funktion. lure: Lockmodul aktiv (mehr Spawns). forceRarity: der erste neu erzeugte Spawn bekommt diese Stufe (Debug).
 // featured: dieser Rüther liegt FEATURED_WEIGHT-fach im Pool (Rüther des Tages).
-export function updateSpawns({ spawns, player, arenas, ruethers, now, rng, lure = false, forceRarity = null, featured = null }) {
+// avoid: Sperrquadrate (map.js signRoom), die Arena-Schilder liegen auf der Karte über den Gesichtern. gap: Mindestabstand je Achse
+// (m) zu den Gesichtern, die schon liegen (map.js faceGap: 48-px-Gesichter bei Zoom 16 decken sich sonst, in der Rüther-Stunde fast
+// immer). Neue Spawns würfeln bis zu 40-mal, bis die Stelle frei ist; die Schilder gehen vor: findet sich keine ganz freie Stelle,
+// der erste Wurf neben ihnen, sonst der letzte (an Worringen/Keller ist der Ring der Ramona zu 73 % gesperrt).
+export function updateSpawns({ spawns, player, arenas, ruethers, now, rng, lure = false, forceRarity = null, featured = null, avoid = signRoom(arenas), gap }) {
   if (!player) return [];
+  gap ??= faceGap(player.lat);
   const list = spawns.filter(s => s.expires > now && distance(player, s) <= CONST.SPAWN_FORGET);
   const min = lure ? CONST.LURE_SPAWN_MIN : CONST.SPAWN_MIN;
   const max = lure ? CONST.LURE_SPAWN_MAX : CONST.SPAWN_MAX;
@@ -39,7 +45,14 @@ export function updateSpawns({ spawns, player, arenas, ruethers, now, rng, lure 
     const loc = local.find(x => x.r.id === r.id);
     const center = loc ? loc.arena : player;
     const ring = loc ? CONST.LOCAL_SPAWN_RING : CONST.SPAWN_RING;
-    const s = makeSpawn(r, randomPointInRing(center, ring[0], ring[1], rng), now, rng, forceRarity);
+    let p = null, ok = null;
+    for (let k = 0; k < 40; k++) {
+      p = randomPointInRing(center, ring[0], ring[1], rng);
+      if (avoid.some(b => inBlock(b, p))) continue;
+      if (!list.some(s => inBlock({ ...s, r: gap }, p))) { ok = p; break; }
+      ok ||= p;
+    }
+    const s = makeSpawn(r, ok || p, now, rng, forceRarity);
     forceRarity = null; // nur der erste neue Spawn
     return s;
   };

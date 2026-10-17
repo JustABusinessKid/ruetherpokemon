@@ -2,7 +2,7 @@ import { CONST, RUETHERS, RUETHER_BY_ID, RARITIES, RARITY_BY_ID, SHOP, QUESTS, A
 import { fighterStats, levelCost, DEX_TOTAL, dexCount, arenaReward, canFuse, nextRarity, levelProgress, pickFood, sell, sellDuplicates,
   summonCost, haunebuActive, questsUnlocked, QUEST_SATS, abilityLevel, buyAbility, upgradeAbility, loadoutFor } from './progress.js';
 import { esc, popup, ico, kitName } from './ui.js';
-import { hashrateText } from './format.js';
+import { hashrateText, countText } from './format.js';
 import { playSheet, btcRain } from './fx.js';
 import { MISSIONS } from './quest/missions.js';
 import { abilitiesFor, ENEMY_TYPES, ABILITIES, FIXED, POOLS } from './quest/engine.js';
@@ -51,6 +51,17 @@ async function askText({ title, html, cls, initial = '', ok = 'Speichern' }) {
 export const distText = m => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toLocaleString('de-DE', { maximumFractionDigits: 1 })} km`);
 const emptyState = (icon, text, sub = '') =>
   `<div class="empty">${ico(icon, 'ico-xl empty-ico')}<p>${esc(text)}</p>${sub ? `<p class="sub">${esc(sub)}</p>` : ''}</div>`;
+// Versionsanzeige im Profil; bei jedem Release mitziehen
+export const VERSION = 'v10';
+// Jeder Knopf-Tipp baut die Liste neu auf: ein schneller zweiter Tipp träfe das nachgerückte Exemplar (falsches verkauft oder
+// gefüttert, zwei Super-Münzen gekauft). Darum schluckt node 300 ms nach einem Knopf-Tipp alle weiteren Klicks.
+function tapGuard(node, ms = 300) {
+  let last = -Infinity;
+  node.addEventListener('click', e => {
+    if (e.timeStamp - last < ms) { e.stopPropagation(); e.preventDefault(); return; }
+    if (e.target.closest('button')) last = e.timeStamp;
+  }, true);
+}
 
 // ---------- Sammlung ----------
 // Eine Karte pro Rüther (Spec §3): echtes Gesicht des besten Exemplars groß, Zähler je Seltenheit, Fusions-Fortschritt,
@@ -61,11 +72,15 @@ const emptyState = (icon, text, sub = '') =>
 // v10: onBuyAbility / onUpgradeAbility / onEquipAbility (rid, aid) -> { ok, reason } (Toast, Sats und Speichern macht der App-Code)
 export function createCollectionScreen({ el, onTeamChange, onPowerUp, onFuse, onFeed, onSell, onSellDuplicates, onDex, onBack, onBuyAbility, onUpgradeAbility, onEquipAbility }) {
   const box = el.querySelector('.box');
+  tapGuard(box);
   el.querySelector('.back')?.addEventListener('click', () => onBack?.());
   el.querySelector('.dex-btn').addEventListener('click', onDex);
   let save = null;
   const open = new Set(), abOpen = new Set(); // ausgeklappte Rüther-ids (Exemplare bzw. Quest-Fähigkeiten)
-  const dry = (fn, ...a) => fn(structuredClone(save), ...a); // Regeln aus progress.js probeweise, ohne den Spielstand zu ändern
+  // Regeln aus progress.js probeweise, ohne den Spielstand zu ändern. Flache Kopie statt structuredClone(save): der Klon des ganzen
+  // Spielstands je Zeile machte jeden Tipp ab etwa 200 Exemplaren träge. Die Proben (sell, sellDuplicates, buy-/upgradeAbility)
+  // ersetzen box, ändern sats und questAbilities, aber keine Exemplare (test/map.test.mjs prüft das an eingefrorenen Exemplaren).
+  const dry = (fn, ...a) => fn({ ...save, box: [...save.box], team: [...save.team], questAbilities: structuredClone(save.questAbilities || {}) }, ...a);
   const statLine = inst => {
     const st = fighterStats(RUETHER_BY_ID[inst.id], inst);
     return `${fmt(st.btc)} BTC · ${ico('hashrate', 'ico-in')}${hashrateText(st.power)}`;
@@ -282,6 +297,7 @@ export function createDexScreen({ el, onBack }) {
 export function createShopScreen({ el, onBuy, onBack }) {
   el.querySelector('.back').addEventListener('click', onBack);
   const list = el.querySelector('.shop-items');
+  tapGuard(list);
   let save = null;
   // v8 §1: Haunebu-Preis steigt pro Beschwörung; im 10-Minuten-Fenster „Im Einsatz · noch 7:41"
   // v9 §1: dazu der Knopf „+10 Min · 5.000" (onBuy('haunebu-extend'): verlängert nur, beschwört nie, auch wenn das Fenster
@@ -381,7 +397,9 @@ export function createVictoryScreen({ el, onBack }) {
 // v8 §5.1: oben „Haunebu-Quests" (gesperrt: Fortschritt + fehlende Arenen; frei: Haunebu-Status + Missionen mit Bestwert).
 // onClaim(id) -> { sats, xp } | null  (Toast macht der App-Code); onQuestStart(missionId); onShop()
 const THEME_BG = { neuschwabenland: 'neuschwabenland', hangar: 'neuschwabenland', pcsale: 'pcsale', keller: 'keller', mosel: 'mosel', bruch: 'ranger' };
-const BEST_UNIT = { steal: 'Münzen', sabotage: 'Flugscheiben', fetch: 'PS3', unplug: 'Stecker', valve: 'Anschlüsse', ignite: 'Bäume' };
+// Bestwert mit Einheit in Einzahl/Mehrzahl („1 Baum", „3 Bäume"); Missionen ohne Einheit nur die Zahl
+const BEST_UNIT = { steal: ['Münze', 'Münzen'], sabotage: ['Flugscheibe', 'Flugscheiben'], fetch: ['PS3', 'PS3'], unplug: ['Stecker', 'Stecker'], valve: ['Anschluss', 'Anschlüsse'], ignite: ['Baum', 'Bäume'] };
+const bestText = (type, n) => (BEST_UNIT[type] ? countText(n, BEST_UNIT[type]) : String(n));
 // v9: Strafe, wenn ein Gegner der Mission erwischen kann (Ranger: fine), sonst 0
 const missionFine = m => Math.max(0, ...m.layouts.flatMap(l => l.variants.flatMap(v => v.enemies.map(e => ENEMY_TYPES[e.type]?.fine || 0))));
 const variantCount = m => m.layouts.reduce((n, l) => n + l.variants.length, 0);
@@ -423,7 +441,7 @@ export function createQuestsScreen({ el, onClaim, onQuestStart, onShop }) {
             <div class="m-goal">${esc(m.objective.label)}${m.objective.min ? ` (mind. ${m.objective.min})` : ''}</div>
             ${r ? `<div class="m-reward">${ico('coin', 'ico-in')}${questReward(r, missionFine(m))}</div>` : ''}
             <div class="sub m-maps">Karten: ${m.layouts.length} · Varianten: ${variantCount(m)}</div>
-            <div class="sub m-best">${log ? `Bestwert: ${log.best} ${BEST_UNIT[m.objective.type] || ''}${log.done ? ' · geschafft' : ''}${log.kieser ? ` · Kieser: ${log.kieser}` : ''}` : 'Noch nicht gespielt'}</div>
+            <div class="sub m-best">${log ? `Bestwert: ${bestText(m.objective.type, log.best)}${log.done ? ' · geschafft' : ''}${log.kieser ? ` · Kieser: ${log.kieser}` : ''}` : 'Noch nicht gespielt'}</div>
           </div>
           <button class="m-start${active && !locked ? ' primary' : ''}" ${locked ? 'disabled' : ''}>${locked ? `Fang erst ${esc(solo.name)}` : solo ? 'Solo starten' : 'Starten'}</button>
         </div>`;
@@ -561,6 +579,7 @@ export function createQuestResultScreen({ el, onDone }) {
       const ok = summary.result === 'success', o = summary.objective || { done: 0, total: 0 };
       const layout = mission.layouts?.find(l => l.id === setup?.layoutId), variant = layout?.variants.find(v => v.id === setup?.variantId);
       const r = QUEST_SATS[mission.id] || {}, kieser = summary.kieser || 0, fine = reward?.fine || 0, caught = summary.reason === 'caught';
+      const left = summary.leftBehind || 0; // K.o. neben der Plattform liegengelassen: je Kopf −1 Wertung (engine questSummary)
       el.style.backgroundImage = `url(art/bg-${THEME_BG[mission.theme] || 'menu'}.png)`;
       el.classList.toggle('won', ok);
       const clean = summary.alarmFree ? `nie ausgelöst${ok && QUEST_SATS[mission.id]?.clean ? ` · +${fmt(QUEST_SATS[mission.id].clean)} Bonus` : ''}` : 'ausgelöst';
@@ -573,8 +592,9 @@ export function createQuestResultScreen({ el, onDone }) {
           <div class="qr-row"><span>Zeit</span><b>${clock(summary.timeMs || 0)}</b></div>
           <div class="qr-row"><span>Alarm</span><b>${clean}</b></div>
           ${r.kieser ? `<div class="qr-row"><span>Kieser-Training</span><b>${kieser ? `${kieser}×${ok ? ` · −${fmt(Math.min(kieser * r.kieser, r.base - r.min))}` : ''}` : 'keins'}</b></div>` : ''}
+          ${left ? `<div class="qr-row fine"><span>Liegengelassen</span><b>${left} · −${left} Wertung${ok && r.coin ? ` · −${fmt(left * r.coin)}` : ''}</b></div>` : ''}
           ${caught || fine ? `<div class="qr-row fine"><span>Strafe</span><b>−${fmt(fine)}${fine < (summary.fine || 0) ? ' (mehr war nicht da)' : ''}</b></div>` : ''}
-          <div class="qr-row"><span>Bestwert</span><b>${reward ? `${reward.best} ${BEST_UNIT[mission.objective.type] || ''}${reward.newBest ? ' · neu!' : ''}` : '–'}</b></div>
+          <div class="qr-row"><span>Bestwert</span><b>${reward ? `${bestText(mission.objective.type, reward.best)}${reward.newBest ? ' · neu!' : ''}` : '–'}</b></div>
           <div class="qr-gain"><span class="big">+${fmt(reward?.sats || 0)}${ico('coin', 'ico-in')}</span>${fine ? `<span class="big fine">−${fmt(fine)}${ico('coin', 'ico-in')}</span>` : ''}<span class="big xp">+${fmt(reward?.xp || 0)} XP</span></div>
         </div>
         <p class="qr-text">${esc(summary.text || (ok ? mission.texts.success : mission.texts.fail))}</p>
@@ -584,7 +604,7 @@ export function createQuestResultScreen({ el, onDone }) {
 }
 
 // ---------- Rangliste ----------
-// state = { now, online, leaderboard: [{ nickname, avatar, sats, dex, trophies, mastered, level, online }], feed: [{ at, nickname, kind, text }] } | null
+// state = { now, online, leaderboard: [{ nickname, avatar, sats, dex, trophies, mastered, level, online, me }], feed: [{ at, nickname, kind, text }] } | null
 export function createLeaderboardScreen({ el }) {
   const count = el.querySelector('.online-count'), status = el.querySelector('.lb-status'), list = el.querySelector('.lb-list'), feed = el.querySelector('.feed');
   const ICON = { catch: 'star', achievement: 'trophy', fusion: 'star', level: 'lightning', arena: 'trophy' };
@@ -600,7 +620,7 @@ export function createLeaderboardScreen({ el }) {
       if (!board.length) list.innerHTML = emptyState('trophy', state ? 'Noch niemand gemeldet. Spiel eine Runde!' : 'Sobald du online bist, erscheint hier die Rangliste.');
       board.forEach((p, i) => {
         const row = document.createElement('div');
-        row.className = 'lb-row' + (p.nickname === save.profile?.nickname ? ' me' : '');
+        row.className = 'lb-row' + (p.me ? ' me' : ''); // per Online-Kennung, ein Namensvetter ist nicht ich
         row.innerHTML = `
           <div class="rank${i < 3 ? ` medal px-circle m${i + 1}` : ''}">${i + 1}</div>
           <img class="av" src="${spriteOf(p.avatar)}" alt="">
@@ -632,6 +652,7 @@ export function createProfileScreen({ el, onRename, onAvatar, onSettings, onShar
   const $ = s => el.querySelector(s);
   const pick = $('.profile-avatar-pick');
   let save = null;
+  $('.version').textContent = `Rüther GO ${VERSION}`;
   $('.go-shop').addEventListener('click', () => onShop?.());
   $('.share').addEventListener('click', () => onShare?.());
   $('.export').addEventListener('click', () => onExport?.());
@@ -648,9 +669,10 @@ export function createProfileScreen({ el, onRename, onAvatar, onSettings, onShar
     const i = await popup({ title: 'Spielstand löschen?', html: '<p>Alle Rüthers, Sats, Erfolge und dein Profil sind dann weg. Das lässt sich nicht rückgängig machen.</p>', buttons: [{ label: 'Abbrechen', primary: true }, { label: 'Löschen', danger: true }] });
     if (i === 1) onReset();
   });
-  const settingsChanged = () => onSettings({ sound: $('.set-sound').checked, haptics: $('.set-haptics').checked });
+  const settingsChanged = () => onSettings({ sound: $('.set-sound').checked, haptics: $('.set-haptics').checked, flight: $('.set-flight').checked });
   $('.set-sound').addEventListener('change', settingsChanged);
   $('.set-haptics').addEventListener('change', settingsChanged);
+  $('.set-flight').addEventListener('change', settingsChanged);
   pick.addEventListener('click', e => {
     const b = e.target.closest('.avatar-opt');
     if (!b) return;
@@ -659,7 +681,7 @@ export function createProfileScreen({ el, onRename, onAvatar, onSettings, onShar
     $('.avatar').src = spriteOf(b.dataset.id);
   });
 
-  function render(onlineId, available) {
+  function render(onlineId, available, nameTaken) {
     const p = save.profile || {};
     const leader = save.box.find(i => i.uid === save.team[0]);
     $('.profile-head .frame').className = `frame r-${leader?.rarity || 'normal'}`;
@@ -669,7 +691,7 @@ export function createProfileScreen({ el, onRename, onAvatar, onSettings, onShar
     $('.lvl').textContent = lp.level;
     $('.bar.xp .fill').style.width = `${Math.min(100, Math.round((lp.xp / lp.need) * 100))}%`;
     $('.xp-text').textContent = `${fmt(lp.xp)} / ${fmt(lp.need)} XP bis Lv. ${lp.level + 1}`;
-    $('.online-id').textContent = onlineId ? `Online-ID ${onlineId} · ${available ? 'verbunden' : 'offline'}` : 'Noch nicht online';
+    $('.online-id').textContent = onlineId ? `Online-ID ${onlineId} · ${nameTaken ? 'Name online vergeben, bitte umbenennen' : available ? 'verbunden' : 'offline'}` : 'Noch nicht online';
     const st = save.stats || {};
     const mastered = Object.keys(save.arenaMastered || {}).length;
     const tiles = [
@@ -683,9 +705,10 @@ export function createProfileScreen({ el, onRename, onAvatar, onSettings, onShar
       `<div class="ach${got[a.id] ? '' : ' locked'}" title="${esc(a.desc)}">${ico(got[a.id] ? kitName(a.icon) || 'star' : 'lock', 'a-ico')}<div class="a-name">${esc(a.name)}</div>${got[a.id] ? '' : `<div class="a-desc">${esc(a.desc)}</div>`}</div>`).join('');
     $('.set-sound').checked = save.settings?.sound !== false;
     $('.set-haptics').checked = save.settings?.haptics !== false;
+    $('.set-flight').checked = !!save.settings?.flight;
     pick.innerHTML = avatarGrid(p.avatar);
   }
-  return { show(s, { onlineId = '', available = false } = {}) { save = s; render(onlineId, available); } };
+  return { show(s, { onlineId = '', available = false, nameTaken = false } = {}) { save = s; render(onlineId, available, nameTaken); } };
 }
 
 // ---------- Dosenbier-Stop ----------

@@ -14,7 +14,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800&family=Pixelify+Sans:wght@400;700&display=swap">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css"><!-- Leaflet 1.9.4 lokal (npm), kein fremder Server beim Start -->
 <link rel="stylesheet" href="css/theme.css">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="css/catch.css">
@@ -235,13 +235,15 @@
     <div class="settings panel thin">
       <label class="switch-row"><span>Sound</span><input type="checkbox" class="set-sound"></label>
       <label class="switch-row"><span>Haptik</span><input type="checkbox" class="set-haptics"></label>
+      <label class="switch-row"><span>Flugmodus (Position einfrieren, z. B. im Flugzeug)</span><input type="checkbox" class="set-flight"></label>
+      <p class="hint set-flight-hint">Friert deinen Standort ein: Rüther tauchen trotzdem um dich herum auf, Fangen, Kämpfen und Quests laufen ganz normal, auch ohne GPS und ohne Netz.</p>
       <div class="set-label">Avatar</div>
       <div class="avatar-pick profile-avatar-pick"></div>
       <button class="export">Spielstand kopieren</button>
       <button class="import">Spielstand einfügen</button>
       <button class="reset danger">Spielstand löschen</button>
     </div>
-    <p class="hint version">Rüther GO v9</p>
+    <p class="hint version"></p><!-- Text aus VERSION in js/screens.js -->
   </div>
 </section>
 
@@ -351,7 +353,8 @@
 <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
 <div id="popup" class="popup hidden"><div class="popup-card panel"></div></div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script type="module" src="js/app.js"></script>
+<script src="vendor/leaflet/leaflet.js"></script>
+<!-- onerror: scheitert ein Modul beim Laden, kommt der error-Listener in app.js nie dran, der Splash hinge stumm -->
+<script type="module" src="js/app.js" onerror="document.querySelector('#splash p').textContent='Fehler beim Laden. Bitte Seite neu laden.'"></script>
 </body>
 </html>

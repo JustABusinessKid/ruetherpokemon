@@ -10,6 +10,7 @@ export const BOARD_MAX = 20;
 export const MSG_MAX_BYTES = 3500;
 export const FUTURE_SLACK_MS = 5 * 60 * 1000;   // Uhren der Geräte dürfen etwas vorgehen
 export const BUS_OVERLAP_S = 30; // ntfy schreibt seinen Cache gebündelt: etwas zurück lesen, der Merge ist idempotent
+export const DUP_WINDOW_MS = 24 * 3600_000; // gleicher Feed-Text vom selben Spieler höchstens einmal in 24 h
 export const KINDS = ['catch', 'level', 'quest', 'fusion', 'achievement']; // Event-Arten der Clients ('arena' erzeugt nur der Merge)
 const MSG_KINDS = new Set(['sync', 'arena', 'event']);
 const DEX_MAX = RUETHERS.length * RARITIES.length;
@@ -138,8 +139,12 @@ export function loadState(raw) {
 }
 
 const nickKey = n => n.toLocaleLowerCase('de');
+// Gleicher Text vom selben Spieler in 24 h (z. B. „gemeistert!“ bei jedem Sieg alter Clients)
+export const dupEvent = (s, { at, nickname, kind, text }) =>
+  s.events.some(x => x.nickname === nickname && x.kind === kind && x.text === text && Math.abs(x.at - at) < DUP_WINDOW_MS);
 function addEvent(s, e) {
   if (s.events.some(x => x.m === e.m)) return; // schon gemergt (Snapshot + Bus überlappen)
+  if (e.kind !== 'arena' && dupEvent(s, e)) return; // Arena-Texte dürfen sich wiederholen (Hin und Her ist echte Änderung)
   s.events.push(e);
   s.events.sort((a, b) => b.at - a.at).splice(FEED_MAX);
 }
@@ -161,6 +166,7 @@ function apply(s, { k, id, t, d, sig }) {
   if (k === 'arena') {
     const cur = s.arenas[d.arenaId];
     if (cur && t <= cur.since) return;
+    if (cur?.ownerId === id && cur.level === d.level) return; // nochmal gewonnen, nichts geändert: kein Feed, „seit“ bleibt
     const prev = cur && s.players[cur.ownerId]?.nickname;
     s.arenas[d.arenaId] = { ownerId: id, leader: d.leader, level: d.level, since: t };
     const taken = prev && prev !== me.nickname ? ` und ${prev} rausgeworfen` : '';
@@ -179,19 +185,28 @@ export function merge(state, items) {
   return s;
 }
 
-// Form von online.lastState, wie sie app.js/screens.js schon kennen
-export function toAppState(s, now = Date.now()) {
+// Name gehört online schon einer anderen Kennung (dann verwirft der Merge unsere sync, arena und event).
+// Altspieler zählen nicht: deren Namen übernimmt die erste neue id.
+export function nameTaken(s, id, nickname) {
+  if (!id || !nickname) return false;
+  const k = nickKey(nickname);
+  return Object.entries(s.players).some(([pid, p]) => pid !== id && !pid.startsWith('legacy:') && nickKey(p.nickname) === k);
+}
+
+// Form von online.lastState, wie sie app.js/screens.js schon kennen.
+// me = { id, nickname } des Geräts: mine/me hängen an der Kennung, nicht am Namen.
+export function toAppState(s, now = Date.now(), me = {}) {
   const on = p => p.t > now - ONLINE_WINDOW_MS;
   const arenas = {};
   for (const [aid, a] of Object.entries(s.arenas)) {
     const owner = s.players[a.ownerId]?.nickname;
-    if (owner) arenas[aid] = { owner, leader: a.leader, level: a.level, since: a.since };
+    if (owner) arenas[aid] = { owner, mine: !!me.id && a.ownerId === me.id, leader: a.leader, level: a.level, since: a.since };
   }
-  const players = Object.values(s.players);
+  const players = Object.entries(s.players).map(([id, p]) => ({ ...p, id }));
   const board = [...players].sort((a, b) => b.trophies - a.trophies || b.mastered - a.mastered || b.dex - a.dex || b.sats - a.sats).slice(0, BOARD_MAX);
   return {
-    ok: true, now, arenas,
-    leaderboard: board.map(p => ({ nickname: p.nickname, avatar: p.avatar, sats: p.sats, dex: p.dex, trophies: p.trophies, mastered: p.mastered, level: p.level, leader: p.leader, online: on(p) })),
+    ok: true, now, arenas, nameTaken: nameTaken(s, me.id, me.nickname),
+    leaderboard: board.map(p => ({ nickname: p.nickname, avatar: p.avatar, sats: p.sats, dex: p.dex, trophies: p.trophies, mastered: p.mastered, level: p.level, leader: p.leader, online: on(p), me: !!me.id && p.id === me.id })),
     online: players.filter(on).length,
     feed: s.events.map(({ at, nickname, kind, text }) => ({ at, nickname, kind, text })),
   };

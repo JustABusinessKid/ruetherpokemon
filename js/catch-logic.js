@@ -15,12 +15,13 @@ export function catchChance(base, scale) {
 
 export function isFlick(vy) { return vy <= -MIN_FLICK; }
 
-// Wurfweite = 160 px + 100 px je px/ms, in Flick-Richtung. Normale Daumen-Flicks (1–3 px/ms) landen damit
-// 260–460 px über der Ruheposition der Münze – das Trefferfenster des Rüthers (Sprite 160 px + 20 px Rand,
-// Mitte ~360 px drüber). Schwächer fällt davor runter, stärker schießt drüber.
+// Wurfweite in Flick-Richtung: 2 px/ms trifft die Mitte des Rüthers (dist px über der Ruheposition der Münze), je px/ms
+// 100 px mehr oder weniger. Normale Daumen-Flicks (1–3 px/ms) landen so im Trefferfenster (Sprite 160 px + 20 px Rand),
+// schwächer fällt davor runter, stärker schießt drüber. dist ist die echte Entfernung: auf kleinen Handys steht der Rüther
+// viel näher (iPhone SE: ~180 statt 360 px), mit fester Weite trafen dort nur ganz schwache Flicks.
 // (Geschwindigkeit × Flugzeit traf nur zwischen 0,6 und 0,9 px/ms.)
-export function landing(start, vx, vy) {
-  const speed = Math.hypot(vx, vy), reach = 160 + 100 * Math.min(speed, MAX_FLICK);
+export function landing(start, vx, vy, dist = 360) {
+  const speed = Math.hypot(vx, vy), reach = Math.max(0, dist + 100 * (Math.min(speed, MAX_FLICK) - 2));
   return { x: start.x + vx * reach / speed, y: start.y + vy * reach / speed };
 }
 

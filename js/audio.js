@@ -1,11 +1,15 @@
 // Synthetische Effekte per Web Audio, keine Dateien. Lautstärke 0,25.
 // sfx.play(name) · sfx.setEnabled(bool) · sfx.unlock() · haptic(pattern) · setHapticsEnabled(bool)
 
-let ctx = null, enabled = true, hapticsOn = true;
+// touched: erste Geste war da. Vorher keine Töne und kein Vibrieren: Töne in einem stummen AudioContext stauen sich
+// und laufen beim ersten Tipp alle auf einmal los, vibrate wirft vorher Konsolenfehler.
+let ctx = null, enabled = true, hapticsOn = true, touched = false;
 function ac() {
+  if (!touched) return null;
   if (!ctx) { const AC = globalThis.AudioContext || globalThis.webkitAudioContext; if (!AC) return null; ctx = new AC(); }
-  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-  return ctx;
+  if (ctx.state === 'running') return ctx;
+  ctx.resume().catch(() => {}); // stumm (Hintergrund, iOS-Unterbrechung): nichts einplanen, die nächste Geste weckt ihn
+  return null;
 }
 function tone({ f = 440, f2 = null, type = 'square', t = 0.08, g = 0.25, delay = 0 }) {
   const c = ac(); if (!c || !enabled) return;
@@ -73,11 +77,11 @@ function theremin() {
 export const sfx = {
   play(name) { if (enabled) try { SFX[name]?.(); } catch { /* kein Audio */ } },
   setEnabled(b) { enabled = !!b; },
-  unlock() { try { ac(); } catch { /* kein Audio */ } },
+  // Touch: pointerdown zählt im Browser noch nicht als Geste (userActivation), erst pointerup; Safari < 16.4 kennt es nicht
+  unlock() { touched ||= globalThis.navigator?.userActivation?.hasBeenActive ?? true; try { ac(); } catch { /* kein Audio */ } },
 };
-export function haptic(pattern) { if (hapticsOn) try { globalThis.navigator?.vibrate?.(pattern); } catch { /* egal */ } }
+export function haptic(pattern) { if (hapticsOn && touched) try { globalThis.navigator?.vibrate?.(pattern); } catch { /* egal */ } }
 export function setHapticsEnabled(b) { hapticsOn = !!b; }
 
-// Erste Geste schaltet den AudioContext frei (Autoplay-Regeln)
-globalThis.addEventListener?.('pointerdown', sfx.unlock, { once: true });
-globalThis.addEventListener?.('keydown', sfx.unlock, { once: true });
+// Gesten schalten den AudioContext frei bzw. wecken ihn wieder (Autoplay-Regeln; iOS nimmt nicht jede Geste)
+for (const t of ['pointerdown', 'pointerup', 'keydown']) globalThis.addEventListener?.(t, sfx.unlock, { capture: true, passive: true });

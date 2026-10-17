@@ -478,6 +478,25 @@ test('Firewall: nur Rüther kommen durch, Gegner nicht, Sicht frei; Stufe 3 blic
   }
 });
 
+test('Fix: Verstärkung taucht nicht in Michas Firewall am Tor auf; ist alles zu, fällt die Welle aus', () => {
+  const st = Q(ROOM, [], { team: [['micha', { firewall: 1 }]] }); // Tor (18, 8)
+  place(st.units[0], 15, 6);
+  const a = find(tick(st, 50, [ab(0, 'firewall', { x: 18.5, y: 8.5 }, { dir: 'h' })]), 'ability');
+  assert.ok(a.tiles.some(q => q.x === 18 && q.y === 8), 'Firewall liegt auf dem Tor');
+  Object.assign(st, { fullAlarm: true, alarm: 1, reinforceAt: st.time });
+  const r = find(tick(st, 50), 'reinforce');
+  assert.equal(r.enemies.length, 2);
+  for (const i of r.enemies) {
+    const e = st.enemies[i], k = Math.floor(e.y) * st.w + Math.floor(e.x);
+    assert.ok(!(st.wall[k] > st.time), `Verstärkung ${i} steht in der Firewall`);
+  }
+  // Firewall überall (nur zum Test): keine Gegner in der Wand, keine Welle
+  st.wall.fill(st.time + 60_000); st.reinforceAt = st.time;
+  const n = st.enemies.length, ev = tick(st, 50);
+  assert.ok(!has(ev, 'reinforce'));
+  assert.equal(st.enemies.length, n);
+});
+
 test('Raubkopie: Fake mit Gesicht des Teammitglieds läuft zum zweiten Punkt, Wachen jagen ihn ohne Alarm; Stufe 3 „Lizenz ungültig“', () => {
   for (const level of [1, 3]) {
     const st = Q(ROOM, [P(10, 4, 180)], { team: [['micha', { raubkopie: level }], 'christian'] });

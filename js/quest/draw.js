@@ -402,6 +402,20 @@ export function faceFrame(g, face, x, y, size, rarity, { grey = false, src = '' 
   if (im) { g.imageSmoothingEnabled = true; g.drawImage(im, x0 + 2, y0 + 2, s - 4, s - 4); g.imageSmoothingEnabled = false; }
 }
 
+// Echte Gesichter auffächern (§0): Punkte ps (Kacheln), die sich in x UND y näher als S sind, rücken entlang ihrer
+// Verbindungslinie auseinander, bis max(|dx|, |dy|) = S (Gesicht 28 px); jeder bleibt auf seiner Seite, nichts springt durch.
+// Genau übereinander: kleinerer Index links. Mehrere Runden, damit auch drei dicht an dicht frei stehen. Ändert und liefert ps
+export function fan(ps, S) {
+  for (let n = 0; n < 8; n++) for (let a = 0; a < ps.length; a++) for (let b = a + 1; b < ps.length; b++) {
+    const dx = ps[b].x - ps[a].x, dy = ps[b].y - ps[a].y, m = Math.max(Math.abs(dx), Math.abs(dy));
+    if (m >= S) continue;
+    if (m < 1e-6) { ps[a].x -= S / 2; ps[b].x += S / 2; continue; }
+    const k = (S / m - 1) / 2;
+    ps[a].x -= dx * k; ps[a].y -= dy * k; ps[b].x += dx * k; ps[b].y += dy * k;
+  }
+  return ps;
+}
+
 // Pixel-Bitmaps für Herzen und Sterne (1 = Pixel)
 const BITMAPS = { heart: ['01010', '11111', '11111', '01110', '00100'], star: ['00100', '01110', '11011', '01110', '00100'], spark: ['10001', '01010', '00100', '01010', '10001'], plus: ['00100', '00100', '11111', '00100', '00100'], vein: ['01010', '11011', '00000', '11011', '01010'] };
 export function bitmap(g, kind, x, y, s, color) {
@@ -413,7 +427,8 @@ export function bitmap(g, kind, x, y, s, color) {
 // Sprechblase im Bildschirmraum: Papier, Ink-Rand, Zipfel unten mittig auf (x,y); head = Kopf-Oberkante des Sprechers (y)
 // avoid: Gesichter und schon gezeichnete Blasen; überlappt die neue, rutscht sie darüber (nie über den oberen Rand)
 // und zeigt statt des Zipfels einen Pixel-Stiel bis zum Sprecher, damit sie nicht wie der Spruch eines anderen aussieht.
-export function bubble(g, x, y, text, { maxW = 170, font = '800 12px Nunito, system-ui, sans-serif', bg = PAPER, fg = INK, vw = 9999, avoid = [], head = y } = {}) {
+// phase 'stem' | 'box': nur Stiel bzw. nur Kasten zeichnen (Anordnung und avoid wie sonst), view.js malt erst alle Stiele
+export function bubble(g, x, y, text, { maxW = 170, font = '800 12px Nunito, system-ui, sans-serif', bg = PAPER, fg = INK, vw = 9999, avoid = [], head = y, phase = '' } = {}) {
   g.font = font;
   const words = String(text).split(' '), lines = [];
   let cur = '';
@@ -431,13 +446,14 @@ export function bubble(g, x, y, text, { maxW = 170, font = '800 12px Nunito, sys
   avoid.push({ x: bx, y: by, w, h });
   const tx = Math.round(Math.max(bx + 6, Math.min(bx + w - 10, x - 2)));
   const sh = Math.round(head - by - h);
-  if (by !== by0 && sh > 4) { // Stiel bis auf den Kopf (Ink außen, Papier innen), seitlich an fremden Gesichtern vorbei
+  if (phase !== 'box' && by !== by0 && sh > 4) { // Stiel bis auf den Kopf (Ink außen, Papier innen), seitlich an fremden Gesichtern vorbei
     const f = avoid.find(r => r.y + r.h > by + h && r.y < head - 4 && tx + 3 > r.x && tx - 1 < r.x + r.w);
     const sx = !f ? tx : Math.round(Math.max(bx + 2, Math.min(bx + w - 6, x < f.x + f.w / 2 ? f.x - 5 : f.x + f.w + 2)));
     const fy = by + h + sh - 4, x0 = Math.min(sx, tx), x1 = Math.max(sx, tx);
     g.fillStyle = INK; g.fillRect(sx - 1, by + h, 4, sh); g.fillRect(x0 - 3, fy, x1 - x0 + 8, 4);
     g.fillStyle = bg; g.fillRect(sx, by + h, 2, sh - 3); g.fillRect(x0 - 1, fy + 1, x1 - x0 + 4, 2);
   }
+  if (phase === 'stem') return;
   g.fillStyle = INK; g.fillRect(bx - 2, by - 2, w + 4, h + 4); g.fillRect(bx + 2, by + 2, w + 4, h + 4);
   g.fillStyle = bg; g.fillRect(bx, by, w, h);
   if (by === by0) {

@@ -260,6 +260,13 @@ export function canExtract(st) {
   return up.length > 0 && up.every(u => tileAt(st, u.x, u.y) === 'P');
 }
 
+// Tratsch: Treffpunkt der Streithähne auf ihrem Weg zueinander (Mitte des Wegs), nicht die Luftlinien-Mitte in der Wand.
+// Ohne Weg (oder auf derselben Kachel) die Luftlinien-Mitte. Engine und Vorschau (view.js) nutzen dasselbe
+export function tratschMeet(st, a, b) {
+  const path = pathTo(st, a, Math.floor(b.x), Math.floor(b.y));
+  return path?.length ? mid(path[Math.floor((path.length - 1) / 2)]) : { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+}
+
 // Ergebnis für onEnd und questResult(save, missionId, result, score, alarmFree, { kieser, fine }).
 // score = erfüllte Ziele (Raub: abgelieferte Münzen); jeder liegengelassene Rüther (down, nicht auf P) kostet 1.
 export function questSummary(st) {
@@ -418,14 +425,16 @@ function command(st, c, ev) {
   if (c.type === 'move') {
     if (!c.to) return fail(ev, u, 'move', 'target');
     const t = freeNear(st, u, Math.floor(c.to.x), Math.floor(c.to.y));
-    const path = t && pathTo(st, u, t.x, t.y);
-    if (!path) return fail(ev, u, 'move', 'path');
+    if (!t) return fail(ev, u, 'move', 'path');
+    const { path } = t, to = { x: t.x, y: t.y };
     cancelBusy(u, 'befehl', ev);
-    u.intent = null; u.path = path; u.goal = t;
-    return ev.push({ type: 'path', unit: u.i, to: t, path });
+    u.intent = null; u.path = path; u.goal = to;
+    return ev.push({ type: 'path', unit: u.i, to, path });
   }
   const it = c.type === 'interact' ? interactIntent(st, u, c.obj, ev) : c.type === 'ability' ? abilityIntent(st, u, c, ev) : null;
   if (!it) return;
+  // derselbe Auftrag noch mal (Tresor erneut angetippt): weiterarbeiten statt von vorn
+  if (c.type === 'interact' && u.busy && (it.unit != null ? u.busy.unit === it.unit : u.busy.obj === it.obj)) return;
   cancelBusy(u, 'befehl', ev);
   u.path = []; u.goal = null; u.intent = it;
   pursue(st, u, ev, blocker(st)); // sofort, wenn in Reichweite (auch in der Pause), sonst Weg berechnen
@@ -537,22 +546,31 @@ function pursue(st, u, ev, blk) {
   const tx = Math.floor(p.x), ty = Math.floor(p.y);
   if (u.path.length && it.tx === tx && it.ty === ty) return;
   // in Reichweite, aber ohne Sichtlinie (Regal an der Ecke): weiter auf das Ziel zu statt aufgeben
-  const path = pathTo(st, u, tx, ty, it.los && d <= it.range && !sight ? 0 : it.near);
+  let path = pathTo(st, u, tx, ty, it.los && d <= it.range && !sight ? 0 : it.near);
+  // schon auf der Zielkachel, aber mitten im Schritt (Stopp oder neuer Befehl beim Laufen): erst in die Kachelmitte statt „Keine Sichtlinie.“
+  const cx = Math.floor(u.x), cy = Math.floor(u.y);
+  if (path && !path.length && Math.hypot(u.x - cx - 0.5, u.y - cy - 0.5) > 0.05) path = [{ x: cx, y: cy }];
   if (!path || !path.length) { u.intent = null; return fail(ev, u, it.kind, path ? 'sight' : 'path', { ability: it.ability }); }
   it.tx = tx; it.ty = ty; u.path = path;
 }
 
-// Nächste freie begehbare Kachel (keine zwei Rüther auf demselben Ziel)
+// Nächste freie begehbare Kachel mit Weg (keine zwei Rüther auf demselben Ziel) → { x, y, path } oder null.
+// Erst der nähere Ring, darin die nähere Kachel; Tipp auf die Plattform: P vor allem anderen, sonst geht Abheben nicht.
+// Tipp auf Boden: nur die nächste Kachel (verschlossener Raum = „Da komm ich nicht hin.“); Tipp auf Wasser oder Wand:
+// unerreichbare Kacheln (Schilfinsel) überspringen. ponytail: dann ein A* je Kandidat (≤ 49), reicht für einzelne Tipps
 function freeNear(st, u, tx, ty) {
   const taken = new Set(st.units.filter(o => o !== u && !o.down).map(o => { const g = o.goal || o.path[o.path.length - 1] || { x: Math.floor(o.x), y: Math.floor(o.y) }; return g.y * st.w + g.x; }));
-  for (let r = 0; r <= 3; r++) {
-    let best = null, bd = Infinity;
-    for (let y = ty - r; y <= ty + r; y++) for (let x = tx - r; x <= tx + r; x++) {
-      if (Math.max(Math.abs(x - tx), Math.abs(y - ty)) !== r || x < 0 || y < 0 || x >= st.w || y >= st.h) continue;
-      const i = y * st.w + x, d = Math.hypot(x - tx, y - ty);
-      if (WALK.has(st.tiles[i]) && !taken.has(i) && d < bd) { bd = d; best = { x, y }; }
-    }
-    if (best) return best;
+  const at = tileAt(st, tx, ty), pad = at === 'P', ground = WALK.has(at), c = [];
+  for (let y = ty - 3; y <= ty + 3; y++) for (let x = tx - 3; x <= tx + 3; x++) {
+    const i = y * st.w + x;
+    if (x < 0 || y < 0 || x >= st.w || y >= st.h || !WALK.has(st.tiles[i]) || taken.has(i)) continue;
+    c.push({ x, y, p: pad && st.tiles[i] !== 'P' ? 1 : 0, r: Math.max(Math.abs(x - tx), Math.abs(y - ty)), d: Math.hypot(x - tx, y - ty) });
+  }
+  c.sort((a, b) => a.p - b.p || a.r - b.r || a.d - b.d);
+  for (const t of c) {
+    const path = pathTo(st, u, t.x, t.y);
+    if (path) return { x: t.x, y: t.y, path };
+    if (ground) return null;
   }
   return null;
 }
@@ -808,10 +826,10 @@ function cast(st, u, it, ev) {
     case 'tratsch': {
       const [a, b] = selfTargets(st, u, id, p);
       if (!b) return no('noPair');
-      const meet = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      const meet = tratschMeet(st, a, b); // bis 1 Kachel heran (nicht schräg über eine Wandecke), damit sie sich sehen
       ev.push({ ...base, enemies: [a.i, b.i], meet, ms: p.ms, say: 'Habt ihr gehört, was der über dich erzählt?' });
-      setTask(st, a, { kind: 'tratsch', to: meet, near: REACH, ms: dur(a, p), cone: true, trust: u.i, faceEnemy: b.i, pair: b.i, swap: !!p.swap }, ev, 'Was hast du über mich gesagt?');
-      setTask(st, b, { kind: 'tratsch', to: meet, near: REACH, ms: dur(b, p), cone: true, trust: u.i, faceEnemy: a.i, pair: a.i, swap: !!p.swap }, ev, 'Ich? Du hast doch angefangen!');
+      setTask(st, a, { kind: 'tratsch', to: meet, near: 1, ms: dur(a, p), cone: true, trust: u.i, faceEnemy: b.i, pair: b.i, swap: !!p.swap }, ev, 'Was hast du über mich gesagt?');
+      setTask(st, b, { kind: 'tratsch', to: meet, near: 1, ms: dur(b, p), cone: true, trust: u.i, faceEnemy: a.i, pair: a.i, swap: !!p.swap }, ev, 'Ich? Du hast doch angefangen!');
       break;
     }
     case 'mutter': {
@@ -1475,9 +1493,11 @@ function reinforce(st, ev) {
   const n = Math.min(REINFORCE_N, REINFORCE_MAX - st.reinforced);
   if (n <= 0) return;
   const g = st.gate, to = st.lastSighting || mid(st.pads[0]), spots = [];
-  for (let r = 0; r <= 2 && spots.length < n; r++) for (let y = g.y - r; y <= g.y + r; y++) for (let x = g.x - r; x <= g.x + r; x++) {
-    if (spots.length < n && Math.max(Math.abs(x - g.x), Math.abs(y - g.y)) === r && WALK.has(tileAt(st, x, y))) spots.push({ x, y });
+  // nicht mitten in Michas Firewall auftauchen; liegt sie auf dem Tor, weiter außen suchen
+  for (let r = 0; r <= 4 && spots.length < n; r++) for (let y = g.y - r; y <= g.y + r; y++) for (let x = g.x - r; x <= g.x + r; x++) {
+    if (spots.length < n && Math.max(Math.abs(x - g.x), Math.abs(y - g.y)) === r && WALK.has(tileAt(st, x, y)) && !(st.wall[y * st.w + x] > st.time)) spots.push({ x, y });
   }
+  if (!spots.length) return; // alles zu: die Welle fällt aus, die nächste kommt in 15 s
   const ids = [];
   for (const s of spots) {
     const e = addEnemy(st, { type: st.mission.reinforce || 'pinguin', at: [s.x, s.y], patrol: [[s.x, s.y, 2000], [Math.floor(to.x), Math.floor(to.y), 3000]], reinforcement: true });

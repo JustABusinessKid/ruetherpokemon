@@ -6,7 +6,11 @@
 #screen-catch .back:active { transform: translate(2px, 2px); box-shadow: none; }
 #screen-catch:not([data-state="idle"]) .back { opacity: .4; }
 
-.catch-stage { position: relative; flex: 1; min-height: 60vh; overflow: hidden; touch-action: none; --rc: var(--r-normal);
+/* --tw = Kantenlänge des Ziels (kleiner auf niedrigen Bildschirmen, s. u.), --tb = seine Unterkante über dem Bühnenboden. Oberkante
+   ≥ 134 px: unter der Plakette (bis 54 px samt Schatten) Platz für eine zweizeilige Sprechblase samt Zipfel; Unterkante ≥ 184 px
+   (Ring −12 px über der Münze bei 164 px), die Meldung sitzt darunter (s. .catch-msg) */
+.catch-stage { --tw: 160px; --tb: max(184px, min(316px, calc(100% - 134px - var(--tw) - env(safe-area-inset-top))));
+  position: relative; flex: 1; min-height: 60vh; min-height: 60svh; /* Safari mit Leisten: vh misst ohne Leisten */ overflow: hidden; touch-action: none; --rc: var(--r-normal);
   background: var(--night) url(../art/bg-catch.png) center bottom / cover no-repeat; image-rendering: pixelated; }
 .catch-stage[data-rarity="selten"] { --rc: var(--r-selten); }
 .catch-stage[data-rarity="episch"] { --rc: var(--r-episch); }
@@ -19,7 +23,7 @@
 .catch-stage[data-rarity="legendaer"] .rarity-badge .ico { animation: catch-blink .8s steps(1) infinite; }
 
 /* Rüther: .target läuft in 4-px-Schritten hin und her, der Sprite darin hüpft/wehrt sich/wird eingesaugt. */
-.target { position: absolute; left: 50%; bottom: max(196px, min(316px, calc(100% - 273px - env(safe-area-inset-top)))); /* Oberkante ≥ 113 px: unter dem Badge Platz für eine zweizeilige Sprechblase */ width: 160px; height: 160px; margin-left: -80px; animation: catch-roam 4s steps(20) infinite; }
+.target { position: absolute; left: 50%; bottom: var(--tb); width: var(--tw); height: var(--tw); margin-left: calc(var(--tw) / -2); animation: catch-roam 4s steps(20) infinite; }
 /* Aura ab selten: drei harte Ringe mit gestufter Deckung, pulsiert in zwei Stufen */
 .target .aura { position: absolute; inset: -7px; opacity: 0; pointer-events: none;
   box-shadow: 0 0 0 6px color-mix(in srgb, var(--rc) 75%, transparent), 0 0 0 12px color-mix(in srgb, var(--rc) 45%, transparent), 0 0 0 18px color-mix(in srgb, var(--rc) 20%, transparent); }
@@ -27,7 +31,7 @@
 .target.r-episch .aura { opacity: .85; animation: catch-aura 1.2s steps(1) infinite; }
 .target.r-legendaer .aura { opacity: 1; animation: catch-aura .8s steps(1) infinite; }
 /* Seltenheitsrahmen: Farbe, außen Ink-Linie, harter Schatten */
-.target .sprite { display: block; position: relative; z-index: 1; width: 160px; height: 160px; border: 4px solid var(--rc); outline: 3px solid var(--ink); background: var(--paper-2); box-shadow: 7px 7px 0 rgba(30, 42, 34, .45); image-rendering: pixelated; }
+.target .sprite { display: block; position: relative; z-index: 1; width: var(--tw); height: var(--tw); border: 4px solid var(--rc); outline: 3px solid var(--ink); background: var(--paper-2); box-shadow: 7px 7px 0 rgba(30, 42, 34, .45); image-rendering: pixelated; }
 /* Ring: Pixel-Kreis (Treppen-Polygon im 32er-Raster) mit Ink-Kontur; schrumpft in 8 Stufen.
    Farbe zeigt die Wertung: Creme ohne Bonus, Gold „Gut!", Teal „Super!" (Schwellen aus ringBonus in catch-logic.js). */
 .target .ring { position: absolute; inset: -12px; z-index: 2; pointer-events: none; color: var(--paper);
@@ -43,8 +47,12 @@
 .sprite.pop { animation: catch-pop .4s steps(4) both; }
 /* Abhauen: das ganze Ziel rennt los, die Sprechblase bleibt in der Bühne stehen (catch.js); catch-flee (translate) kommt zum angehaltenen Hin-und-her (transform) dazu */
 #screen-catch[data-state] .target.flee { animation: catch-roam 4s steps(20) infinite paused, catch-flee .8s steps(12) forwards; }
-/* Sprechblase (fx.js say) hängt in .target und läuft mit (beim Abhauen in der Bühne); die Breite richtet sich nach der Bühne statt nach dem 160-px-Ziel */
-.catch-stage .fx-say { max-width: 200px; font-size: 14px; }
+/* Sprechblase (fx.js say) hängt in .target und läuft mit (beim Abhauen in der Bühne); die Breite richtet sich nach der Bühne statt nach
+   dem 160-px-Ziel. Mittig über dem Gesicht, Zipfel in der Mitte: so bleibt sie beim Hin-und-her (±40 px) auch auf 320 px breiten
+   Handys ganz in der Bühne und ist breit genug, dass lange Sprüche zweizeilig bleiben */
+.catch-stage .fx-say { max-width: min(280px, calc(100vw - 96px)); font-size: 14px; text-align: center; translate: -50% calc(-100% - 14px); transform-origin: 50% 100%; }
+.catch-stage .fx-say::after { left: calc(50% - 8px); }
+@media (max-width: 340px) { .catch-stage .fx-say { font-size: 13px; } }
 /* Außer im Flug und beim Ziehen (Münze vorn) liegt der Rüther samt Blase über Badge, Rauch und Funken: echtes Gesicht frei, Blase lesbar */
 #screen-catch[data-state="idle"] .target, #screen-catch[data-state="seq"] .target { z-index: 5; }
 #screen-catch[data-state="seq"] .target { animation-play-state: paused; }
@@ -57,7 +65,9 @@
 .catch-fx .legend { position: absolute; font: 700 44px/1 var(--font-pixel); letter-spacing: 2px; white-space: nowrap; color: var(--gold); text-shadow: 2px 0 0 var(--ink), -2px 0 0 var(--ink), 0 2px 0 var(--ink), 0 -2px 0 var(--ink), 3px 3px 0 var(--ink), 6px 6px 0 var(--wood-2); animation: catch-legend .5s steps(4) both; }
 
 /* Meldung als Papierstreifen, mittig, bricht bei langen Namen um */
-.catch-msg { position: absolute; left: 0; right: 0; bottom: 168px; /* zwischen Münze und Ziel */ z-index: 4; width: max-content; max-width: calc(100% - 32px); margin: 0 auto; padding: 4px 12px; font: 700 30px/1.1 var(--font-pixel); color: var(--ink); background: var(--paper); border: 3px solid var(--ink); box-shadow: var(--shadow); opacity: 0; pointer-events: none; }
+/* … unter dem Ziel (5 px Luft, sonst steckte ihre Oberkante hinter dem Rahmen), auf niedrigen Bühnen dafür über der oberen Münzhälfte:
+   die Münze fällt bzw. platzt in dem Moment */
+.catch-msg { position: absolute; left: 0; right: 0; bottom: min(168px, calc(var(--tb) - 52px)); z-index: 4; width: max-content; max-width: calc(100% - 32px); margin: 0 auto; padding: 4px 12px; font: 700 30px/1.1 var(--font-pixel); color: var(--ink); background: var(--paper); border: 3px solid var(--ink); box-shadow: var(--shadow); opacity: 0; pointer-events: none; }
 .catch-msg:empty { visibility: hidden; }
 .catch-msg.show { opacity: 1; animation: catch-msg .24s steps(3); }
 .catch-msg.narr { font: 800 18px/1.3 var(--font-body); } /* Erzähltext beim Abhauen: länger, daher Fließtext */
@@ -98,6 +108,16 @@
 .catch-fight .fight-hint { display: none; max-width: 120px; padding: 3px 6px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); box-shadow: 2px 2px 0 var(--wood-2); font: 800 12px/1.2 var(--font-body); text-align: center; }
 .catch-fight.locked .fight-hint { display: block; }
 #screen-catch:not([data-state="idle"]) .catch-fight { opacity: .4; pointer-events: none; }
+/* Schmale Handys (≤ 380 px): Knopf und Zettel bleiben rechts neben der Münze (Münze bis 50 % + 56 px), sonst schnappt der Knopf
+   Würfe am rechten Münzrand weg; bei 320 px bleiben so nur 98 px, dort Knopf etwas kleiner */
+@media (max-width: 380px) {
+  .catch-fight { left: calc(50% + 58px); right: 4px; align-items: stretch; }
+  .catch-fight .fight-hint { max-width: none; }
+}
+@media (max-width: 340px) {
+  .catch-fight .fight-btn { gap: 4px; padding: 4px 5px; font-size: 14px; }
+  .catch-fight .sword { width: 16px; height: 21px; }
+}
 
 /* Super-Münzen-Schalter unter der Münze, nur bei Vorrat sichtbar (.hidden) */
 .catch-stage .supercoin { position: absolute; left: 0; right: 0; bottom: 6px; width: max-content; margin: 0 auto; /* ohne transform zentriert: theme.css drückt per transform */ z-index: 3; display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 4px 12px; border: 3px solid var(--ink); border-radius: 0; background: var(--paper); color: var(--ink); box-shadow: 3px 3px 0 var(--wood-2); font: 700 14px/1 var(--font-pixel); white-space: nowrap; }
@@ -112,6 +132,24 @@
 .catch-info .desc { margin: 4px 0; font-size: 14px; color: var(--ink-soft); }
 .catch-info .throws { margin: 6px 0 0; font: 700 16px/1.2 var(--font-pixel); }
 .catch-info .hint { margin: 4px 0 0; font-size: 13px; color: var(--ink-soft); }
+
+/* Niedrige Bildschirme (iPhone SE im Safari mit Leisten, kleine Androids): unter 640 px wäre die Bühne niedriger als 469 px, das
+   160-px-Ziel rutschte unter Plakette und Sprechblase oder aus dem Bild. Stattdessen Info knapper und Ziel kleiner; die Oberkante
+   bleibt bei ≥ 134 px, die Unterkante über der Münze (bis 164 px, die fliegende Münze startet in catch.js mit 112 px, bleibt also). */
+@media (max-height: 640px) {
+  .catch-info { padding-top: 6px; padding-bottom: calc(8px + env(safe-area-inset-bottom)); }
+  .catch-info .name { font-size: 22px; }
+  .catch-info .title { margin: 0; }
+  .catch-info .desc { margin: 2px 0; font-size: 13px; line-height: 1.3; }
+  .catch-info .throws { margin-top: 2px; }
+  .catch-info .hint { margin-top: 2px; font-size: 12px; line-height: 1.25; }
+  .catch-stage { --tw: 112px; --tb: max(176px, min(316px, calc(100% - 134px - var(--tw) - env(safe-area-inset-top)))); }
+}
+@media (max-height: 580px) { .catch-stage { --tw: 96px; } }
+@media (max-height: 500px) { /* SE 1. Gen. im Safari (320 × 460): sonst ragt das Gesicht aus der Bühne; die Blase liegt dann über der Plakette */
+  .catch-info .hint { display: none; }
+  .catch-stage .fx-say { font-size: 12px; }
+}
 
 /* ---- Keyframes (global, daher alle mit catch-) ---- */
 @keyframes catch-roam { 0%, 100% { transform: translateX(-40px); } 50% { transform: translateX(40px); } }

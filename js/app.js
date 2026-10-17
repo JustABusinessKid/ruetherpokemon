@@ -1,6 +1,6 @@
 import { CONST, RUETHERS, RUETHER_BY_ID, BOSSES, ARENAS, ARENA_BY_ID, RARITY_BY_ID, pickLine } from './data.js';
 import * as storage from './storage.js';
-import { createLocator, distance, offsetPoint } from './geo.js';
+import { createLocator, distance, offsetPoint, geoHint } from './geo.js';
 import { updateSpawns, lureWave, lureTrim } from './spawn.js';
 import { createMap } from './map.js';
 import { createCatchScreen } from './catch.js';
@@ -31,7 +31,15 @@ import { MISSIONS, MISSION_BY_ID, pickSetup } from './quest/missions.js';
 import { ABILITIES, FIXED, POOLS } from './quest/abilities.js';
 
 const $ = s => document.querySelector(s);
-window.addEventListener('error', () => { const p = document.querySelector('#splash p'); if (p) p.textContent = 'Fehler beim Laden. Bitte Seite neu laden.'; }, { once: true });
+// Fehler beim Start: Hinweis im Splash und ein Ausweg, falls es am Spielstand liegt (sonst hängt jeder Start; eine Kopie bleibt)
+window.addEventListener('error', () => {
+  const p = document.querySelector('#splash p');
+  if (!p) return;
+  p.textContent = 'Fehler beim Laden. Bitte Seite neu laden.';
+  const b = Object.assign(document.createElement('button'), { textContent: 'Spielstand zurücksetzen' });
+  b.addEventListener('click', () => { if (confirm('Hilft Neuladen nicht, liegt es meist am Spielstand. Löschen und neu anfangen?')) { storage.clear(true); location.reload(); } });
+  p.after(b);
+}, { once: true });
 const fmt = n => n.toLocaleString('de-DE');
 for (const el of document.querySelectorAll('[data-say]')) el.textContent = pickLine(...el.dataset.say.split(':'));
 let save = storage.load();
@@ -46,23 +54,61 @@ function show(id) {
   if (id !== current) prevScreen = current;
   current = id;
   setScreen(id);
-  if (id === 'screen-map') { map.invalidate(); if (save.profile) online.fetchState(); }
+  backEntry(id !== 'screen-map');
+  if (id === 'screen-map') { map.invalidate(); if (save.profile) online.fetchState(); dailyCheck(); }
   if (id === 'screen-collection') { teamInstances(); collection.show(save); }
   if (id === 'screen-quests') questsScreen.show(save, today);
   if (id === 'screen-leaderboard') { leaderboard.show({ save, state: online.lastState, available: online.available }); online.fetchState().then(() => { if (current === 'screen-leaderboard') leaderboard.show({ save, state: online.lastState, available: online.available }); }); }
-  if (id === 'screen-profile') profile.show(save, { onlineId: save.profile?.token?.slice(0, 8) || '', available: online.available });
+  if (id === 'screen-profile') showProfile();
   if (id === 'screen-shop') shop.show(save);
   if (id === 'screen-victory') showVictoryFace();
 }
+// onlineId: echte Online-Kennung (Hash des Geräteschlüssels), der Token geht nie raus
+const showProfile = () => profile.show(save, { onlineId: online.id?.slice(0, 8) || '', available: online.available, nameTaken: online.nameTaken });
 onTab(id => { sfx.play('click'); show(id); });
+
+// ---------- System-Zurück (Android-Taste, Browser) ----------
+// Außerhalb der Karte liegt genau ein eigener Verlaufseintrag ({ rg: 1 }). Zurück landet dann nicht außerhalb des Spiels,
+// sondern beim Zurück-Knopf des Screens; geht die App selbst zur Karte, nimmt sie den Eintrag wieder weg.
+let popOwn = false; // das nächste popstate kommt von unserem history.back()
+// Neu geladen (oder vom Handy verworfen und wiederhergestellt) auf unserem Eintrag: davor liegt das alte Dokument,
+// history.back() lüde die Seite neu. Der Eintrag gilt deshalb als Basis.
+if (history.state?.rg) history.replaceState(null, '');
+function backEntry(on) {
+  if (on && !history.state?.rg) history.pushState({ rg: 1 }, '');
+  else if (!on && history.state?.rg && !popOwn) { popOwn = true; history.back(); }
+}
+window.addEventListener('popstate', e => {
+  if (e.state?.rg) return; // Vorwärts im Browser: nichts tun
+  if (popOwn) popOwn = false; else onBackKey();
+  if (current !== 'screen-map') backEntry(true);
+});
+// Popup: der erste Knopf ist immer der harmlose (Abbrechen, Später, OK). Flug, Beschwörung, Onboarding: Zurück zählt nicht.
+// Kampf: kein Popup über dem laufenden Kampf, nur ein Hinweis; Quest: deren Aufgeben-Rückfrage (pausiert); Stop: Belohnung steht schon.
+function onBackKey() {
+  if (current === 'screen-map' || current === 'screen-onboarding' || flying || $('.flight')) return;
+  if (!$('#popup').classList.contains('hidden')) return $('#popup .popup-buttons button')?.click();
+  const el = $(`#${current}`);
+  if (current === 'screen-battle') {
+    const done = el.querySelector('.overlay:not(.hidden) .done');
+    return done ? done.click() : toast('Aufgeben: × oben rechts.');
+  }
+  if (current === 'screen-stop') return show('screen-map');
+  const btn = el.querySelector(current === 'screen-quest' ? '.q-quit' : current === 'screen-questresult' ? '.qr-done' : '.back');
+  if (btn) btn.click(); else show('screen-map');
+}
 document.querySelectorAll('.sats-chip').forEach(b => b.addEventListener('click', () => show('screen-shop')));
 
 // ---------- Banner / HUD / Persist ----------
+// Ein Banner für Speichern, Online-Name und Ortung (in dieser Rangfolge), jede Art räumt nur ihren eigenen Text weg
+const bannerText = { save: '', name: '', geo: '' }, BANNER_ICON = { save: 'lock', name: 'profile', geo: 'map' };
 function banner(text, kind) {
-  const b = $('#banner');
-  if (!text && b.dataset.kind !== kind) return;
-  b.innerHTML = text ? ico(kind === 'geo' ? 'map' : 'lock') + esc(text) : ''; b.dataset.kind = kind; b.classList.toggle('hidden', !text);
+  if (bannerText[kind] === text) return;
+  bannerText[kind] = text;
+  const k = Object.keys(bannerText).find(x => bannerText[x]) || 'geo', t = bannerText[k], b = $('#banner');
+  b.innerHTML = t ? ico(BANNER_ICON[k]) + esc(t) : ''; b.dataset.kind = k; b.classList.toggle('hidden', !t);
 }
+$('#banner').addEventListener('click', () => { if ($('#banner').dataset.kind === 'name') show('screen-profile'); });
 const instById = uid => save.box.find(i => i.uid === uid);
 function teamInstances() {
   save.team = save.team.filter(uid => instById(uid));
@@ -71,6 +117,7 @@ function teamInstances() {
 const ticker = createTicker({ el: $('#btc-ticker'), getLeaderId: () => instById(save.team[0])?.id });
 // Level-Ups nach Siegen (levelUpUids-Ergebnis): ein Toast für alle, nach den Erfolgs-Toasts (sonst verdrängt, max. 3 sichtbar)
 function levelUpToast(ups) {
+  ups = ups.filter(u => instById(u.uid));
   if (!ups.length) return;
   toast(ups.map(({ uid, level }) => `${RUETHER_BY_ID[instById(uid).id].name} Lv. ${level}!`).join(' '), { kind: 'level' });
   sfx.play('levelup');
@@ -80,11 +127,29 @@ function leaderInfo() {
   return l ? { id: l.id, rarity: l.rarity, level: l.level } : null;
 }
 function persist() {
-  if (!storage.save(save)) banner('Spielstand kann nicht gespeichert werden.', 'save');
+  if (storage.changed()) return adoptStored(); // anderer Tab war schneller: nie dessen neueren Stand überschreiben
+  banner(storage.save(save) ? '' : 'Spielstand kann nicht gespeichert werden.', 'save');
   updateHud();
   ticker.refresh(); // Anführer kann gewechselt haben (Christian-Effekt)
   online.syncSoon();
 }
+// Zwei Tabs oder App + Browser-Tab teilen sich den Spielstand: speichert der andere, übernimmt dieser dessen Stand, statt ihn
+// später mit dem alten zu überschreiben. Ein laufender Kampf oder eine Quest bucht ihr Ergebnis dann auf den neuen Stand.
+function adoptStored() {
+  save = storage.load();
+  if (!save.profile) return location.reload(); // dort zurückgesetzt: Onboarding
+  sfx.setEnabled(save.settings.sound !== false);
+  setHapticsEnabled(save.settings.haptics !== false);
+  updateHud();
+  ticker.refresh();
+  renderStops();
+  show(current); // offenen Screen (Sammlung, Shop, Profil …) mit dem neuen Stand neu zeichnen
+  toast('Spielstand aus einem anderen Tab übernommen.');
+}
+const syncStored = () => { if (storage.changed()) adoptStored(); };
+window.addEventListener('storage', e => { if (e.key === storage.KEY || e.key === null) syncStored(); });
+window.addEventListener('pageshow', e => { if (e.persisted) syncStored(); }); // aus dem Back-Forward-Cache: Events verpasst
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncStored(); });
 function updateHud() {
   document.querySelectorAll('.sats-chip').forEach(b => { b.lastChild.textContent = fmt(save.sats); }); // Münz-Icon steht im HTML davor
   $('#hud-dex').textContent = `Dex ${dexCount(save)}/${DEX_TOTAL}`;
@@ -99,7 +164,7 @@ function updateHud() {
       level: save.arenaLevels[a.id] || 1,
       mastered: !!save.arenaMastered[a.id],
       ownerId: owner ? owner.id : null,
-      globalOwner: g ? { owner: g.owner, mine: g.owner === save.profile?.nickname } : null,
+      globalOwner: g ? { owner: g.owner, mine: !!g.mine } : null,
     });
   }
   updateBanners();
@@ -119,9 +184,8 @@ function updateBanners() {
   fb.querySelector('span').textContent = `Heute: ${RUETHER_BY_ID[f].name} taucht deutlich häufiger auf`;
   beamTick();
 }
-setInterval(updateBanners, 1000);
 
-// XP, Erfolge, Quests nach jedem Ereignis. Level-up-Popups warten, bis die Fangsequenz vorbei ist.
+// XP, Erfolge, Quests nach jedem Ereignis. Level-up-Popups warten, bis Fangsequenz bzw. Kampf vorbei sind.
 const pendingLevelUps = [];
 function gainXp(n) {
   const r = addXp(save, n);
@@ -129,7 +193,7 @@ function gainXp(n) {
     pendingLevelUps.push(lv);
     if (lv % 5 === 0 && lv <= 20) online.postEvent('level', `ist Trainer Lv. ${lv} geworden!`);
   }
-  if (current !== 'screen-catch') showLevelUps();
+  if (current !== 'screen-catch' && current !== 'screen-battle') showLevelUps();
 }
 function showLevelUps() {
   for (const lv of pendingLevelUps.splice(0)) {
@@ -146,8 +210,13 @@ function afterChange() {
 }
 
 // ---------- Tageswechsel ----------
+// Einmal pro Tag (Intervall, jede Rückkehr zur Karte), aber nie über Kampf, Fang, Quest oder Flug: das Popup blockiert
+// sonst den laufenden Kampf. Er wartet dann bis zur nächsten Gelegenheit.
+let checkedDay = '';
+const busy = () => BEAM_WAIT.includes(current) || flying || !!$('.flight');
 function dailyCheck() {
-  today = dayKey();
+  if (!save.profile || checkedDay === dayKey() || busy()) return;
+  today = checkedDay = dayKey();
   ensureDailyQuests(save, today);
   const st = applyStreak(save, today);
   if (st) {
@@ -156,7 +225,6 @@ function dailyCheck() {
   }
   persist();
 }
-setInterval(() => { if (dayKey() !== today) dailyCheck(); }, 60_000);
 
 // ---------- Online ----------
 const online = createOnline({
@@ -170,9 +238,14 @@ const online = createOnline({
       mastered: Object.keys(save.arenaMastered).length, level: save.trainerLevel, xp: save.xp, leader: leaderInfo(),
     };
   },
-  onState() { $('#online-dot').className = 'online-dot online'; $('#online-dot').title = 'Online'; updateHud(); },
+  onState(st) {
+    $('#online-dot').className = 'online-dot online'; $('#online-dot').title = 'Online';
+    // Name gehört online einer anderen Kennung: der Merge verwirft dann sync, Arenen und Feed. Banner bis zum Umbenennen
+    banner(st.nameTaken ? `Der Name „${save.profile?.nickname}“ ist online schon vergeben. Hier tippen und im Profil umbenennen.` : '', 'name');
+    updateHud();
+    if (current === 'screen-profile') showProfile();
+  },
 });
-setInterval(() => { if (current === 'screen-map' || current === 'screen-leaderboard') online.fetchState().then(ok => { if (!ok) { $('#online-dot').className = 'online-dot offline'; $('#online-dot').title = 'Offline'; } }); }, CONST.STATE_POLL);
 
 // ---------- Karte ----------
 const map = createMap({
@@ -199,7 +272,7 @@ const map = createMap({
       mastered: !!save.arenaMastered[a.id],
       ownerName: owner ? `${RUETHER_BY_ID[owner.id].name} (${RARITY_BY_ID[owner.rarity].name}, Lv. ${owner.level})` : null,
       bossBtc: Math.floor(BOSSES[a.boss].btc * arenaScale(level)),
-      globalOwner: g ? { ...g, mine: g.owner === save.profile?.nickname } : null,
+      globalOwner: g ? { ...g, mine: !!g.mine } : null,
       flugscheibe: haunebuActive(save, Date.now()),
     });
     show('screen-arena');
@@ -267,21 +340,24 @@ async function refreshStops(force = false) {
   if (!list.length) { lastStopPos = null; stopRetryAt = Date.now() + 60_000; return; } // Overpass-Fehler: in 60 s erneut
   stops = list; renderStops();
 }
-setInterval(renderStops, 30_000);
 
 // ---------- Ortung ----------
+// Position auf Karte, Reichweite, Spawns und Stops anwenden (GPS, Fake, nach der Quest)
+function applyPos(p) {
+  map.setPlayer(p);
+  map.setReach(p);
+  banner('', 'geo');
+  if (!lastSpawnPos || distance(lastSpawnPos, p) > CONST.SPAWN_WALK) refreshSpawns();
+  refreshStops();
+}
 const locator = createLocator({
   onPosition(p) {
     pos = p;
     if (!save.beam) homePos = p; // Startpunkt für den Rückflug der Haunebu
     if (flying || questRun) return; // echtes GPS mitten im Flug oder in der Quest: Marker bleibt bei der Scheibe
-    map.setPlayer(p);
-    map.setReach(p);
-    banner('', 'geo');
-    if (!lastSpawnPos || distance(lastSpawnPos, p) > CONST.SPAWN_WALK) refreshSpawns();
-    refreshStops();
+    applyPos(p);
   },
-  onError() { banner('Ortung aus. Erlaube sie in den Browser-Einstellungen oder nutze den Test-Modus.', 'geo'); },
+  onError(e) { if (!save.settings.flight) banner(geoHint(e) + ' Kein GPS (z. B. im Flugzeug)? Profil → Flugmodus.', 'geo'); },
 });
 
 // ---------- Fangen ----------
@@ -411,29 +487,43 @@ const profile = createProfileScreen({
     if (!save.profile) return;
     const n = String(nick || '').trim().slice(0, 16);
     if (n.length < 2) return toast('Name zu kurz.');
-    save.profile.nickname = n; persist(); online.syncNow(); profile.show(save, { onlineId: save.profile.token.slice(0, 8), available: online.available });
+    save.profile.nickname = n; persist(); online.syncNow({ force: true }); showProfile(); // Umbenennen sofort, ohne 5-Minuten-Sperre
   },
   onAvatar(id) { if (save.profile && RUETHER_BY_ID[id]) { save.profile.avatar = id; persist(); } },
-  onSettings({ sound, haptics }) { save.settings = { sound: !!sound, haptics: !!haptics }; sfx.setEnabled(save.settings.sound); setHapticsEnabled(save.settings.haptics); persist(); },
+  onSettings({ sound, haptics, flight }) {
+    const was = !!save.settings.flight;
+    save.settings = { ...save.settings, sound: !!sound, haptics: !!haptics, flight: !!flight };
+    sfx.setEnabled(save.settings.sound); setHapticsEnabled(save.settings.haptics);
+    if (!!flight !== was) setFlightMode(!!flight);
+    persist();
+  },
   async onShare() {
     const text = `Ich bin Trainer Lv. ${save.trainerLevel} bei Rüther GO: ${dexCount(save)}/${DEX_TOTAL} im Dex, ${save.stats.arenaWins} Arenasiege. ${location.origin}${location.pathname}`;
     try { if (navigator.share) await navigator.share({ title: 'Rüther GO', text }); else { await navigator.clipboard.writeText(text); toast('In die Zwischenablage kopiert.'); } } catch { /* abgebrochen */ }
   },
+  // _key: Online-Geräteschlüssel, damit das neue Gerät online derselbe Spieler bleibt (privat wie der Spielstand selbst)
   async onExport() {
-    const json = JSON.stringify(save);
-    try { await navigator.clipboard.writeText(json); toast('Spielstand kopiert.'); } catch { popup({ title: 'Spielstand', html: `<textarea readonly class="export">${esc(json)}</textarea>` }); }
+    const json = JSON.stringify({ ...save, _key: online.exportKey?.() || undefined });
+    const note = 'Nur an dich selbst schicken, er enthält deinen Online-Schlüssel.';
+    try { await navigator.clipboard.writeText(json); toast(`Spielstand kopiert. ${note}`); } catch { popup({ title: 'Spielstand', html: `<p class="sub">${note}</p><textarea readonly class="export">${esc(json)}</textarea>` }); }
     return json;
   },
+  // Nur bekannte Versionen; v2/v3 brauchen box (sonst überschriebe ein leerer Stand den alten). Erfolg erst nach dem Speichern.
   onImport(text) {
-    try {
-      const data = JSON.parse(text);
-      if (!data || typeof data !== 'object' || !Array.isArray(data.box)) throw new Error('bad');
-      save = migrate(data);
-      storage.save(save);
-      toast('Spielstand übernommen.');
-      setTimeout(() => location.reload(), 600);
-      return true;
-    } catch { toast('Das war kein gültiger Spielstand.'); return false; }
+    let data = null;
+    try { data = JSON.parse(text); } catch { /* kein JSON */ }
+    const v = data && typeof data === 'object' ? data.version : null;
+    if (!(v === 1 || ((v === 2 || v === 3) && Array.isArray(data.box)))) {
+      toast(Number.isFinite(v) && v > 3 ? 'Der Spielstand ist aus einer neueren Version. Lade erst die Seite neu.' : 'Das war kein gültiger Spielstand.');
+      return false;
+    }
+    const { _key, ...rest } = data, next = migrate(rest);
+    if (!storage.save(next)) { toast('Speichern fehlgeschlagen: Speicher voll oder gesperrt.'); return false; }
+    save = next;
+    if (typeof _key === 'string') online.importKey?.(_key);
+    toast('Spielstand übernommen.');
+    setTimeout(() => location.reload(), 600);
+    return true;
   },
   onReset() { storage.clear(); location.reload(); },
   onShop() { show('screen-shop'); },
@@ -458,8 +548,11 @@ const stopScreen = createStopScreen({
 });
 
 // ---------- Arena + Kampf ----------
-// fight = { arena }, { spawn } (Wildkampf) oder { haunebu } (Hitler); uids = Team beim Kampfstart (activeIndex zeigt hier hinein)
+// fight = { arena }, { spawn } (Wildkampf) oder { haunebu } (Hitler); uids = Team beim Kampfstart (activeIndex zeigt hier hinein);
+// booked = was beim Kampfende (onResult) schon verbucht und gespeichert ist, onEnd zeigt es nur noch an und navigiert
 let fight = null;
+// Haunebu-Fenster während eines Arena-Flugs zu: kein „Nochmal", zurück zur Karte, dann Rückflug
+const beamOver = () => !!save.beam && !activeBeam(save, Date.now());
 function teamFighters() {
   const insts = teamInstances();
   return { uids: insts.map(i => i.uid), team: insts.map(inst => makeFighter(RUETHER_BY_ID[inst.id], inst)) };
@@ -471,10 +564,10 @@ function startBattle(a) {
   const enemy = makeBoss(BOSSES[a.boss], level);
   if (debugWeakBoss) enemy.btc = 20;
   show('screen-battle');
-  battleScreen.start({ team, enemy, rng: Math.random, mode: 'arena', arena: a, arenaLevel: level, reward: arenaReward(level), masteredAfter: level >= CONST.ARENA_LEVELS });
+  battleScreen.start({ team, enemy, rng: Math.random, mode: 'arena', arena: a, arenaLevel: level, reward: arenaReward(level), masteredAfter: level >= CONST.ARENA_LEVELS, canRetry: () => !beamOver() });
 }
 // Wildkampf (Spec §2): Sieg fängt, Niederlage/Zeit lässt ihn abhauen, Aufgeben behält den Spawn
-// Was endWild am Ende wirklich gutschreibt: Siegbonus + Fang-Sats (+ Happy Hour) + Dex-Bonus
+// Was bookWild am Ende wirklich gutschreibt: Siegbonus + Fang-Sats (+ Happy Hour) + Dex-Bonus
 function wildReward(id, rarity) {
   const base = RARITY_BY_ID[rarity].sats;
   return CONST.WILD_WIN_SATS[rarity] + base + (isHappyHour() ? Math.round(base * (CONST.HOUR_SATS_MULT - 1)) : 0) + (save.dex[`${id}:${rarity}`] ? 0 : CONST.DEX_BONUS);
@@ -489,8 +582,8 @@ function startWild(spawn) {
   show('screen-battle');
   battleScreen.start({ team, enemy, rng: Math.random, mode: 'wild', wild: { id: def.id, rarity: spawn.rarity, name: def.name }, reward: wildReward(def.id, spawn.rarity) });
 }
-function endWild({ spawn, uids }, { won, reason, activeIndex = 0 }) {
-  if (!won && reason === 'quit') { afterChange(); return show('screen-map'); } // Spezial-/Ausweich-/Combo-Fortschritt sichern
+function bookWild({ spawn, uids }, { won, reason, activeIndex = 0 }) {
+  if (!won && reason === 'quit') { afterChange(); return {}; } // Spezial-/Ausweich-/Combo-Fortschritt sichern
   removeSpawn(spawn);
   let ups = [], msg = '';
   if (won) {
@@ -502,9 +595,22 @@ function endWild({ spawn, uids }, { won, reason, activeIndex = 0 }) {
     ups = levelUpUids(save, [uids[activeIndex] ?? uids[0]]);
   }
   afterChange();
-  if (msg) toast(msg, { kind: 'sats' });
-  levelUpToast(ups);
-  show('screen-map');
+  return { ups, msg };
+}
+function bookArena(arena, uids, won) {
+  if (!won) { afterChange(); return {}; }
+  const wasUnlocked = questsUnlocked(save), first = !save.arenaMastered[arena.id];
+  const w = arenaWin(save, arena.id, save.team[0]);
+  gainXp(CONST.XP_ARENA * w.level);
+  trackQuest(save, 'arenaWin');
+  const ups = levelUpUids(save, uids);
+  // claimArena pollt selbst und sendet nur, wenn sich Besitzer oder Stufe dort ändern (lastState ist nach dem Kampf veraltet);
+  // „gemeistert" nur beim ersten Mal: Farmen einer gehaltenen Arena flutete sonst Feed und ntfy-Tageslimit
+  const leader = leaderInfo();
+  online.syncNow().then(() => online.claimArena(arena.id, w.level, leader)).then(() => updateHud());
+  if (w.mastered && first) online.postEvent('achievement', `hat ${arena.name} gemeistert!`);
+  afterChange();
+  return { ups, unlocked: !wasUnlocked && questsUnlocked(save) };
 }
 const arenaScreen = createArenaScreen({ el: $('#screen-arena'), bosses: BOSSES, onBack() { show('screen-map'); }, onFight: startBattle, onBeam: beamTo });
 const battleScreen = createBattleScreen({
@@ -514,30 +620,25 @@ const battleScreen = createBattleScreen({
     if (e.type === 'dodge') { save.stats.dodges = (save.stats.dodges || 0) + 1; trackQuest(save, 'dodge'); }
     if (e.type === 'combo') { if (e.value > (save.stats.maxCombo || 0)) save.stats.maxCombo = e.value; if (e.value >= 8) trackQuest(save, 'combo8'); }
   },
-  onEnd(res) {
+  // Sofort beim Kampfende verbuchen und speichern, nicht erst mit „Weiter": Neuladen oder App-Kill davor verliert sonst Sieg und Fang
+  onResult(res) {
     const f = fight;
+    if (!f || f.booked) return;
+    f.booked = f.spawn ? bookWild(f, res) : f.haunebu ? bookHaunebu(res.won) : bookArena(f.arena, f.uids, res.won);
+  },
+  onEnd(res) {
+    const f = fight, b = f.booked || {};
     fight = null;
-    if (f.spawn) return endWild(f, res);
-    if (f.haunebu) return endHaunebu(res);
-    const { won, retry } = res, arena = f.arena;
-    if (retry && !(save.beam && !activeBeam(save, Date.now()))) return startBattle(arena); // Flugzeit um: kein „Nochmal", zurück zur Karte, dann Rückflug
-    if (won) {
-      const wasUnlocked = questsUnlocked(save);
-      const w = arenaWin(save, arena.id, save.team[0]);
-      gainXp(CONST.XP_ARENA * w.level);
-      trackQuest(save, 'arenaWin');
-      const ups = levelUpUids(save, f.uids);
-      const leader = leaderInfo();
-      online.syncNow().then(() => online.claimArena(arena.id, w.level, leader)).then(() => updateHud());
-      if (w.mastered) online.postEvent('achievement', `hat ${arena.name} gemeistert!`);
-      afterChange();
-      levelUpToast(ups);
-      if (!wasUnlocked && questsUnlocked(save)) toast('Haunebu-Quests freigeschaltet! Schau in den Quests-Tab.', { icon: 'haunebu', kind: 'achievement' });
-      if (ARENAS.every(a => save.arenaMastered[a.id]) && !save.victoryShown) { save.victoryShown = true; persist(); return show('screen-victory'); }
-    } else {
-      afterChange();
+    if (f.spawn) { if (b.msg) toast(b.msg, { kind: 'sats' }); levelUpToast(b.ups || []); }
+    else if (f.haunebu) { if (res.won) toast(`Haunebu erbeutet: +${fmt(CONST.HAUNEBU_WIN_SATS)} Sats. ${CONST.HAUNEBU_USE_MS / 60000} Minuten freie Flüge, Knopf unten rechts auf der Karte.`, { icon: 'haunebu', kind: 'sats' }); }
+    else {
+      if (res.retry && !beamOver()) return startBattle(f.arena);
+      levelUpToast(b.ups || []);
+      if (b.unlocked) toast('Haunebu-Quests freigeschaltet! Schau in den Quests-Tab.', { icon: 'haunebu', kind: 'achievement' });
+      if (res.won && ARENAS.every(a => save.arenaMastered[a.id]) && !save.victoryShown) { save.victoryShown = true; persist(); show('screen-victory'); return showLevelUps(); }
     }
     show('screen-map');
+    showLevelUps();
   },
 });
 createVictoryScreen({ el: $('#screen-victory'), onBack() { show('screen-map'); } });
@@ -556,7 +657,7 @@ function showVictoryFace() {
 // Kauf beschwört die Flugscheibe (Preis steigt je Beschwörung), Hitler steigt aus. Sieg öffnet ein 10-Minuten-Fenster mit freien Flügen.
 function buyHaunebu() {
   if (!teamInstances().length) { toast('Stell erst ein Team auf. Hitler gibt die Scheibe nicht kampflos her.'); return { ok: false, reason: 'team' }; }
-  const res = buyItem(save, 'haunebu', Date.now());
+  const res = buyItem(save, 'haunebu', Date.now()); // merkt die bezahlte Beschwörung (summonPending), bis der Kampf entschieden ist
   if (!res.ok) { toast(res.reason === 'aktiv' ? 'Die Haunebu ist gerade im Einsatz.' : 'Nicht genug Sats.'); return res; }
   sfx.play('coin');
   persist();
@@ -573,15 +674,31 @@ function startHaunebu(shownLine = '') {
   battleScreen.start({ team, enemy, rng: Math.random, mode: 'haunebu', reward: CONST.HAUNEBU_WIN_SATS, shownLine });
 }
 // Niederlage, Zeit oder Aufgeben: Sats bleiben weg, kein „Nochmal" (die Beschwörung kostet neu), Stats trotzdem speichern
-function endHaunebu({ won }) {
+function bookHaunebu(won) {
+  save.summonPending = 0; // entschieden: Neuladen setzt nichts mehr fort
   if (won) {
     haunebuWin(save, Date.now());
     gainXp(CONST.XP_HAUNEBU);
     online.postEvent('achievement', 'hat die Haunebu erbeutet und fliegt 10 Minuten lang frei zu jeder Arena!');
   }
   afterChange();
-  if (won) toast(`Haunebu erbeutet: +${fmt(CONST.HAUNEBU_WIN_SATS)} Sats. ${CONST.HAUNEBU_USE_MS / 60000} Minuten freie Flüge, Knopf unten rechts auf der Karte.`, { icon: 'haunebu', kind: 'sats' });
-  show('screen-map');
+  return {};
+}
+// Bezahlt, aber nie entschieden (Neuladen oder App-Kill während Beschwörung oder Kampf): Hitler wartet noch, der Kampf
+// beginnt beim Start neu. Ohne Team (nur per Import möglich) gibt es die Sats zurück. true = Kampf läuft
+function resumeSummon() {
+  if (!save.summonPending) return false;
+  if (!teamInstances().length) {
+    save.sats += save.summonPending;
+    save.stats.haunebuSummons = Math.max(0, save.stats.haunebuSummons - 1);
+    save.summonPending = 0;
+    persist();
+    toast('Beschwörung abgebrochen, die Sats sind zurück.', { icon: 'haunebu', kind: 'sats' });
+    return false;
+  }
+  toast('Hitler wartet noch auf dich.', { icon: 'haunebu' });
+  startHaunebu();
+  return true;
 }
 // v9 §1: Gehört sie dir schon, verlängert der Shop- bzw. Chip-Knopf um 10 Minuten für 5.000 Sats, ohne Hitler-Kampf
 const extendLabel = `+${CONST.HAUNEBU_EXTEND_MS / 60000} Min · ${fmt(CONST.HAUNEBU_EXTEND_COST)}`;
@@ -616,31 +733,56 @@ async function pickBeamTarget() {
 }
 // Hinfliegen: speichern (Heimatort bleibt beim Weiterspringen), Animation, dann Fake-Position wie beim Debug-Beamen
 async function beamTo(a) {
-  if (flying || questRun) return; // Popup liegt über dem Flug-Overlay: kein zweiter Flug parallel
+  if (flying || questRun) return toast('Die Haunebu ist gerade unterwegs.', { icon: 'haunebu' }); // Popup lag über dem Flug: kein zweiter Flug
   const res = startBeam(save, a.id, Date.now(), homePos || save.beam?.from || null);
   if (!res.ok) return toast(res.reason === 'keine' ? 'Die Haunebu ist nicht im Einsatz. Beschwöre sie im Shop.' : 'Unbekanntes Ziel.');
   persist();
   if (current !== 'screen-map') show('screen-map');
   flying = true;
-  await playBeam(document.body, { map, to: a, label: a.name }).catch(() => {});
+  await playBeam(document.body, { map, to: landPoint(a), label: a.name }).catch(() => {});
   flying = false; // vor land(): setFake ruft onPosition sofort
+  if (!activeBeam(save, Date.now())) return returnHome(); // Fenster lief im Flug ab: gleich zurück statt „noch 0:00"
   land(a);
   toast(`Gelandet: ${a.name} · noch ${clock(save.haunebuUntil - Date.now())}`, { icon: 'haunebu' });
 }
+// Landeplatz 40 m nördlich der Arena (nicht auf ihrem Schild). Die Haunebu fliegt gleich dorthin, sonst setzte der Punkt erst auf
+// dem Schild auf und spränge nach dem Absetzen samt Kamera weiter
+function landPoint(a) { return offsetPoint(a, 40, 0); }
+// onPosition (setFake) holt Spawns und Stops für den neuen Ort genau einmal; erst folgen: die Lockmodul-Welle meidet dann die Knöpfe
 function land(a) {
-  const p = offsetPoint(a, 40, 0);
-  map.follow(p); locator.setFake(p); refreshSpawns(); refreshStops(true); // erst folgen: die Lockmodul-Welle meidet dann die Knöpfe
+  const p = landPoint(a);
+  lastSpawnPos = lastStopPos = null; stopRetryAt = 0;
+  map.follow(p); locator.setFake(p);
 }
-// Zurück zur echten Ortung; ohne GPS ist der Spieler danach nirgends (wie „GPS wieder an")
+// Flugmodus: Position einfrieren (letzte bekannte, sonst Worringen). Fangen, Kämpfen, Quests laufen ohne GPS und ohne Netz weiter.
+function setFlightMode(on) {
+  if (on) {
+    const p = save.beam ? (homePos || save.beam.from) : (homePos || pos || locator.current);
+    const at = p ? { lat: p.lat, lon: p.lon } : offsetPoint(ARENA_BY_ID.worringen, 40, 0);
+    save.settings.flightPos = at;
+    if (!save.beam) { lastSpawnPos = lastStopPos = null; locator.setFake(at); map.follow(at); }
+    toast('Flugmodus an: Dein Standort ist eingefroren. Rüther tauchen trotzdem auf.', { icon: 'map' });
+  } else {
+    save.settings.flightPos = null;
+    if (!save.beam) gpsBack();
+    toast('Flugmodus aus: Es gilt wieder dein echtes GPS.', { icon: 'map' });
+  }
+}
+// Zurück zur echten Ortung (im Flugmodus zur eingefrorenen Position); ohne GPS ist der Spieler danach nirgends, auch kein Punkt mehr auf der Karte
 function gpsBack() {
+  if (save.settings.flight && save.settings.flightPos) { lastSpawnPos = lastStopPos = null; locator.setFake(save.settings.flightPos); return; }
   locator.clearFake();
-  if (!locator.current) { pos = homePos = null; lastSpawnPos = null; map.setSpawns(spawns = []); map.setReach(null); }
+  if (!locator.current) { pos = homePos = null; lastSpawnPos = null; map.setSpawns(spawns = []); map.setReach(null); map.setPlayer(null); }
 }
+// Ohne GPS gibt es kein Zuhause (pos ist dann die Fake-Position an der Arena): kein Flug „Kurs: Zuhause" an dieselbe Stelle
 async function returnHome() {
   if (!save.beam || flying) return;
-  const to = homePos || save.beam.from || pos;
+  const to = homePos || save.beam.from || null;
   endBeam(save);
   persist();
+  // offenes Flug-Popup („Haunebu-Flug", „Wohin fliegen?") über den harmlosen ersten Knopf schließen: es läge sonst über dem
+  // Rückflug und stünde danach veraltet da (Noch 0:00)
+  if ($('#popup:not(.hidden) .hb-left')) $('#popup .popup-buttons button')?.click();
   if (current !== 'screen-map') show('screen-map');
   flying = true;
   if (to) await playReturn(document.body, { map, to }).catch(() => {});
@@ -685,6 +827,7 @@ $('#beam-chip').addEventListener('click', async () => {
 // v9: Die Quest verbraucht die Haunebu nicht. Ein laufender Arena-Flug bleibt in save.beam stehen (BEAM_WAIT hält den
 // Rückflug an, Neuladen landet wieder an der Arena) und geht danach weiter, solange das Fenster offen ist; sonst nach Hause.
 // questRun = { mission, setup, insts, home, beam: { arenaId, from } | null, ended, kieser (Debug) }; solange bewegt GPS die Karte nicht.
+// home: echte Position; an einer Arena ohne GPS null (pos ist dort die Fake-Position, ein Rückflug „Zuhause" ginge an die Arena)
 const questTeam = createQuestTeamScreen({ el: $('#screen-questteam'), onStart: launchQuest, onEquip: equipQuestAbility, onBack() { show('screen-quests'); } });
 const questResultScreen = createQuestResultScreen({ el: $('#screen-questresult'), onDone: questHome });
 let questScreen = null, questView = null;
@@ -717,7 +860,7 @@ async function launchQuest(id, uids, { setup = null, kieser = false } = {}) {
   try { view = await loadQuestView(); } catch (e) { flying = false; console.warn('Quest-Modus', e); return toast('Der Quest-Modus lädt nicht. Bitte Seite neu laden.'); }
   questScreen ||= view.createQuestScreen({ el: $('#screen-quest'), onEnd: endQuest });
   const b = save.beam;
-  questRun = { mission, setup: setup || pickSetup(mission, Math.random), insts, home: homePos || b?.from || pos, beam: b ? { arenaId: b.arenaId, from: b.from } : null, kieser };
+  questRun = { mission, setup: setup || pickSetup(mission, Math.random), insts, home: homePos || b?.from || (b ? null : pos), beam: b ? { arenaId: b.arenaId, from: b.from } : null, kieser };
   show('screen-map');
   await playBeam(document.body, { map, to: mission, label: mission.place }).catch(() => {});
   flying = false;
@@ -750,13 +893,14 @@ async function questHome() {
   const now = Date.now(), open = haunebuActive(save, now), b = activeBeam(save, now), arena = b ? ARENA_BY_ID[b.arenaId] : null;
   if (!arena && save.beam) { endBeam(save); persist(); } // Fenster zu: der Arena-Flug endet, es geht nach Hause
   flying = true;
-  if (arena) await playBeam(document.body, { map, to: arena, label: arena.name }).catch(() => {});
+  if (arena) await playBeam(document.body, { map, to: landPoint(arena), label: arena.name }).catch(() => {});
   else if (run.home) await playReturn(document.body, { map, to: run.home }).catch(() => {});
   flying = false;
   questRun = null;
   if (arena) land(arena);
   else {
     if (run.beam) gpsBack(); // war vorher per Haunebu an einer Arena: zurück zur echten Ortung
+    else if (locator.current) applyPos(locator.current); // von zu Hause: in der Quest weitergegangen, Punkt und Kreis nachziehen
     map.follow(locator.current || run.home);
   }
   const left = clock(save.haunebuUntil - Date.now());
@@ -779,8 +923,7 @@ const onboarding = createOnboarding({
     save.seen.onboarding = true;
     persist();
     online.syncNow();
-    show('screen-map');
-    dailyCheck();
+    show('screen-map'); // mit Tagescheck
     iosHint();
   },
 });
@@ -855,17 +998,26 @@ $('#dbg-reset').addEventListener('click', () => { storage.clear(); location.relo
 $('#dbg-close').addEventListener('click', () => debug.classList.add('hidden'));
 
 // ---------- Start ----------
+// Intervalle erst hier: bricht der Start oben ab (Leaflet oder ein Modul fehlt), liefen sie sonst ins Leere und
+// würfen jede Sekunde Fehler (Variablen weiter unten noch nicht angelegt)
+setInterval(updateBanners, 1000);
+setInterval(dailyCheck, 60_000);
+setInterval(() => { if (current === 'screen-map' || current === 'screen-leaderboard') online.fetchState().then(ok => { if (!ok) { $('#online-dot').className = 'online-dot offline'; $('#online-dot').title = 'Offline'; } }); }, CONST.STATE_POLL);
+setInterval(renderStops, 30_000);
 sfx.setEnabled(save.settings.sound !== false);
 setHapticsEnabled(save.settings.haptics !== false);
 // Haunebu-Flug über Neuladen: noch aktiv → ohne Animation wieder hin, abgelaufen → aufräumen
 const beamAtStart = activeBeam(save, Date.now());
 if (beamAtStart && ARENA_BY_ID[beamAtStart.arenaId]) { homePos = beamAtStart.from || null; land(ARENA_BY_ID[beamAtStart.arenaId]); } // homePos: Entfernungen im Popup, Rückflugziel bei neuem Flug
 else if (save.beam) endBeam(save);
+if (!save.beam && save.settings.flight && save.settings.flightPos) locator.setFake(save.settings.flightPos); // Flugmodus über Neustart
 updateHud();
 ticker.refresh();
+// Offline-Start und App-Installation: Service Worker (sw.js, erzeugt von tools/make_sw.py)
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 setTimeout(() => {
   $('#splash').classList.add('gone');
   setTimeout(() => $('#splash').remove(), 400);
   if (!save.profile) { onboarding.start({ profileOnly: save.seen.onboarding || save.box.length > 0 }); show('screen-onboarding'); }
-  else { show('screen-map'); dailyCheck(); online.syncNow().then(() => online.fetchState()); }
+  else { if (!resumeSummon()) show('screen-map'); online.syncNow().then(() => online.fetchState()); } // Karte mit Tagescheck
 }, CONST.SPLASH_MS);

@@ -62,20 +62,20 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
   function setCoin(x, y, r = 0, s = 1) {
     coin.style.setProperty('--x', `${x}px`); coin.style.setProperty('--y', `${y}px`);
     coin.style.setProperty('--r', `${r}deg`); coin.style.setProperty('--s', s);
-    if (sparkle) { sparkle.el.style.setProperty('--x', `${sparkle.x + x}px`); sparkle.el.style.setProperty('--y', `${sparkle.y + y}px`); }
+    if (sparkle) { sparkle.el.style.setProperty('--x', `calc(${sparkle.x} + ${x}px)`); sparkle.el.style.setProperty('--y', `calc(${sparkle.y} + ${y}px)`); }
   }
   // Das Funkeln springt mit setCoin sofort, die Münze gleitet/fällt per CSS: solange ausblenden, resetCoin zeigt es wieder
   const sparkleVisible = on => { if (sparkle) sparkle.el.style.visibility = on ? '' : 'hidden'; };
   function resetCoin() { coin.className = superActive ? 'coin super' : 'coin'; setCoin(0, 0); sparkleVisible(true); }
   function spriteAnim(cls) { sprite.classList.remove('hop', 'suck', 'pop'); if (cls) sprite.classList.add(cls); }
-  // Spruch als Sprechblase über dem Rüther; hängt in .target und läuft so mit ihm mit. stay: bleibt an der Stelle in der
-  // Bühne stehen (Flucht: er rennt aus ihr heraus, sonst wäre sie nach 0,3 s aus dem Bild)
+  // Spruch als Sprechblase mittig über dem Rüther (css/catch.css); hängt in .target und läuft so mit ihm mit. stay: bleibt an der
+  // Stelle in der Bühne stehen (Flucht: er rennt aus ihr heraus, sonst wäre sie nach 0,3 s aus dem Bild)
   const talk = (kind, ms = 2600, t = pickLine(def.id, kind), stay = false) => {
     if (!t) return;
     stage.querySelectorAll('.fx-say').forEach(n => n.remove()); // nie zwei Blasen übereinander
-    if (!stay) { bubble(target, t, { x: '22%', y: '-4%', ms }); return; }
+    if (!stay) { bubble(target, t, { x: '50%', y: '-4%', ms }); return; }
     const r = target.getBoundingClientRect(), s = stage.getBoundingClientRect();
-    bubble(stage, t, { x: r.left - s.left + r.width * 0.22, y: r.top - s.top - r.height * 0.04, ms });
+    bubble(stage, t, { x: r.left - s.left + r.width * 0.5, y: r.top - s.top - r.height * 0.04, ms });
   };
   function say(text, ms = 1200, cls = '') {
     clearTimeout(msgTimer); timers.delete(msgTimer);
@@ -89,8 +89,9 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
     superBtn.classList.toggle('active', superActive);
     if (superActive === !!sparkle) return;
     if (sparkle) { sparkle.stop(); sparkle = null; return; }
-    // Ruhemitte der Münze ohne Transform: left 50 % + translate(-50 %) → Mitte = offsetLeft
-    const x = coin.offsetLeft, y = coin.offsetTop + coin.offsetHeight / 2;
+    // Ruhemitte der Münze relativ zur Bühne (left 50 % + translate(-50 %), bottom + halbe Höhe): wandert beim Drehen oder wenn
+    // die Safari-Leiste die Bühne verkleinert mit, statt in Pixeln an der alten Stelle zu stehen
+    const x = '50%', y = `calc(100% - ${parseFloat(getComputedStyle(coin).bottom) + coin.offsetHeight / 2}px)`;
     sparkle = { ...playSheet(fx, 'sparkle', { x, y, size: 144, ms: 864e5 }), x, y };
   }
   const center = r => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
@@ -175,7 +176,7 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
     }
     setCoin(x, y);
     const cur = center(coin.getBoundingClientRect()), rest = { x: cur.x - x, y: cur.y - y };
-    const land = landing(rest, vx, vy); // ab Ruheposition: der Ziehweg zählt nicht zur Wurfweite
+    const land = landing(rest, vx, vy, rest.y - center(sprite.getBoundingClientRect()).y); // ab Ruheposition: der Ziehweg zählt nicht
     land.y = Math.max(stage.getBoundingClientRect().top + 40, land.y); // nie über die Bühne hinaus
     fly(rest, cur, land);
   }
@@ -209,7 +210,9 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
   }
 
   function resolve(rest, land) {
-    if (!isHit(land, sprite.getBoundingClientRect())) { // daneben: fällt aus dem Bild
+    // Trefferfenster immer etwa 200 px (Sprite 160 + 2 × 20 Rand), auch wenn das Gesicht auf kleinen Bildschirmen schrumpft
+    const r = sprite.getBoundingClientRect();
+    if (!isHit(land, r, Math.max(20, 100 - r.width / 2))) { // daneben: fällt aus dem Bild
       coin.classList.add('fall'); sparkleVisible(false); say('Daneben!');
       onThrow?.({ hit: false, label: '' });
       after(500, idle);
@@ -231,6 +234,7 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
     btcRain(fx, { n: 20 });
     if (rarity !== 'legendaer') return;
     const s = stage.getBoundingClientRect();
+    badge.style.visibility = 'hidden'; // der Schriftzug ersetzt die gleichlautende Plakette, sonst stünden beide übereinander (kleine Bühnen)
     place('legend', 'LEGENDÄR!', { x: s.left + s.width / 2, y: s.top + s.height * 0.14 }); // über dem Sprite, Belohnung kommt darunter
     confetti(fx, 40, CONFETTI, 2200);
   }
@@ -335,6 +339,7 @@ export function createCatchScreen({ el, onDone, onCancel, onCaught, onSuperCoinU
       target.className = `target r-${rarity}`; // räumt auch angry weg
       stage.dataset.rarity = rarity;
       badge.innerHTML = rarity === 'legendaer' ? `${ICO('star')}${R.name}${ICO('star')}` : R.name;
+      badge.style.visibility = '';
       reward.classList.add('hidden'); reward.innerHTML = '';
       name.textContent = d.name; title.textContent = d.title; desc.textContent = d.desc;
       renderThrows(); renderSuper();

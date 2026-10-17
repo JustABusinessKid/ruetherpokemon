@@ -14,7 +14,7 @@
 // Uhren: gt = Spielzeit (steht in der Pause, treibt Effekte, Würfe, Blasen), rt = echte Zeit (Auswahl-Puls, Untertasse, Abspann).
 // Bedienung: Antippen wählt/läuft/interagiert, Doppeltipp auf einen Rüther = Kreismenü, Zielmodus mit Reichweite, Ziehen = Kamera,
 // Zwei-Finger-Zoom und ±. Sounds: vorhandene sfx plus step/alarm/steal/gas (audio.js; unbekannte Namen sind stumm).
-import { createQuest, tick, canExtract, visibleCone, abilitiesFor, abilityTargets, ABILITIES, ENEMY_TYPES } from './engine.js';
+import { createQuest, tick, canExtract, visibleCone, abilitiesFor, abilityTargets, tratschMeet, ABILITIES, ENEMY_TYPES } from './engine.js';
 import { MISSION_BY_ID, MELEE_HINT } from './missions.js';
 import { makeFighter } from '../battle.js';
 import { RUETHER_BY_ID } from '../data.js';
@@ -23,13 +23,14 @@ import { sfx, haptic } from '../audio.js';
 import { banner } from '../fx.js';
 import { popup, esc } from '../ui.js';
 import { TILE, INK, PAPER, GOLD, THEMES, BLUE_FIRE, loadImg, img, variant, paintMap, paintMini, doorHoriz, drawDoor, faceFrame, bitmap, bubble, dither, hash, flames, smoke, mug, fountain, swatter,
-  zigzag, phone, eye, suit, glitchFace, wifi, scold, puddle } from './draw.js';
+  zigzag, phone, eye, suit, glitchFace, wifi, scold, puddle, fan } from './draw.js';
 
 const STEP = 50, MAX_CATCHUP = 1500;
 const ZOOMS = [0.6, 0.8, 1, 1.25, 1.6, 2], ZOOM_MIN = 0.5, ZOOM_MAX = 2.4;
 const TUT_KEY = 'ruether-go-quest-tut';
 const DOUBLE_MS = 350, DOUBLE_PX = 30, DRAG_PX = 10, SPREAD = 0.9; // SPREAD: Mindestabstand der Gesichter in Kacheln (Gesicht 28 px)
 const RING_UP = 30; // Kreismenü: Abstand der oberen Plätze über der Rüther-Mitte (Gesicht bis Zoom 2 frei)
+const RING_W = [78, 100]; // Kreismenü: Abstand der Seitenplätze, weiter raus, wenn ein Teamkamerad drunter läge
 const SUS_BAR = new Set(['patrol', 'suspicious', 'investigate', 'distracted']); // Misstrauens-Balken nur bei eingeschaltetem Kegel
 const face = id => `sprites/${id}.png`;
 const fxArt = n => `art/fx-${n}.png`;
@@ -114,7 +115,7 @@ export function createQuestScreen({ el, onEnd }) {
   let running = false, raf = 0, lastTs = 0, acc = 0, overClock = 0, paused = false, gt = 0, rt = 0, frameDt = 16;
   let sel = [], follow = true, zoom = 1, cam = { x: 0, y: 0 }, vw = 0, vh = 0, dpr = 1;
   let inspect = null, menuFor = -1, aim = null, tut = -1, ending = null, ended = false, lastTap = {}, hitSfxAt = 0, reached = false, warned = false;
-  let fx = freshFx(), labels = [], doorH = [], pad = null, powersKey = '', quitAsk = false, msgT = 0;
+  let fx = freshFx(), labels = [], doorH = [], pad = null, powersKey = '', quitAsk = false, msgT = 0, ringBox = [], ringW = 78;
   let prev = new WeakMap(), flash = new WeakMap(), popAt = new WeakMap();
   const doorAt = new Map(), effAt = new Map(), timers = new Set();
   const scolder = new Map(), chatAt = new Map(); // Junge: Gegner → schimpfende Einheit; nächster Spruch je Gegner (Schimpfen, Streit)
@@ -136,16 +137,8 @@ export function createQuestScreen({ el, onEnd }) {
     const p = prev.get(ent), a = acc / STEP;
     return p ? { x: p.x + (ent.x - p.x) * a, y: p.y + (ent.y - p.y) * a, dir: p.dir + angDiff(p.dir, ent.dir) * a, moved: p.x !== ent.x || p.y !== ent.y } : { x: ent.x, y: ent.y, dir: ent.dir, moved: false };
   }
-  // Rüther auf (fast) derselben Stelle seitlich auffächern, damit kein echtes Gesicht verdeckt ist (§0); Zeichnen und Tippen nutzen dasselbe
-  function upos(u) {
-    const p = pos(u);
-    for (const o of st.units) {
-      if (o === u) continue;
-      const q = pos(o), d = Math.hypot(q.x - p.x, q.y - p.y);
-      if (d < SPREAD) p.x += (SPREAD - d) / 2 * (u.i < o.i ? -1 : 1);
-    }
-    return p;
-  }
+  // Rüther dicht beieinander auffächern, damit kein echtes Gesicht verdeckt ist (§0); Zeichnen und Tippen nutzen dasselbe (draw.js fan)
+  const upos = u => fan(st.units.map(o => pos(o)), SPREAD)[u.i];
   const toScreen = (wx, wy) => ({ x: (wx - cam.x) * zoom + vw / 2, y: (wy - cam.y) * zoom + vh / 2 });
   const toWorld = (sx, sy) => ({ x: (sx - vw / 2) / zoom + cam.x, y: (sy - vh / 2) / zoom + cam.y });
   const at = (ref) => { // Weltpixel eines Ankers: { u } | { e } | { x, y } (Kacheln)
@@ -155,7 +148,8 @@ export function createQuestScreen({ el, onEnd }) {
   };
 
   // ---------- Effekt-Bausteine (alles in Spielzeit gt, Weltpixel) ----------
-  const now = () => st.time;
+  // Geburtszeit der Effekte: Engine-Zeit; in der Pause die stehende Zeichenzeit gt (< st.time), sonst fehlten Wurf, Ring und Blase bis „Weiter“
+  const now = () => (paused ? gt : st.time);
   function text(ref, t, color = PAPER, size = 16, ms = 1100) { fx.texts.push({ ref, t, color, size, ms, born: now() }); }
   function say(ref, t, ms = 2600, delay = 0) { // eine Blase je Figur, höchstens 5 gleichzeitig; delay in Spielzeit
     if (!t) return;
@@ -164,9 +158,10 @@ export function createQuestScreen({ el, onEnd }) {
     if (fx.bubbles.length > 5) fx.bubbles.shift();
   }
   const ring = (x, y, r, color, ms = 700, delay = 0) => fx.rings.push({ x: x * TILE, y: y * TILE, r: r * TILE, color, ms, born: now() + delay });
-  function throwArc(src, x0, y0, x1, y1, ms, { size = 18, spin = 4 * Math.PI, h = null, delay = 0 } = {}) {
+  // to: Anker ({ e }), dem der Wurf folgt (sonst fester Endpunkt x1/y1)
+  function throwArc(src, x0, y0, x1, y1, ms, { size = 18, spin = 4 * Math.PI, h = null, delay = 0, to = null } = {}) {
     const d = Math.hypot(x1 - x0, y1 - y0);
-    fx.projs.push({ src, x0: x0 * TILE, y0: y0 * TILE, x1: x1 * TILE, y1: y1 * TILE, ms, size, spin, h: h ?? 14 + d * 7, born: now() + delay });
+    fx.projs.push({ src, x0: x0 * TILE, y0: y0 * TILE, x1: x1 * TILE, y1: y1 * TILE, ms, size, spin, h: h ?? 14 + d * 7, born: now() + delay, to });
   }
   const pop = (src, x, y, { size = 28, ms = 900, kind = 'pop', delay = 0 } = {}) => fx.sprites.push({ src, x: x * TILE, y: y * TILE, size, ms, kind, born: now() + delay });
   // side ±1: nur nach links bzw. rechts (seitlich am echten Gesicht vorbei)
@@ -395,7 +390,7 @@ export function createQuestScreen({ el, onEnd }) {
     [...list.map(a => ({ a })), { stop: true }].forEach((it, k) => {
       const b = document.createElement('button');
       b.className = 'q-ring-item';
-      b.style.left = `${at[k][0]}px`;
+      b.style.left = `${at[k][0]}px`; b.dataset.sd = Math.sign(at[k][0]);
       if (at[k][1] == null) { b.classList.add('up'); b.style.bottom = `${RING_UP}px`; } else b.style.top = `${at[k][1]}px`;
       if (it.stop) { b.classList.add('stop'); b.innerHTML = '<span class="q-ring-ico"><i></i></span><span class="q-ring-name">Stopp</span>'; b.addEventListener('click', () => { closeMenu(); send({ type: 'stop', unit: i }); }); }
       else {
@@ -407,6 +402,12 @@ export function createQuestScreen({ el, onEnd }) {
       ringEl.appendChild(b);
     });
     ringEl.classList.remove('hidden');
+    // Symbole und Namen relativ zur Ringmitte (offset* ohne die Einblend-Animation), für placeMenu
+    ringBox = [...ringEl.querySelectorAll('.q-ring-ico, .q-ring-name')].map(n => {
+      const b = n.closest('.q-ring-item');
+      return { sd: +b.dataset.sd, x: b.offsetLeft + n.offsetLeft, y: b.offsetTop + n.offsetTop, w: n.offsetWidth, h: n.offsetHeight };
+    });
+    ringW = RING_W[0];
     sfx.play('special');
     tutStep(2);
   }
@@ -808,7 +809,8 @@ export function createQuestScreen({ el, onEnd }) {
         sfx.play('special');
         break;
       case 'beer': case 'mms': case 'controller': case 'kursalarm':
-        throwArc(THROWN[e.item], x, y - 0.3, e.tx, e.ty, e.ms, { size: e.item === 'controller' ? 24 : 22, spin: e.item === 'mms' ? Math.PI : e.item === 'phone' ? 2 * Math.PI : 5 * Math.PI });
+        throwArc(THROWN[e.item], x, y - 0.3, e.tx, e.ty, e.ms, { size: e.item === 'controller' ? 24 : 22, spin: e.item === 'mms' ? Math.PI : e.item === 'phone' ? 2 * Math.PI : 5 * Math.PI, to: e.item === 'controller' ? { e: e.enemy } : null });
+        if (e.item !== 'controller') ring(e.tx, e.ty, 0.45, PAPER, 450); // Landepunkt (auch in der Pause sichtbar, die Dose liegt da noch unterm Gesicht)
         if (e.portions > 1) text({ u: e.unit }, 'Familienpackung!', MMS[3], 14, 1500);
         if (e.ability === 'kursalarm') say({ u: e.unit }, 'Schaut mal, der Kurs!', 2000);
         sfx.play('throw');
@@ -867,6 +869,7 @@ export function createQuestScreen({ el, onEnd }) {
         break;
       case 'deo':
         throwArc('art/ab-deo.png', x, y - 0.3, e.tx, e.ty, 380, { size: 22, spin: 2 * Math.PI });
+        effAt.set(e.effect, now() + 380); // der Nebel quillt erst, wenn die Dose landet (drawOverlay)
         say({ u: e.unit }, 'Duschen? Ich hab Deo.', 2000);
         if (e.mute) text({ x: e.tx, y: e.ty - e.size / 2 - 0.3 }, 'gedämpft', PINK, 13, 1500);
         sfx.play('gas');
@@ -920,7 +923,7 @@ export function createQuestScreen({ el, onEnd }) {
   function endSequence(e) {
     closeMenu(); endAim(); closeMini(); closeCut();
     tut = -1; tutEl.classList.add('hidden'); msgEl.classList.add('hidden');
-    const lift = e.result === 'success' && e.reason === 'extract';
+    const lift = e.result === 'success' && (e.reason === 'extract' || e.reason === 'time'); // Raub: Zeit um, Beute an Bord, sie hebt ab
     ending = { at: rt, lift, text: e.text, summary: e.summary, result: e.result, ready: false };
     if (e.reason === 'caught') return caughtScene(e);
     sfx.play(lift ? 'ufo' : e.result === 'success' ? 'win' : 'lose');
@@ -946,10 +949,10 @@ export function createQuestScreen({ el, onEnd }) {
 
   // ---------- Cutscenes (DOM-Overlay über dem Canvas, echte Gesichter); Tippen überspringt nach kurzer Sperre ----------
   function playCut(kind, html, ms, done) {
-    cut = { done, at: performance.now(), closing: false };
+    const c = cut = { done, at: performance.now(), closing: false };
     cutEl.className = `q-cut ${kind}`;
     cutEl.innerHTML = html;
-    later(endCut, ms);
+    later(() => { if (cut === c) endCut(); }, ms); // eine früher weggetippte Szene beendet nicht die nächste
   }
   function endCut() {
     if (!cut || cut.closing) return;
@@ -969,8 +972,11 @@ export function createQuestScreen({ el, onEnd }) {
     sfx.play('rage'); haptic([60, 40, 60]);
     playCut('kieser', `<div class="q-cut-scene"><div class="q-cut-walk"><img class="q-cut-boss" src="art/boss-bernd.png" alt="${esc(ENEMY_TYPES.bernd.name)}"><i class="q-cut-rope"></i>${frameFace(u, 'dragged')}</div>${says}</div>`
       + `<div class="q-cut-stamp"><b>Kieser-Training #${n}</b>${sub ? `<span>${esc(sub)}</span>` : ''}</div><span class="q-cut-skip">Tippen zum Überspringen</span>`, 4000, () => {
+      const mine = cut;
       cutEl.classList.add('black');
-      later(() => { send({ type: 'resume' }); later(closeCut, 300); }, 240);
+      // nur die eigene Szene schließen: erwischt Stefan (oder der Ranger) gleich nach dem Resume wieder, läuft schon die nächste,
+      // und deren Ende (resume bzw. Abspann) bliebe sonst nie aus, die Quest stünde still
+      later(() => { send({ type: 'resume' }); later(() => { if (cut === mine) closeCut(); }, 300); }, 240);
     });
   }
 
@@ -1038,10 +1044,12 @@ export function createQuestScreen({ el, onEnd }) {
   }
 
   // ---------- Zeichnen ----------
+  const CQ = CSS.supports('width', '1cqw'); // Container-Einheiten (fehlen auf iOS 15)
   function resize() {
     const r = stage.getBoundingClientRect();
     dpr = Math.min(2, window.devicePixelRatio || 1);
     vw = Math.round(r.width); vh = Math.round(r.height);
+    if (!CQ) { stage.style.setProperty('--cw', `${r.width / 100}px`); stage.style.setProperty('--ch', `${r.height / 100}px`); } // 1 % der Bühne für die Cutscene (quest.css)
     const w = Math.round(vw * dpr), h = Math.round(vh * dpr);
     if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
   }
@@ -1095,10 +1103,11 @@ export function createQuestScreen({ el, onEnd }) {
     if (sw > 0 && sh > 0) g.drawImage(mapCv, sx, sy, sw, sh, sx, sy, sw, sh);
     if (hasWater) drawWater(view);
     drawDoors(); drawObjs(); drawSaucer(); drawEffects(); drawCones(inView); drawPaths(); drawAim();
-    drawEnemies(inView); drawOverlay(); drawDecoys(); drawUnits(); drawFx();
+    // Würfe, Blitze, Ringe, Partikel unter den echten Gesichtern (§0); die Familientreffen-Helfer über den Effekten
+    drawEnemies(inView); drawOverlay(); drawDecoys(); drawFx(); drawHelpers(); drawUnits();
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     drawScreen();
-    placeMenu();
+    placeMenu(); placeTut();
   }
 
   // Wellen-Glitzer auf sichtbaren Wasserkacheln (die Wasserfläche selbst liegt im Karten-Cache)
@@ -1266,15 +1275,17 @@ export function createQuestScreen({ el, onEnd }) {
     for (const f of st.effects) {
       const kin = clamp(age(f.until - (f.ms || 0)) / 700), kout = clamp((f.until - gt) / 900);
       if (f.kind === 'deo') {
+        const land = effAt.get(f.id) ?? f.until - f.ms, kd = clamp(age(land) / 700);
+        if (gt < land) continue;
         g.fillStyle = deoPat; g.globalAlpha = 0.9 * kout;
         for (const t of f.tiles) for (let k = 0; k < 2; k++) {
-          const ph = gt / 700 + k * 2.4 + t.x * 1.1 + t.y * 0.6, r = (19 + 3 * Math.sin(ph * 1.7)) * (0.25 + 0.75 * kin);
+          const ph = gt / 700 + k * 2.4 + t.x * 1.1 + t.y * 0.6, r = (19 + 3 * Math.sin(ph * 1.7)) * (0.25 + 0.75 * kd);
           g.beginPath(); g.arc((t.x + 0.5 + Math.cos(ph) * 0.18) * TILE, (t.y + 0.5 + Math.sin(ph * 1.2) * 0.18) * TILE, r, 0, 2 * Math.PI); g.fill();
         }
         g.fillStyle = '#FFE3F2'; // Duft-Glitzer
         for (let k = 0; k < 10; k++) {
           const ph = (gt / 1700 + hash(f.id, k)) % 1;
-          g.globalAlpha = (1 - ph) * kout * kin;
+          g.globalAlpha = (1 - ph) * kout * kd;
           g.fillRect(Math.round((f.x + (hash(f.id, k, 1) - 0.5) * (f.x1 - f.x0 + 1)) * TILE), Math.round((f.y + 0.4) * TILE - ph * 50), 2, 2);
         }
         g.globalAlpha = 1;
@@ -1389,17 +1400,19 @@ export function createQuestScreen({ el, onEnd }) {
       if (Number.isFinite(r)) circle(p.x * TILE, p.y * TILE, r * TILE, TEAL, 0.08);
       if (ab.vaultRange) circle(p.x * TILE, p.y * TILE, ab.vaultRange * TILE, GOLD, 0.06);
       if (!(LIST.has(T) || T === 'self' || T === 'enemyThenPoint')) return;
-      const tps = abilityTargets(st, aim.unit, ab.id).map(t => (t.enemy != null ? { ...pos(st.enemies[t.enemy]), on: t.inRange } : { ...t, on: t.inRange }));
+      const ts = abilityTargets(st, aim.unit, ab.id), tps = ts.map(t => (t.enemy != null ? { ...pos(st.enemies[t.enemy]), on: t.inRange } : { ...t, on: t.inRange }));
       for (const t of tps) corners(t.x * TILE, t.y * TILE, t.on);
-      if (ab.id === 'tratsch' && tps.length === 2) { // Treffpunkt der beiden Streithähne (Mitte, wie in der Engine)
-        const [a, b] = tps, mx = (a.x + b.x) / 2 * TILE, my = (a.y + b.y) / 2 * TILE;
+      if (ab.id === 'tratsch' && tps.length === 2) { // Treffpunkt der beiden Streithähne (auf ihrem Weg, wie in der Engine)
+        const [a, b] = tps, m = tratschMeet(st, st.enemies[ts[0].enemy], st.enemies[ts[1].enemy]), mx = m.x * TILE, my = m.y * TILE;
         g.globalAlpha = 0.8; g.setLineDash([3, 5]); g.strokeStyle = AMBER; g.lineWidth = 2;
-        g.beginPath(); g.moveTo(a.x * TILE, a.y * TILE); g.lineTo(b.x * TILE, b.y * TILE); g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
+        g.beginPath(); g.moveTo(a.x * TILE, a.y * TILE); g.lineTo(mx, my); g.lineTo(b.x * TILE, b.y * TILE); g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
         bitmap(g, 'spark', mx, my, 1.4, AMBER);
         label(mx, my - 14, 'Treffpunkt', AMBER, 11);
       }
       return;
     }
+    // Insider-Tipp: die gewählte Wache ist inzwischen betäubt, KO oder gekündigt: von vorn statt Schleife „Kein gültiges Ziel.“
+    if (first.enemy != null && !abilityTargets(st, aim.unit, ab.id).some(t => t.enemy === first.enemy)) { aimStep(null); return msg('Die Wache ist weg. Neue Wache antippen.'); }
     const q = first.enemy != null ? pos(st.enemies[first.enemy]) : first, qx = q.x * TILE, qy = q.y * TILE;
     if (ab.range2) circle(qx, qy, ab.range2 * TILE, GOLD, 0.06);
     if (T === 'pointDir') {
@@ -1577,7 +1590,8 @@ export function createQuestScreen({ el, onEnd }) {
       const ph = gt / 105 + u.i * 1.7, moving = u.state === 'move' && p.moved;
       const bob = moving ? -Math.abs(Math.sin(ph)) * 3 : 0, tilt = moving ? Math.sin(ph) * 0.09 : 0;
       let rise = 0, alpha = 1;
-      if (ending?.lift && !u.down) { const k = clamp((rt - ending.at) / 1000); rise = k * 46; alpha = 1 - k; }
+      // an Bord ist, wer auf der Plattform steht oder liegt (wie questSummary), der Rest bleibt sichtbar zurück
+      if (ending?.lift && st.tiles[Math.floor(u.y) * st.w + Math.floor(u.x)] === 'P') { const k = clamp((rt - ending.at) / 1000); rise = k * 46; alpha = 1 - k; }
       if (alpha <= 0) continue;
       shadow(x, y + 13, 22);
       if (on && !u.down) { // Auswahl: goldene Ecken, pulsierend
@@ -1612,27 +1626,40 @@ export function createQuestScreen({ el, onEnd }) {
     }
   }
 
+  // Familientreffen-Helfer zur Spielzeit t: Weltpixel, fy = Gesichtsmitte (drawHelpers und die Ausweichliste in drawScreen)
+  function helperAt(h, t) {
+    const a = t - h.born, side = h.id === 'micha' ? 1 : -1, k = clamp(a / h.ms), e = 1 - (1 - k) ** 2;
+    const x = h.x0 + (h.x1 - h.x0) * e + side * 13 * Math.min(1, k * 3), y = h.y0 + (h.y1 - h.y0) * e + side * 5;
+    const bob = k < 1 ? -Math.abs(Math.sin(a / 70)) * 5 : -Math.abs(Math.sin(a / 140)) * 3;
+    return { a, k, x, y, fy: y - 4 + bob, alpha: clamp((h.ms + 1400 - a) / 300) };
+  }
+  // Familientreffen: die echten Christian und Micha rennen vom Rand heran, fesseln und jubeln.
+  // Sterne über der Wache rechts der Mitte und vor den Gesichtern: Christian steht links, Micha rechts tiefer, keiner liegt drunter
+  function drawHelpers() {
+    fx.helpers = fx.helpers.filter(h => gt - h.born < h.ms + 1400);
+    const hs = fx.helpers.filter(h => gt >= h.born).map(h => ({ h, ...helperAt(h, gt) }));
+    for (const { h, a, k, alpha } of hs) {
+      const en = k >= 1 && st.enemies[h.enemy];
+      if (!en) continue;
+      const ep = pos(en);
+      g.globalAlpha = alpha; bitmap(g, 'star', ep.x * TILE + 7 + Math.sin(a / 90) * 4, ep.y * TILE - 20, 1, GOLD);
+    }
+    for (const { h, x, y, fy, alpha } of hs) {
+      g.globalAlpha = alpha;
+      shadow(x, y + 12, 20);
+      faceFrame(g, img(face(h.id)), x, fy, 24, 'normal');
+    }
+    g.globalAlpha = 1;
+  }
+
   function drawFx() {
     const t = gt;
-    // Familientreffen: die echten Christian und Micha rennen vom Rand heran, fesseln und jubeln
-    fx.helpers = fx.helpers.filter(h => t - h.born < h.ms + 1400);
-    for (const h of fx.helpers) {
-      const a = t - h.born;
-      if (a < 0) continue;
-      const side = h.id === 'micha' ? 1 : -1, k = clamp(a / h.ms), e = 1 - (1 - k) ** 2;
-      const x = h.x0 + (h.x1 - h.x0) * e + side * 13 * Math.min(1, k * 3), y = h.y0 + (h.y1 - h.y0) * e + side * 5;
-      const bob = k < 1 ? -Math.abs(Math.sin(a / 70)) * 5 : -Math.abs(Math.sin(a / 140)) * 3;
-      g.globalAlpha = clamp((h.ms + 1400 - a) / 300);
-      shadow(x, y + 12, 20);
-      faceFrame(g, img(face(h.id)), x, y - 4 + bob, 24, 'normal');
-      if (k >= 1) { const en = st.enemies[h.enemy]; if (en) { const ep = pos(en); bitmap(g, 'star', ep.x * TILE + Math.sin(a / 90) * 8, ep.y * TILE - 20, 1, GOLD); } }
-      g.globalAlpha = 1;
-    }
     fx.projs = fx.projs.filter(p => t - p.born < p.ms);
     for (const p of fx.projs) {
       const a = t - p.born;
       if (a < 0) continue;
-      const k = a / p.ms, x = p.x0 + (p.x1 - p.x0) * k, y = p.y0 + (p.y1 - p.y0) * k - Math.sin(Math.PI * k) * p.h;
+      const end = p.to ? at(p.to) : { x: p.x1, y: p.y1 }; // Controller: fliegt der laufenden Wache hinterher
+      const k = a / p.ms, x = p.x0 + (end.x - p.x0) * k, y = p.y0 + (end.y - p.y0) * k - Math.sin(Math.PI * k) * p.h;
       sprite(img(p.src), x, y, p.size, { rot: p.spin * k });
     }
     fx.sprites = fx.sprites.filter(p => t - p.born < p.ms);
@@ -1683,6 +1710,11 @@ export function createQuestScreen({ el, onEnd }) {
     // nur Anker auf dem Schirm: sonst zöge pixelText/bubble Texte unsichtbarer Figuren an den Rand
     const vis = (s, m = 8) => s.x > -m && s.x < vw + m && s.y > -m && s.y < vh + m;
     const faces = st.units.map(u => { const p = upos(u), s = toScreen(p.x * TILE, p.y * TILE), r = 17 * zoom; return { i: u.i, down: u.down, x: s.x - r, y: s.y - r, w: 2 * r, h: 2 * r }; });
+    for (const h of fx.helpers) { // die echten Christian und Micha vom Familientreffen: „KO“, „Gefesselt!“ und Blasen weichen auch ihnen aus
+      if (gt < h.born) continue;
+      const p = helperAt(h, gt), s = toScreen(p.x, p.fy), r = 14 * zoom;
+      faces.push({ i: null, down: false, x: s.x - r, y: s.y - r, w: 2 * r, h: 2 * r });
+    }
     for (const l of labels) { // Gegner-Beschriftungen rutschen über ein echtes Gesicht, statt es zu verdecken
       const s = toScreen(l.wx, l.wy);
       if (!vis(s)) continue;
@@ -1697,12 +1729,18 @@ export function createQuestScreen({ el, onEnd }) {
     }
     fx.bubbles = fx.bubbles.filter(b => gt - b.born < b.ms);
     // Gesichter der Rüther freihalten: Blasen weichen ihnen nach oben aus
-    const avoid = faces.filter(f => !f.down).map(({ x, y, w, h }) => ({ x, y, w, h })), nFaces = avoid.length;
+    const base = faces.filter(f => !f.down).map(({ x, y, w, h }) => ({ x, y, w, h })), nFaces = base.length, live = [];
     for (let k = fx.bubbles.length - 1; k >= 0; k--) { // neueste zuerst an ihren Platz, ältere weichen nach oben aus
       const b = fx.bubbles[k], p = at(b.ref), s = toScreen(p.x, p.y);
       if (gt < b.at) continue; // verzögerte Blase (Ventil-Text zuerst)
       if (s.x < -8 || s.x > vw + 8 || s.y < -8 || s.y > vh + 80) continue; // unten mehr Rand: die Blase sitzt über dem Kopf
-      bubble(g, s.x, s.y - 32 * zoom - 10, b.t, { vw, maxW: Math.min(170, vw - 40), avoid, head: s.y - 15 * zoom });
+      live.push({ b, s });
+    }
+    // zwei Durchgänge mit derselben Anordnung: erst alle Stiele, dann alle Kästen, damit kein Stiel durch eine Blase läuft
+    let avoid = base;
+    for (const phase of ['stem', 'box']) {
+      avoid = base.slice();
+      for (const { b, s } of live) bubble(g, s.x, s.y - 32 * zoom - 10, b.t, { vw, maxW: Math.min(170, vw - 40), avoid, head: s.y - 15 * zoom, phase });
     }
     // Schwebetexte weichen fremden Gesichtern und den Blasen nach oben aus
     const blocks = [...faces, ...avoid.slice(nFaces)];
@@ -1726,10 +1764,12 @@ export function createQuestScreen({ el, onEnd }) {
   }
 
   // Zielleiste oben oder unten: auf die Seite, wo im Streifen der Leiste (Höhe + Abstand + halbe Zielmarke) weniger Ziele liegen
-  // (Liste: leuchtende Ziele, sonst Mitte und Rand des Reichweitenkreises); Gleichstand: unten, wenn der Rüther oben im Bild steht.
+  // (Liste: leuchtende Ziele, sonst Mitte und Rand des Reichweitenkreises; dazu die Gesichter der Teamkameraden, §0);
+  // Gleichstand: unten, wenn der Rüther oben im Bild steht.
   // Höhe je Schritt nur wachsend gemerkt: oben/unten ändert die Breite, sonst kippte die Wahl hin und her
   function placeAim() {
     const { ab, first } = aim, T = ab.target, me = upos(st.units[aim.unit]), sp = q => toScreen(q.x * TILE, q.y * TILE), pts = [sp(me)];
+    for (const o of st.units) if (o.i !== aim.unit && !o.down) pts.push(sp(upos(o)));
     if (!first && (LIST.has(T) || T === 'enemyThenPoint')) {
       const ts = abilityTargets(st, aim.unit, ab.id), near = ts.filter(t => t.inRange);
       for (const t of near.length ? near : ts) pts.push(sp(t.enemy != null ? pos(st.enemies[t.enemy]) : t));
@@ -1742,12 +1782,31 @@ export function createQuestScreen({ el, onEnd }) {
     const top = on.filter(q => q.y >= 0 && q.y < h).length, low = on.filter(q => q.y > vh - h && q.y <= vh).length;
     aimEl.classList.toggle('low', top !== low ? top > low : pts[0].y < vh * 0.45);
   }
+  // Tutorial „Tipp auf den Boden“: Box unten (die Kamera stellt das Team in die Mitte); steht es dort, weil die Kamera am
+  // Kartenrand hängt, kommt die Box nach oben (§0). Bei offener Zielleiste weg: die hat ihren eigenen Hinweis, und die Box
+  // läge sonst über „Los!“/„Abbrechen“ (320×568)
+  function placeTut() {
+    if (tut < 0 || TUT[tut].at !== 'stage') return;
+    if (tutEl.classList.toggle('hidden', !!aim)) return;
+    const h = tutEl.offsetHeight + 14 + 18 * zoom, ys = st.units.map(u => toScreen(0, upos(u).y * TILE).y);
+    tutEl.classList.toggle('top', ys.filter(y => y > vh - h).length > ys.filter(y => y < h).length);
+  }
   function placeMenu() {
     if (aim) placeAim();
     if (menuFor < 0) return;
-    const p = upos(st.units[menuFor]), s = toScreen(p.x * TILE, p.y * TILE);
-    const four = abs[menuFor].length >= 3, x = clamp(s.x, 130, vw - 130), y = clamp(s.y, RING_UP + 106, vh - (four ? 124 : 104)); // oben: Symbol, Punkte, zweizeiliger Name
-    ringEl.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+    const p = upos(st.units[menuFor]), s = toScreen(p.x * TILE, p.y * TILE), four = abs[menuFor].length >= 3;
+    // kein echtes Gesicht (Teamkameraden, auch das eigene am Rand) unter Symbolen oder Namen (§0): sonst die Seitenplätze
+    // weiter raus bzw. den Ring etwas runter oder hoch; passt nichts, bleibt er normal
+    const r = 15 * zoom, fs = st.units.map(o => { const q = upos(o), c = toScreen(q.x * TILE, q.y * TILE); return { x: c.x - r, y: c.y - r, w: 2 * r, h: 2 * r }; });
+    let pick = null;
+    for (const W of RING_W) for (const dy of [0, 40, -40, 80]) {
+      const x = clamp(s.x, W + 52, vw - W - 52), y = clamp(s.y + dy, RING_UP + 106, vh - (four ? 124 : 104)); // oben: Symbol, Punkte, zweizeiliger Name
+      const hit = ringBox.some(b => { const bx = x + b.x + b.sd * (W - RING_W[0]), by = y + b.y; return fs.some(f => bx < f.x + f.w && bx + b.w > f.x && by < f.y + f.h && by + b.h > f.y); });
+      pick ||= { W, x, y };
+      if (!hit) { pick = { W, x, y }; break; }
+    }
+    if (pick.W !== ringW) { ringW = pick.W; for (const b of ringEl.children) if (+b.dataset.sd) b.style.left = `${b.dataset.sd * ringW}px`; }
+    ringEl.style.transform = `translate(${Math.round(pick.x)}px, ${Math.round(pick.y)}px)`;
   }
 
   // ---------- Schleife ----------
@@ -1826,6 +1885,6 @@ export function createQuestScreen({ el, onEnd }) {
   }
 
   // debug(): Zustand und Kachel → Bildschirmpunkt (CSS-px im Canvas) für Tests und das Debug-Panel
-  const debug = () => ({ st, paused, sel, aim, menuFor, cut: cut && cutEl.className, mini: !!mini, send, tile: (x, y) => toScreen(x * TILE, y * TILE) });
+  const debug = () => ({ st, paused, sel, aim, menuFor, cut: cut && cutEl.className, mini: !!mini, send, fx, ending, tile: (x, y) => toScreen(x * TILE, y * TILE) });
   return { start, stop, send, debug };
 }

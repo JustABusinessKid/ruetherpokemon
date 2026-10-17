@@ -28,6 +28,16 @@ test('Flick mit 2 px/ms nach 150 px Drag trifft Sprite-Box', () => {
   assert.equal(isHit(landing(rest, 0, -MAX_FLICK), sprite), false); // zu stark: schießt drüber
 });
 
+test('landing: auf kleinen Handys (Rüther 177 px über der Münze) treffen dieselben Flicks wie auf großen', () => {
+  const rest = { x: 187, y: 500 }, dist = 177;
+  const sprite = { left: 139, right: 235, top: rest.y - dist - 48, bottom: rest.y - dist + 48 }; // 96 px, Rand wie catch.js (100 - 48)
+  const hit = v => isHit(landing(rest, 0, -v, dist), sprite, 100 - 48);
+  for (const v of [1, 1.5, 2, 2.5, 3]) assert.equal(hit(v), true, `${v} px/ms`);
+  assert.equal(hit(0.6), false); // zu schwach
+  assert.equal(hit(MAX_FLICK), false); // zu stark
+  assert.equal(landing(rest, 0, -0.6, 20).y, rest.y); // nie rückwärts
+});
+
 test('isHit mit 20 px Rand', () => {
   const rect = { left: 100, top: 100, right: 200, bottom: 200 };
   assert.equal(isHit({ x: 150, y: 150 }, rect), true);

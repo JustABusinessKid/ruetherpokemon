@@ -46,15 +46,22 @@ export function lureZoom(lat, side) {
   return Math.min(18, Math.max(15, Math.floor(z * 4) / 4));
 }
 const mPerPx = (lat, z) => (156543 * Math.cos((lat * Math.PI) / 180)) / 2 ** z;
+const ZOOM = 16; // Karte ohne Lockmodul
 // v8 Platz für die Lockmodul-Welle (spawn.js lureWave avoid/gap), gerechnet bei lureZoom mit dem Spieler pos in der Kartenmitte.
 // avoid: Sperrquadrate für jedes Arena-Schild samt Besitzer-Foto, Lv-Schild und Keller-Plakette (ragen 10 px über das 48-px-Schild)
 // und jeden Knopf aus boxes ({ x, y, h }: Mitte relativ zur Kartenmitte, halbe Kantenlänge, px), plus halbes Gesicht samt Rand.
 // gap: so weit (m, je Achse) müssen zwei Gesichter auseinander, damit sich die Quadrate nicht berühren.
 const FACE = 26;
+const signBlock = (a, m) => { const [ax, ay] = arenaAnchor(a.id); return { ...offsetPoint(a, (ay - 24) * m, (24 - ax) * m), r: (34 + FACE) * m }; };
+// Dieselben Sperrquadrate für die normalen Spawns (spawn.js updateSpawns) beim Zoom ohne Lockmodul: die Schilder liegen über den
+// Gesichtern (createMap), ein Gesicht direkt am Schild wäre sonst verdeckt
+export const signRoom = arenas => arenas.map(a => signBlock(a, mPerPx(a.lat, ZOOM)));
+// … und so weit (m, je Achse) liegen zwei normale Spawn-Gesichter mindestens auseinander, damit sie sich bei Zoom 16 nicht decken
+export const faceGap = lat => 2 * FACE * mPerPx(lat, ZOOM);
 export function lureRoom(pos, arenas, side, boxes = []) {
   const m = mPerPx(pos.lat, lureZoom(pos.lat, side));
   const avoid = [
-    ...arenas.map(a => { const [ax, ay] = arenaAnchor(a.id); return { ...offsetPoint(a, (ay - 24) * m, (24 - ax) * m), r: (34 + FACE) * m }; }),
+    ...arenas.map(a => signBlock(a, m)),
     ...boxes.map(b => ({ ...offsetPoint(pos, -b.y * m, b.x * m), r: (b.h + FACE) * m })),
   ];
   return { avoid, gap: 2 * FACE * m };
@@ -64,7 +71,8 @@ const stopIcon = ready => L.divIcon({ className: 'stop-icon px-circle' + (ready 
 export function createMap({ el, arenas, onSpawnTap, onArenaTap, onStopTap, onFollowChange }) {
   const map = L.map(el, { zoomControl: false, zoomSnap: 0.25 }).setView(HAGEN, 15);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
-  // eigene Position immer über den Spawns (zIndexOffset 1000); nicht klickbar, Tipps gehen an die Gesichter darunter
+  // Ebenen (zIndexOffset): Stops 500, Spawns 1000, Arena-Schilder 1500, eigene Position 2000. Die Schilder liegen über den Gesichtern,
+  // sonst öffnet ein Tipp auf die Arena (gerade an der Heimadresse Worringen/Keller) den Fang. Die Position ist nicht klickbar.
   const pulse = L.marker(HAGEN, { icon: L.divIcon({ className: 'player-pulse', iconSize: [48, 48], iconAnchor: [24, 24] }), interactive: false, zIndexOffset: 2000 });
   const player = L.marker(HAGEN, { icon: L.divIcon({ className: 'player-dot px-circle', iconSize: [16, 16], iconAnchor: [8, 8] }), interactive: false, zIndexOffset: 2000 });
   const reachCircle = L.circle(HAGEN, { radius: CONST.CATCH_RANGE, className: 'reach-circle', weight: 2, dashArray: '6 6', fillOpacity: 0.06, interactive: false });
@@ -74,7 +82,7 @@ export function createMap({ el, arenas, onSpawnTap, onArenaTap, onStopTap, onFol
   const reachOf = s => (!reachPos ? '' : distance(reachPos, s) < CONST.CATCH_RANGE ? 'near' : 'far');
   const arenaMarkers = {};
   for (const a of arenas) {
-    arenaMarkers[a.id] = L.marker([a.lat, a.lon], { icon: arenaIcon({}, a.id) }).addTo(map).on('click', () => onArenaTap(a));
+    arenaMarkers[a.id] = L.marker([a.lat, a.lon], { icon: arenaIcon({}, a.id), zIndexOffset: 1500 }).addTo(map).on('click', () => onArenaTap(a));
   }
   let following = true;
   let centered = false;
@@ -82,7 +90,7 @@ export function createMap({ el, arenas, onSpawnTap, onArenaTap, onStopTap, onFol
   let lure = false;
   let size = [innerWidth, innerHeight];
   const view = () => (el.clientWidth ? (size = [el.clientWidth, el.clientHeight]) : size); // verdeckt: zuletzt gesehene Größe
-  const zoom = lat => (lure ? lureZoom(lat, Math.min(...view())) : 16);
+  const zoom = lat => (lure ? lureZoom(lat, Math.min(...view())) : ZOOM);
   map.on('dragstart', () => { following = false; onFollowChange?.(false); });
   // Banner und Haunebu-Chip ändern die Kartenhöhe: Leaflet nachführen, im Lockmodul den Zoom neu rechnen (sonst ragt die Welle aus dem Bild)
   new ResizeObserver(() => {
@@ -93,7 +101,9 @@ export function createMap({ el, arenas, onSpawnTap, onArenaTap, onStopTap, onFol
   }).observe(el);
 
   return {
+    // pos null: Ortung weg (Rückflug ohne GPS, „GPS wieder an"), Punkt und Puls verschwinden statt an der alten Stelle zu stehen
     setPlayer(pos) {
+      if (!pos) { player.remove(); pulse.remove(); return; }
       const ll = [pos.lat, pos.lon];
       player.setLatLng(ll); pulse.setLatLng(ll);
       if (!map.hasLayer(player)) { pulse.addTo(map); player.addTo(map); }
@@ -126,10 +136,13 @@ export function createMap({ el, arenas, onSpawnTap, onArenaTap, onStopTap, onFol
       }
     },
     setArena(id, info) { arenaMarkers[id].setIcon(arenaIcon(info, id)); },
-    // v8 Lockmodul-Welle: ein Pixel-Ring läuft einmal vom Spieler nach außen (style.css .player-pulse.wave)
+    // v8 Lockmodul-Welle: ein Pixel-Ring läuft einmal vom Spieler nach außen (style.css .player-pulse.wave), bis über die äußersten
+    // Wellen-Gesichter (LURE_RING[1] + halbes Gesicht) beim Lock-Zoom; den hat die Karte beim Kauf noch nicht (setLure kommt danach)
     wave() {
       const el = pulse.getElement();
       if (!el) return;
+      const lat = pulse.getLatLng().lat, z = following ? lureZoom(lat, Math.min(...view())) : map.getZoom();
+      el.style.setProperty('--wave', `${Math.round(2 * (CONST.LURE_RING[1] / mPerPx(lat, z) + FACE))}px`);
       el.classList.remove('wave'); void el.offsetWidth; el.classList.add('wave');
       clearTimeout(waveT); waveT = setTimeout(() => el.classList.remove('wave'), 1400);
     },
@@ -170,13 +183,15 @@ export function createMap({ el, arenas, onSpawnTap, onArenaTap, onStopTap, onFol
         t = setTimeout(done, (duration + 1) * 1000);
       });
     },
-    // Spieler-Marker steigt in die Scheibe (on) bzw. landet wieder; pos setzt ihn vorher dorthin (Landung am Ziel)
+    // Spieler-Marker steigt in die Scheibe (on) bzw. landet wieder; pos setzt ihn vorher dorthin (Landung am Ziel).
+    // Das zweite liftPlayer(false) (Flugende, nach der Landung) nimmt .land wieder ab: sonst startete fl-land bei jeder Rückkehr
+    // zur Karte neu (display: none → sichtbar), der Punkt fiele jedes Mal vom Himmel
     liftPlayer(on, pos) {
       if (pos) { player.setLatLng([pos.lat, pos.lon]); pulse.setLatLng([pos.lat, pos.lon]); }
       for (const m of [player, pulse]) {
         const c = m.getElement()?.classList;
         if (!c) continue;
-        if (on) c.remove('land'); else if (c.contains('lift')) c.add('land');
+        c.toggle('land', !on && c.contains('lift'));
         c.toggle('lift', !!on);
       }
     },

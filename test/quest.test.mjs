@@ -6,6 +6,7 @@ import { MISSIONS, MISSION_BY_ID, buildSetup } from '../js/quest/missions.js';
 import { makeFighter } from '../js/battle.js';
 import { RUETHERS, RUETHER_BY_ID } from '../js/data.js';
 import { seededRng } from '../js/quests.js';
+import { fan, bubble } from '../js/quest/draw.js';
 
 const F = id => makeFighter(RUETHER_BY_ID[id]);
 // Test-Mission aus einer Karte; Optionen überschreiben Missionsfelder
@@ -1238,4 +1239,94 @@ test('v10 Fix: Stefan redet auch bei Crash-Gerücht, Panik und Klappern nur übe
   ev = run(v, 2500, [{ type: 'interact', unit: 0, obj: 0 }]);
   assert.ok(B.heard.includes(find(ev, 'heard').say));
   for (const t of [...B.crash, ...B.panik, ...B.insider, ...B.task, ...B.taskEnd, ...B.heard]) assert.ok(/Kieser|Coffee|Kaffee|Beinpresse|Hantel/.test(t), t);
+});
+
+// ---------- Fixes Quest Runde 1 ----------
+
+test('Fix: „Alle“ und Tipp auf jede Plattform-Kachel: alle Ziele auf P, Abheben geht', () => {
+  const MAP = ['##########', '#........#', '#.PPP....#', '#.PPP....#', '#.PPP....#', '#........#', '#........#', '##########'];
+  for (let y = 2; y <= 4; y++) for (let x = 2; x <= 4; x++) {
+    const st = Q(MAP, [], { team: ['christian', 'hildegard', 'micha'] });
+    st.units.forEach((u, k) => place(u, 6 + k % 2, 5 + (k >> 1)));
+    for (const u of st.units) tick(st, 0, [{ type: 'move', unit: u.i, to: { x: x + 0.5, y: y + 0.5 } }]); // wie view.js tap()
+    assert.ok(st.units.every(u => tileAt(st, u.goal.x, u.goal.y) === 'P'), `Tipp ${x},${y}`);
+    run(st, 6000);
+    st.delivered = 2; st.objective.done = 2;
+    assert.ok(canExtract(st), `Tipp ${x},${y}`);
+  }
+});
+
+test('Fix: Tipp aufs Wasser neben dem Steg nimmt den Steg, nicht die unerreichbare Schilfinsel; verschlossener Raum bleibt unerreichbar', () => {
+  const MAP = ['#########', '#PPP....#', '#WWWWWWW#', '#WW~WWWW#', '#WWWWWWW#', '#.......#', '#########'];
+  const st = Q(MAP, [], { gate: [1, 5] });
+  place(st.units[0], 5, 5);
+  const ev = tick(st, 0, [{ type: 'move', unit: 0, to: { x: 3.5, y: 4.5 } }]);
+  assert.ok(!has(ev, 'fail'));
+  assert.deepEqual(find(ev, 'path').to, { x: 3, y: 5 });
+  // Tipp direkt auf die Insel (Boden, aber ohne Weg): wie gehabt „Da komm ich nicht hin.“
+  assert.ok(has(tick(st, 0, [{ type: 'move', unit: 0, to: { x: 3.5, y: 3.5 } }]), 'fail', f => f.reason === 'path'));
+});
+
+test('Fix: mitten im Schritt angehalten, Tresor diagonal: erst Kachelmitte, dann klauen', () => {
+  const st = Q(['##########', '#PPP.....#', '#......C.#', '#........#', '##########']), u = st.units[0];
+  place(u, 6, 3);
+  run(st, 150, [{ type: 'move', unit: 0, to: { x: 3.5, y: 3.5 } }]);
+  tick(st, 0, [{ type: 'stop', unit: 0 }]);
+  assert.equal(Math.floor(u.x), 6);
+  assert.ok(Math.abs(u.x - 6.5) > 0.2, 'steht neben der Kachelmitte');
+  const ev = run(st, 1000, [{ type: 'interact', unit: 0, obj: 0 }]);
+  assert.ok(!has(ev, 'fail'));
+  assert.ok(has(ev, 'interactStart', e => e.kind === 'steal'));
+});
+
+test('Fix: Tresor beim Klauen erneut antippen: Fortschritt bleibt', () => {
+  const st = Q(VAULT), u = st.units[0];
+  place(u, 4, 2);
+  run(st, 2500, [{ type: 'interact', unit: 0, obj: 0 }]);
+  const t = u.busy.t;
+  assert.ok(t > 2000);
+  const ev = tick(st, 0, [{ type: 'interact', unit: 0, obj: 0 }]);
+  assert.equal(u.busy.t, t);
+  assert.ok(!has(ev, 'interactCancel') && !has(ev, 'interactStart'));
+  assert.ok(has(run(st, 600), 'steal'), 'die Münze kommt nach dem Rest der Zeit');
+});
+
+test('Fix: Tratsch – Treffpunkt auf dem Weg, nicht in der Wand zwischen den beiden', () => {
+  const st = Q(ROOM, [{ type: 'pinguin', at: [8, 6], dir: 0 }, { type: 'pinguin', at: [10, 6], dir: 180 }], { team: [L('hildegard', { tratsch: 1 })] });
+  place(st.units[0], 9, 2);
+  const a = find(tick(st, 0, [abx(0, 'tratsch')]), 'ability');
+  assert.ok(a, 'Tratsch ausgelöst');
+  assert.ok('.DP'.includes(tileAt(st, a.meet.x, a.meet.y)), `Treffpunkt ${a.meet.x},${a.meet.y} liegt auf Boden`);
+  run(st, 5000);
+  const [p, q] = st.enemies;
+  assert.ok(st.enemies.every(e => e.task?.kind === 'tratsch' && e.task.phase === 'stay'));
+  assert.ok(lineOfSight((x, y) => tileAt(st, x, y) === '#', p.x, p.y, q.x, q.y), 'die beiden sehen sich (keine Wand dazwischen)');
+});
+
+test('Fix: Gesichter auffächern – jedes Paar mindestens 0,9 Kacheln (Gesicht 28 px), keiner springt durch den anderen', () => {
+  const S = 0.9, apart = ps => { for (let a = 0; a < ps.length; a++) for (let b = a + 1; b < ps.length; b++) assert.ok(Math.max(Math.abs(ps[a].x - ps[b].x), Math.abs(ps[a].y - ps[b].y)) >= S - 0.005, JSON.stringify(ps)); };
+  // gemessen im Hangar: Christian, Hildegard, Viktor beim gemeinsamen Loslaufen
+  const ps = fan([{ x: 6.42, y: 8.5 }, { x: 5.5, y: 8.42 }, { x: 5.22, y: 8.22 }], S);
+  apart(ps);
+  assert.ok(ps[2].x < ps[1].x, 'Viktor bleibt links von Hildegard');
+  apart(fan([{ x: 3, y: 3 }, { x: 3, y: 3 }, { x: 3, y: 3 }], S)); // genau übereinander
+  apart(fan([{ x: 3, y: 3 }, { x: 3.3, y: 3.1 }, { x: 3.6, y: 2.9 }], S));
+  const far = [{ x: 1, y: 1 }, { x: 2, y: 1 }];
+  assert.deepEqual(fan(far.map(p => ({ ...p })), S), far); // weit genug: unverändert
+});
+
+test('Fix: Sprechblasen in zwei Durchgängen – erst alle Stiele, dann alle Kästen, gleiche Anordnung', () => {
+  const calls = [], g = { measureText: t => ({ width: t.length * 6 }), fillRect: (...a) => calls.push(['rect', ...a]), fillText: t => calls.push(['text', t]) };
+  const draw = phase => {
+    calls.length = 0;
+    const avoid = [{ x: 100, y: 300, w: 34, h: 34 }]; // ein Gesicht
+    for (const [x, t] of [[120, 'Zugriff verweigert. Nur für Rüther.'], [160, 'Das steht nicht auf meinem Klemmbrett.'], [200, 'BIEP BIEP']]) bubble(g, x, 260, t, { vw: 390, avoid, head: 285, phase });
+    return { avoid, calls: calls.slice() };
+  };
+  const stem = draw('stem'), box = draw('box'), both = draw();
+  assert.deepEqual(stem.avoid, box.avoid);
+  assert.ok(stem.calls.length > 0, 'ältere Blasen weichen nach oben aus und bekommen einen Stiel');
+  assert.ok(!stem.calls.some(c => c[0] === 'text'));
+  assert.equal(box.calls.filter(c => c[0] === 'text').length, both.calls.filter(c => c[0] === 'text').length);
+  assert.equal(stem.calls.length + box.calls.length, both.calls.length);
 });

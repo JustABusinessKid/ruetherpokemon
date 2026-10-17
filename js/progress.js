@@ -93,6 +93,7 @@ export function buyItem(save, itemId, now = 0) {
 // ---------- v7/v8: Haunebu-Reichsflugscheibe ----------
 // v8 §1: Jede Beschwörung (Kauf, egal ob Sieg) kostet 1000 mehr, höchstens 8000. Ein Sieg über Hitler öffnet
 // ein 10-Minuten-Fenster mit freien Flügen; währenddessen ist keine neue Beschwörung möglich.
+// summonPending = bezahlte Sats der Beschwörung, bis der Hitler-Kampf entschieden ist (Neuladen setzt ihn fort, app.js).
 export const summonCost = save => Math.min(CONST.HAUNEBU_SUMMON_BASE + CONST.HAUNEBU_SUMMON_STEP * (save.stats.haunebuSummons || 0), CONST.HAUNEBU_SUMMON_MAX);
 export const haunebuActive = (save, now) => (save.haunebuUntil || 0) > now;
 function summonHaunebu(save, now) {
@@ -101,6 +102,7 @@ function summonHaunebu(save, now) {
   if (save.sats < cost) return { ok: false, reason: 'sats' };
   save.sats -= cost;
   save.stats.haunebuSummons = (save.stats.haunebuSummons || 0) + 1;
+  save.summonPending = cost;
   return { ok: true, summon: true, cost }; // Beschwörung startet den Hitler-Kampf, kein Inventar
 }
 export function haunebuWin(save, now = Date.now()) {
@@ -146,7 +148,7 @@ export const QUEST_SATS = {
   bruch: { coin: 0, base: 6500, done: 0 },                                  // v9 §4: jedes Mal 6,5k, Erwischen kostet extra.fine
 };
 const QUEST_FAIL = 0.1;
-const nat = n => Math.max(0, Math.floor(n) || 0);
+const nat = n => (Number.isFinite(+n) ? Math.max(0, Math.floor(+n)) : 0);
 // result 'success' | 'fail' | 'abort' (Aufgeben zählt wie Misserfolg: 10 % der Sats und XP, kein Abschluss). Trostgeld und
 // Trost-XP nur mit Fortschritt (score > 0): seit die Quest die Haunebu nicht verbraucht, wäre „Los!“ + Aufgeben sonst gratis Geld.
 // extra.kieser: Kieser-Trainings dieser Runde, extra.fine: Strafe (Ranger hat erwischt; dann kein Trostgeld), nie unter 0 Sats.
@@ -346,7 +348,7 @@ export function levelUpUids(save, uids, n = CONST.WIN_LEVEL_UP) {
 export function emptySaveV3() {
   return {
     version: 3, box: [], team: [], sats: 0, dex: {}, arenaLevels: {}, arenaMastered: {}, arenaOwners: {},
-    items: { lockmodul: 0, supercoin: 0 }, lureUntil: 0, victoryShown: false, haunebuUntil: 0, beam: null, questLog: {}, questAbilities: cleanQuestAbilities(),
+    items: { lockmodul: 0, supercoin: 0 }, lureUntil: 0, victoryShown: false, haunebuUntil: 0, summonPending: 0, beam: null, questLog: {}, questAbilities: cleanQuestAbilities(),
     stats: { catches: 0, arenaWins: 0, stops: 0, fusions: 0, specials: 0, dodges: 0, maxCombo: 0, superHits: 0, haunebuWins: 0, haunebuSummons: 0 },
     nextUid: 1,
     profile: null, xp: 0, trainerLevel: 1,
@@ -356,22 +358,56 @@ export function emptySaveV3() {
 }
 export const emptySaveV2 = emptySaveV3; // Kompatibilität für ältere Importe
 
+// Spielstand-Prüfung (Laden und Import): kaputte oder von Hand bearbeitete Felder legen die App sonst beim Start lahm
+const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
+const obj = v => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+const nums = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, nat(v)]));
+// nur bekannte Arenen; f(v) == null wirft den Eintrag raus
+const perArena = (o, f) => Object.fromEntries(Object.entries(obj(o)).filter(([id]) => own(ARENA_BY_ID, id)).map(([id, v]) => [id, f(v)]).filter(([, v]) => v != null));
+// Exemplare: bekannter Rüther, gültige Seltenheit, Level 1..LEVEL_MAX; fehlende oder doppelte uid bekommt eine neue
+// (doppelte würde sell/feed beide Exemplare entfernen lassen). nextUid liegt danach über allen rN der alten Liste, auch der
+// verworfenen Einträge: Team und Arena-Besitzer, die auf diese zeigen, treffen so kein neu nummeriertes Exemplar.
+function cleanBox(list, nextUid) {
+  const seen = new Set(), box = [], fix = [];
+  list = Array.isArray(list) ? list : [];
+  let n = Math.max(1, nat(nextUid));
+  for (const i of list) { const m = /^r(\d+)$/.exec(i?.uid); if (m) n = Math.max(n, +m[1] + 1); }
+  for (const i of list) {
+    if (!i || typeof i !== 'object' || !own(RUETHER_BY_ID, i.id)) continue;
+    const inst = { ...i, rarity: own(RARITY_BY_ID, i.rarity) ? i.rarity : 'normal', level: Math.min(CONST.LEVEL_MAX, Math.max(1, nat(i.level))) };
+    if ((typeof i.uid === 'string' ? i.uid : Number.isFinite(i.uid)) && !seen.has(i.uid)) seen.add(i.uid); else fix.push(inst); // Test-Stände nutzen auch Zahlen
+    box.push(inst);
+  }
+  for (const inst of fix) inst.uid = `r${n++}`;
+  return { box, nextUid: n };
+}
+
 // v8: save.flugscheibe (v7) entfällt, alte Besitzer beschwören neu (haunebuUntil 0, haunebuSummons 0)
 function upgradeToV3({ flugscheibe, ...s }) {
   const empty = emptySaveV3();
+  const { box, nextUid } = cleanBox(s.box, s.nextUid), uids = new Set(box.map(i => i.uid));
+  const profile = obj(s.profile), quests = obj(s.quests), streak = obj(s.streak);
   return {
-    ...empty, ...s, version: 3,
-    items: { ...empty.items, ...(s.items || {}) },
-    stats: { ...empty.stats, ...(s.stats || {}) },
-    settings: { ...empty.settings, ...(s.settings || {}) },
-    seen: { ...empty.seen, ...(s.seen || {}) },
-    quests: s.quests && Array.isArray(s.quests.list) ? s.quests : empty.quests,
-    streak: s.streak && typeof s.streak.count === 'number' ? s.streak : empty.streak,
-    achievements: s.achievements && typeof s.achievements === 'object' ? s.achievements : {},
-    stopCooldowns: s.stopCooldowns && typeof s.stopCooldowns === 'object' ? s.stopCooldowns : {},
-    profile: s.profile && typeof s.profile.nickname === 'string' && s.profile.nickname.length >= 2 ? s.profile : null,
+    ...empty, ...s, version: 3, box, nextUid,
+    team: [...new Set(Array.isArray(s.team) ? s.team : [])].filter(uid => uids.has(uid)).slice(0, CONST.TEAM_SIZE),
+    sats: nat(s.sats), xp: nat(s.xp), trainerLevel: Math.max(1, nat(s.trainerLevel)), summonPending: nat(s.summonPending),
+    dex: Object.fromEntries(Object.keys(obj(s.dex)).filter(k => { const [id, r] = k.split(':'); return own(RUETHER_BY_ID, id) && own(RARITY_BY_ID, r); }).map(k => [k, true])),
+    arenaLevels: perArena(s.arenaLevels, v => Math.min(CONST.ARENA_LEVELS, Math.max(1, nat(v)))),
+    arenaMastered: perArena(s.arenaMastered, v => (v ? true : null)),
+    arenaOwners: perArena(s.arenaOwners, v => (typeof v === 'string' ? v : null)),
+    items: nums({ ...empty.items, ...obj(s.items) }),
+    stats: nums({ ...empty.stats, ...obj(s.stats) }),
+    settings: { ...empty.settings, ...obj(s.settings) },
+    seen: { ...empty.seen, ...obj(s.seen) },
+    quests: Array.isArray(quests.list) ? { ...quests, list: quests.list.filter(q => q && typeof q === 'object') } : empty.quests,
+    streak: typeof streak.count === 'number' ? streak : empty.streak,
+    achievements: obj(s.achievements),
+    stopCooldowns: obj(s.stopCooldowns),
+    profile: typeof profile.nickname === 'string' && profile.nickname.length >= 2 ? profile : null,
+    lureUntil: Number.isFinite(s.lureUntil) ? s.lureUntil : 0,
+    victoryShown: !!s.victoryShown,
     haunebuUntil: Number.isFinite(s.haunebuUntil) ? s.haunebuUntil : 0,
-    questLog: s.questLog && typeof s.questLog === 'object' && !Array.isArray(s.questLog) ? s.questLog : {},
+    questLog: obj(s.questLog),
     beam: s.beam && typeof s.beam.arenaId === 'string' && typeof s.beam.until === 'number' ? s.beam : null,
     questAbilities: cleanQuestAbilities(s.questAbilities),
   };

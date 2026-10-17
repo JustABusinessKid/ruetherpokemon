@@ -1,23 +1,26 @@
-# Online-Welt: ntfy-Nachrichten alle 15 Minuten in state.json (Branch online-data) übernehmen.
-# Merge-Regeln stehen in js/online-merge.js (dasselbe Modul wie im Spiel). Doku: online/README.md
+# Online-Welt: ntfy-Nachrichten etwa alle 5 Minuten in state.json (Branch online-data) übernehmen.
+# Geplante Läufe drosselt GitHub auf alle 3–8 h, deshalb eine Kette: Ein Lauf (sync) merged knapp 6 h lang alle 5 Minuten
+# und startet sich am Ende selbst neu (workflow_dispatch mit GITHUB_TOKEN, das ist erlaubt). Der Cron (watch) ist nur die
+# Absicherung: Er startet die Kette neu, falls sie gerissen ist, und schlägt fehl (Mail), wenn Nachrichten schon über 10 h
+# ungemergt auf dem Bus liegen. Merge-Regeln stehen in js/online-merge.js (dasselbe Modul wie im Spiel). Doku: online/README.md
 name: Online-Sync
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '23 * * * *'
   workflow_dispatch:
 
 permissions:
   contents: write
-
-concurrency:
-  group: online-sync
-  cancel-in-progress: false
+  actions: write
 
 jobs:
-  sync:
+  watch:
+    if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -30,14 +33,56 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 20
-      - name: Nachrichten mergen
-        run: node --experimental-detect-module main/tools/online-sync.mjs data/state.json
-      - name: Nur bei Änderung committen
+      - name: Kette neu starten, falls kein Lauf aktiv ist
+        run: |
+          busy=$(gh run list -R "$GITHUB_REPOSITORY" --workflow online-sync.yml --event workflow_dispatch -L 5 --json status --jq '[.[] | select(.status != "completed")] | length')
+          if [ "$busy" = 0 ]; then
+            gh workflow run online-sync.yml -R "$GITHUB_REPOSITORY" --ref main
+            echo "::warning::Sync-Kette lief nicht, neu gestartet"
+          fi
+      - name: Stand prüfen (Fehler = Mail)
+        run: node --experimental-detect-module main/tools/online-sync.mjs data/state.json --check
+
+  sync:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    concurrency:
+      group: online-sync
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          path: main
+      - uses: actions/checkout@v5
+        with:
+          ref: online-data
+          path: data
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+      - name: Alle 5 Minuten mergen, nur bei Änderung committen
         working-directory: data
         run: |
-          if [ -z "$(git status --porcelain)" ]; then echo "keine Änderung"; exit 0; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add state.json
-          git commit -m "Online-Stand aktualisieren"
-          git push
+          end=$((SECONDS + 335 * 60))
+          while :; do
+            # neuester Code und Stand (Topic-Wechsel, Zurücksetzen per Hand) gelten ab der nächsten Runde
+            git -C ../main fetch -q --depth 1 origin main && git -C ../main reset -q --hard FETCH_HEAD || echo "::warning::main nicht geholt"
+            git fetch -q --depth 1 origin online-data && git reset -q --hard FETCH_HEAD || echo "::warning::online-data nicht geholt"
+            node --experimental-detect-module ../main/tools/online-sync.mjs state.json || true
+            if [ -n "$(git status --porcelain)" ]; then
+              git add state.json && git commit -qm "Online-Stand aktualisieren" && git push -q origin HEAD:online-data || echo "::warning::Push fehlgeschlagen, nächste Runde"
+            fi
+            [ $((SECONDS + 300)) -lt "$end" ] || break
+            sleep 300
+          done
+      - name: Nächsten Lauf starten
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in 1 2 3; do gh workflow run online-sync.yml -R "$GITHUB_REPOSITORY" --ref main && exit 0; sleep 20; done
+          exit 1

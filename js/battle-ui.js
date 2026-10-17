@@ -9,13 +9,16 @@ import { hashrateText, isNarration } from './format.js';
 // Zahlen, ₿-Regen, Banner, Sprechblasen), kampfeigene Kleinanimationen in css/battle.css, Sounds, Haptik, Combo, Wut, End-Overlay.
 // Gegner-Sprüche und Ausrufe stehen in der eigenen Blase .enemy-say unter der Gegner-Leiste, außerhalb der Bühne (Spec v7 §2c).
 // Spezial-Attacken laufen als Kinosequenz: die Spielzeit friert ein (pauseUntil), Banner mit Gesicht + Spruch (Spec §6).
-// createBattleScreen({ el, onEnd, onEvent }) -> { start({ team, enemy, rng, mode, arena, arenaLevel, reward, masteredAfter, wild, shownLine }), stop() }
+// createBattleScreen({ el, onEnd, onResult, onEvent }) -> { start({ team, enemy, rng, mode, arena, arenaLevel, reward, masteredAfter, wild, shownLine, canRetry }), stop() }
 // shownLine: appear-Spruch, der schon vor dem Kampf zu sehen war (Beschwörungs-Banner); das Intro nimmt einen anderen.
 // mode 'arena' | 'wild' | 'haunebu'; wild = { id, rarity, name } (Gegner = wilder Rüther mit echtem Gesicht, kein „Nochmal").
 // 'haunebu' (v7): Beschwörung aus dem Shop gegen Hitler, ohne arena; Sieg = Flugscheibe erbeutet, kein „Nochmal".
 // Gegner-Helfer (v7b, Wolfsschanzen-Beschwörung): state.enemySummons → .enemy-helpers neben dem Boss (art/boss-<id>.png).
 // Tachionenbitcoin (v8, Neuschwabenland): eigene Kampfdauer enemy.duration (Timer, Intro), Pixel-Echos, Riss, Negativ, Zeitschleife.
-// onEnd({ won, retry, reason, activeIndex }) genau einmal pro Kampf: Overlay-Button oder Aufgeben (reason 'quit').
+// onResult({ won, reason, activeIndex }) genau einmal pro Kampf, sobald er entschieden ist (Engine-Ende oder Aufgeben, reason 'quit'):
+// dort verbucht die App und speichert, damit Neuladen oder App-Kill vor „Weiter" nichts verliert.
+// onEnd({ won, retry, reason, activeIndex }) genau einmal pro Kampf danach: Overlay-Button oder Aufgeben, nur noch Navigation.
+// canRetry(): false blendet „Nochmal" aus (Haunebu-Fenster inzwischen zu).
 // onEvent(e) für jedes Engine-Event, zusätzlich { type: 'combo', value } bei jeder Combo-Erhöhung.
 
 const sprite = id => `sprites/${id}.png`;
@@ -63,6 +66,9 @@ const COUNT_STEP = 500, INTRO_LEAD = CONST.INTRO_MS - COUNTDOWN.length * COUNT_S
 const COMBO_HIDE = 1000;
 // Freeze je Spezial-Attacke (Spec §6), sonst CONST.CINEMATIC_MS
 const FREEZE = { 'chart-up': 2400, handshake: 1600, can: 1500, handbag: 1500, controller: 1500, wallet: 2000, gas: 1800, speech: 2200, mms: 1600, bags: 1400, family: 1400 };
+// Höhe, die Requisit mit Reiter samt Zugabe (css/battle.css) zwischen Brett und Bühnenboden braucht: [px bei voller Größe, Anteil der
+// Bühnenhöhe]. Fehlt sie (kleine Bühne), verkleinert --k Requisit und Zugabe, damit das echte Gesicht ganz drin bleibt
+const NEED = { 'chart-up': [142, 0], handshake: [200, 0], can: [182, 0], handbag: [191, 0], controller: [192, 0], bags: [174, 0], gas: [172, 0.1], mms: [148, 0.1], wallet: [161, 0] };
 const BOSS_SLOW = 1.4; // Boss-Requisiten laufen 1,4× so lang (ohne Freeze)
 const slow = ms => Math.round(ms * BOSS_SLOW);
 const LINE_MIN = 8000, LINE_SPREAD = 4000; // Gegner-Sprüche alle 8–12 s Spielzeit
@@ -81,7 +87,7 @@ const REWIND_MS = 1400; // Zeitschleife: so lange spult die Bühne zurück
 const CRACK_LINES = ['62,0 55,14 60,22 48,38 53,47 41,63 46,72 35,88 38,100', '48,38 30,44 22,40', '53,47 70,55 78,52', '41,63 28,70', '46,72 60,82 66,92'];
 const CRACK_SVG = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" shape-rendering="crispEdges">${['k', 'v', 'p'].map(c => CRACK_LINES.map(l => `<polyline class="${c}" points="${l}"/>`).join('')).join('')}</svg>`;
 
-export function createBattleScreen({ el, onEnd, onEvent }) {
+export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
   const $ = s => el.querySelector(s);
   const flash = $('.flash'), battleTop = $('.battle-top'), stage = $('.stage'), bgEl = $('.stage .bg'), fx = $('.fx'), helpers = $('.helpers'), comboEl = $('.combo');
   const enemyHelpers = $('.enemy-helpers');
@@ -364,7 +370,10 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
       later(() => anim(stage, 'overheat', 1000), hit);
       return hit;
     },
+    // fan, found, ray: Ausruf-Blase weg, sobald die Attacke einschlägt (sie stand die Warnzeit davor), wie bei der Wolfsschanze:
+    // Viktors bzw. Hildegards Gesicht und meins im Strahl steigen auf kleinen Bühnen bis unter sie
     fan() { // Lüfter dreht, bläst Viktors grüne Gaswolke mit seinem echten Gesicht auf mich
+      hideSay();
       prop('fan', 'spin-at-enemy', { ms: slow(1400), size: 176 });
       anim(stage, 'blow', slow(1400));
       anim(stage, 'side-hits', slow(900)); // Tipp-Treffer rechts neben Viktors Gesicht, solange er losfliegt
@@ -372,6 +381,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
       return Math.round(slow(900) * 0.86);
     },
     found() { // Hildegard reitet auf ihrer Handtasche von unten zur Heizung und zahlt: ₿-Explosion, Heilung
+      hideSay();
       prop('handbag', 'rise-from-bottom', { ms: slow(1000), size: 128, rider: 'hildegard' }, { '--rider-x': '30%', '--rider-y': '-34%' });
       anim(stage, 'side-hits', slow(1000)); // Tipp-Treffer und Heilung rechts neben Hildegards Gesicht
       later(() => sheet('btcburst', 'enemy', { size: 208 }), slow(450));
@@ -397,6 +407,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
       return 0;
     },
     ray(atk, me) { // Flugscheibe schwebt über mir ein, der Strahl zieht mein echtes Gesicht (Reiter) hoch
+      hideSay();
       const ms = slow(1400);
       prop('haunebu', 'hover-over-me', { ms, size: 144 });
       later(() => prop('tractor-beam', 'beam-on-me', { ms: ms - slow(300), size: 208, ...rider(me) }, { '--rider-x': 'calc(50% - 40px)', '--rider-y': 'calc(100% - 92px)', '--rider-size': '80px' }), slow(300));
@@ -436,7 +447,9 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
       // Gesicht im Requisit statt darüber: am Scheitel von Bogen bzw. Aufstieg steckte es sonst unter der Gegner-Blase
       // (sein Ausruf steht dort); bei der Sprechblase unter dem Text. Vor seinem echten Gesicht eingehängt: kommt hinter ihm hervor
       const p = prop(atk.prop || 'chart-up', hits ? 'arc-to-me' : 'rise-at-enemy', { ms, size, html, rider: atk.ownerId || ctx.wild?.id, riderRarity: ctx.wild?.rarity || 'normal' },
-        { '--spin': '-30deg', '--rider-x': '30%', '--rider-y': atk.prop === 'speech' ? '72%' : '34%' });
+        // Sprechblase: Viktors Gesicht unter dem Text ragt um −30° gedreht bis me-y + 112 px, beim Ausblenden (1,075×) bis 126 px:
+        // höher landen, sonst schnitte der Bühnenboden es ab
+        { '--spin': '-30deg', '--rider-x': '30%', '--rider-y': atk.prop === 'speech' ? '72%' : '34%', ...(atk.prop === 'speech' && { '--fx-me-y': 'min(86%, calc(100% - 128px))' }) });
       p.el.classList.add('from-face');
       fx.prepend(p.el);
       return hits ? Math.round(ms * 0.86) : 0;
@@ -460,7 +473,9 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
         if (rest > 0) later(() => { if (!state.over) talk(was.line, was.shout, Math.max(rest, 1500)); }, freeze);
         const subs = (LINES[me.id]?.fight || []).filter(l => !l.includes(atk.name)); // Spruch wiederholt nicht den Titel
         const board = banner(fx, { title: atk.fx === 'family' ? 'Familientreffen!' : atk.name, sub: subs[Math.floor(Math.random() * subs.length)] || '', portrait: sprite(me.id), rarity: me.rarity, ms: freeze }).el.querySelector('.fx-board');
-        fx.style.setProperty('--board-clear', `${board.offsetTop + board.offsetHeight + 8}px`); // Unterkante samt Schatten: darunter rückt das Gesicht des Wilden (css/battle.css)
+        const clear = board.offsetTop + board.offsetHeight + 8, h = fx.clientHeight, need = NEED[atk.fx];
+        fx.style.setProperty('--board-clear', `${clear}px`); // Unterkante samt Schatten: darunter rückt das Gesicht des Wilden (css/battle.css)
+        fx.style.setProperty('--k', need ? Math.max(0.3, Math.min(1, (h - clear - 6 - need[1] * h) / need[0])).toFixed(3) : '1');
         batchDelay = run(FX, atk, me);
         sheet('sparkle', 'me', { size: 128, ms: 700 });
         sfx.play('special'); haptic(20);
@@ -534,13 +549,15 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
         floatText(fx, 'WUT!', { ...TXT.enemy, kind: 'big wut', ms: 1200 }); // .wut liegt über den Tipp-Zahlen
         sfx.play('rage'); haptic([30, 30, 30, 30, 80]);
         break;
-      case 'faint': // KO erst, wenn der auslösende Boss-Angriff eingeschlagen ist
-        koPending = true; shownMe = e.fighter;
+      case 'faint': // KO erst, wenn der auslösende Boss-Angriff eingeschlagen ist. Doppel-K.o. (der nächste geht pleite, bevor er
+        // hereingerutscht ist): Leiste und Knöpfe bleiben beim zuletzt gezeigten, bis einer hereinrutscht, der noch steht
+        koPending = true; shownMe ||= e.fighter;
         later(() => { meSprite.classList.add('ko'); text(`${e.fighter.name} ist pleite!`, 'me'); }, batchDelay);
         break;
       case 'switch': {
         const f = e.fighter, ko = koPending, gone = shownMe;
         later(() => {
+          if (f.btc <= 0) return; // schon wieder pleite (Doppel-K.o.): nicht tot hereinrutschen, der nächste Wechsel folgt
           meSprite.className = 'sprite';
           meSprite.src = sprite(f.id);
           setFrame(f);
@@ -552,11 +569,12 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
         break;
       }
       case 'win':
+        onResult?.(result(true, false, state.reason));
         hideSay();
         later(() => { enemySprite.classList.add('ko'); sfx.play('win'); haptic([30, 30, 30]); }, batchDelay);
         later(showOverlay, batchDelay + 900);
         break;
-      case 'lose': later(() => sfx.play('lose'), batchDelay); later(showOverlay, batchDelay + 900); break;
+      case 'lose': onResult?.(result(false, false, state.reason)); later(() => sfx.play('lose'), batchDelay); later(showOverlay, batchDelay + 900); break;
     }
   }
 
@@ -792,7 +810,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     overlay.classList.toggle('wild', !!w);
     overlay.classList.toggle('haunebu', h);
     overlay.querySelector('.trophy').classList.toggle('hidden', !won || !!w || h);
-    overlay.querySelector('.retry').classList.toggle('hidden', won || !!w || h); // Wildkampf und Beschwörung: kein „Nochmal"
+    overlay.querySelector('.retry').classList.toggle('hidden', won || !!w || h || ctx.canRetry?.() === false); // Wildkampf und Beschwörung: kein „Nochmal"
     setText(overlay.querySelector('.done'), won || w || h ? 'Weiter' : 'Karte');
     if (h) { // Sieg: Flugscheibe erbeutet, Hitlers Abgang als Notiz; sonst ist er mit ihr weg und die Beschwörung kostet neu
       setText(overlay.querySelector('.title'), won ? 'Reichsflugscheibe erbeutet!' : 'Verloren');
@@ -840,6 +858,7 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     if (!state || ended) return;
     ended = true;
     const r = state.over ? result(!!state.won, false, state.reason) : result(false, false, 'quit');
+    if (!state.over) onResult?.(r); // sonst schon beim Engine-Ende verbucht
     stop();
     onEnd(r);
   });
@@ -866,13 +885,13 @@ export function createBattleScreen({ el, onEnd, onEvent }) {
     down = null; input = freshInput();
   }
 
-  function start({ team, enemy, rng = Math.random, mode = 'arena', arena = null, arenaLevel = 1, reward = 0, masteredAfter = false, wild = null, shownLine = '' }) {
+  function start({ team, enemy, rng = Math.random, mode = 'arena', arena = null, arenaLevel = 1, reward = 0, masteredAfter = false, wild = null, shownLine = '', canRetry = null }) {
     stop();
     const isWild = mode === 'wild';
     // Kampfdauer: Wildkampf 60 s, sonst die des Bosses (makeBoss übernimmt def.duration), ohne eigene die Engine-Vorgabe
     state = createBattle({ team, enemy, rng, duration: isWild ? CONST.WILD_DURATION : enemy.duration || undefined });
     const w = isWild ? { id: enemy.id, rarity: enemy.rarity || 'normal', name: enemy.name, ...wild } : null;
-    ctx = { mode, arena, arenaLevel, reward, masteredAfter, wild: w, shownLine };
+    ctx = { mode, arena, arenaLevel, reward, masteredAfter, wild: w, shownLine, canRetry };
     ended = false; koPending = false; batchDelay = 0;
     // Bühne und Intro zeigen art/bg-<arena>.png, im Wildkampf art/bg-catch.png, bei der Beschwörung art/bg-mondbasis.png (css)
     const scene = isWild ? 'wild' : mode === 'haunebu' ? 'haunebu' : arena?.id;

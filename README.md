@@ -12,7 +12,8 @@ gibt es nicht mehr, Higgsfield ist abgeschaltet.
 Dann `http://localhost:8000` öffnen (`tools/serve.py` schickt `no-store`,
 damit der Browser geänderte Module neu lädt). Auf dem Handy braucht die
 Ortung HTTPS. Live unter `https://justabusinesskid.github.io/ruetherpokemon/`
-(GitHub Pages).
+(GitHub Pages). Leaflet 1.9.4 liegt unter `vendor/leaflet/`, die Karte braucht
+beim Start keinen fremden Server außer den OpenStreetMap-Kacheln.
 
 ## Steuerung
 
@@ -39,6 +40,7 @@ Ortung HTTPS. Live unter `https://justabusinesskid.github.io/ruetherpokemon/`
   - Christian: Plus 70 Prozent, Werfen mit Dosenbier; Pool Vice-President-Auftritt, Kurs-Alarm, WLAN-Störung. Hildegard: Familientreffen, „Junge, komm mal her!"; Pool Mittagsruhe, Tratsch, „Ich ruf deine Mutter an!". Viktor: Giftgas-Wand, Ungeschlagene Argumentationslogik; Pool Crash-Gerücht, Insider-Tipp, Deobombe. Micha: Hardware-Wallet-Umbau, Controllerwurf; Pool Firewall, Raubkopie, Vibrationsalarm. Ramona: Abgelaufene M&Ms, Unlimited Credits; Pool Trollkids-Horde, Sale-Schild, „Feierabend!".
   - **Schleichen lohnt sich:** Alarmierte Wachen schlagen im Nahkampf deutlich härter zu und halten mehr aus, mit jeder Fähigkeits-Stufe im Team noch etwas mehr. Ablenken, Umgehen und leise Fähigkeiten sind der bessere Weg, jede Mission geht ohne Kampf.
 - Rangliste: Top 20 nach Trophäen, wer gerade online ist, und ein Feed mit legendären Fängen, Fusionen, gemeisterten Arenen und geschafften Quests.
+- Zurück-Taste (Android) bzw. Browser-Zurück: führt zum Zurück-Knopf des offenen Screens, nicht aus dem Spiel. Im Kampf kommt nur ein Hinweis (Aufgeben über ✕), in der Quest die Aufgeben-Rückfrage.
 - Profil: Trainer-Level und XP, Statistik, Erfolge, Sound/Haptik, Avatar, Spielstand kopieren/einfügen/löschen, Teilen.
 - Events: 18 bis 19 Uhr ist Rüther-Stunde (doppelte Spawns, 50 % mehr Sats). Jeden Tag ist ein anderer Rüther dreimal so häufig.
 
@@ -46,12 +48,20 @@ Ortung HTTPS. Live unter `https://justabusinesskid.github.io/ruetherpokemon/`
 
 Jedes Gerät schickt signierte Nachrichten (ECDSA P-256, eigener Schlüssel pro
 Gerät) an ein ntfy.sh-Topic. Eine GitHub Action
-(`.github/workflows/online-sync.yml`, alle 15 Minuten) führt sie zum
-dauerhaften Stand `state.json` im Branch `online-data` zusammen. Spiel und
-Action benutzen dasselbe Modul `js/online-merge.js`. Konfiguration in `ONLINE`
-(`js/data.js`); Ablauf, Nachrichtenformat, Zurücksetzen und Einrichtung stehen
-in [online/README.md](online/README.md). Rangliste, Feed und Arena-Besitzer
-gelten für alle Spieler, es gibt kein Konto und kein Passwort.
+(`.github/workflows/online-sync.yml`) führt sie etwa alle 5 Minuten zum
+dauerhaften Stand `state.json` im Branch `online-data` zusammen: Ein Lauf
+merged knapp 6 Stunden lang und startet sich dann selbst neu. Ein stündlicher
+Cron startet die Kette wieder, falls sie reißt, und schlägt fehl (Mail), wenn
+Nachrichten über 10 Stunden ungemergt liegen. Spiel und Action benutzen dasselbe
+Modul `js/online-merge.js`. Konfiguration in `ONLINE` (`js/data.js`); Ablauf,
+Nachrichtenformat, Überwachung, Zurücksetzen und Einrichtung stehen in
+[online/README.md](online/README.md). Rangliste, Feed und Arena-Besitzer gelten
+für alle Spieler, es gibt kein Konto und kein Passwort.
+
+Die Online-Kennung ist der Geräteschlüssel, nicht der Name. „Spielstand
+kopieren“ nimmt ihn mit, damit man nach einem Gerätewechsel (oder auf dem
+iPhone von Safari zur Home-Bildschirm-App) derselbe Spieler bleibt. Gehört der
+Name online schon jemand anderem, zeigt das Spiel einen Hinweis zum Umbenennen.
 
 Ist ntfy oder GitHub nicht erreichbar, läuft alles lokal weiter: Fangen,
 Kämpfen, Quests und Stops funktionieren ohne Netz, der Punkt unten links wird

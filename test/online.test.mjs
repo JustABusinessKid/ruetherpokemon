@@ -3,12 +3,13 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   canonical, clean, validate, merge, toAppState, loadState, emptyState, readBus,
-  newKeyJwk, signerFromJwk, makeMessage, FEED_MAX, MSG_MAX_BYTES,
+  newKeyJwk, signerFromJwk, makeMessage, nameTaken, FEED_MAX, MSG_MAX_BYTES, DUP_WINDOW_MS,
 } from '../js/online-merge.js';
 import { createOnline, onlineConfig, SYNC_MIN_MS } from '../js/online.js';
-import { runSync } from '../tools/online-sync.mjs';
+import { runSync, STALE_MS } from '../tools/online-sync.mjs';
 import { ONLINE, ARENAS } from '../js/data.js';
 
 const signer = async () => signerFromJwk(await newKeyJwk());
@@ -133,10 +134,10 @@ test('online: Feed hält die letzten 50, toAppState liefert die alte Form', asyn
   assert.equal(s.events[0].text, 'Event Nummer 59');
   s.players['legacy:Alt'] = { ...clean('sync', { ...SYNC, nickname: 'Alt', trophies: 50 }), t: now - 11 * 60_000 };
   const st = toAppState(s, now);
-  assert.deepEqual(Object.keys(st).sort(), ['arenas', 'feed', 'leaderboard', 'now', 'ok', 'online']);
+  assert.deepEqual(Object.keys(st).sort(), ['arenas', 'feed', 'leaderboard', 'nameTaken', 'now', 'ok', 'online']);
   assert.equal(st.online, 1);
   assert.deepEqual(st.leaderboard.map(p => [p.nickname, p.online]), [['Alt', false], ['Sebi', true]]);
-  assert.deepEqual(Object.keys(st.leaderboard[0]).sort(), ['avatar', 'dex', 'leader', 'level', 'mastered', 'nickname', 'online', 'sats', 'trophies']);
+  assert.deepEqual(Object.keys(st.leaderboard[0]).sort(), ['avatar', 'dex', 'leader', 'level', 'mastered', 'me', 'nickname', 'online', 'sats', 'trophies']);
   assert.deepEqual(Object.keys(st.feed[0]).sort(), ['at', 'kind', 'nickname', 'text']);
 });
 
@@ -162,7 +163,7 @@ test('online: onlineConfig – lokal offline, Test-Topic ohne Snapshot, echtes T
 function fakeNet({ snapshot = null, bus = [] } = {}) {
   const calls = [];
   globalThis.fetch = async (url, opts = {}) => {
-    calls.push({ url, method: opts.method || 'GET', body: opts.body });
+    calls.push({ url, method: opts.method || 'GET', body: opts.body, keepalive: !!opts.keepalive });
     if (url.startsWith('https://snap.test/')) return snapshot ? new Response(JSON.stringify(snapshot)) : new Response('nope', { status: 404 });
     if (opts.method === 'POST') { bus.push(JSON.parse(opts.body)); return new Response(JSON.stringify({ id: 'n', time: 1 })); }
     return new Response(bus.map((m, i) => line(m, 1000 + i)).join('\n'));
@@ -272,19 +273,234 @@ test('online-sync (Action): Seed beim ersten Lauf, schreibt nur bei Änderung', 
   const a = await signer();
   const bus = [await makeMessage(a, 'sync', clean('sync', SYNC)), await makeMessage(a, 'event', clean('event', { kind: 'quest', text: 'hat den Tachionenraub geschafft!' }))];
   const calls = fakeNet({ bus });
-  assert.equal(await runSync({ statePath, bus: 'https://bus.test', topic: 'ruether-go-test-unit' }), true);
+  assert.equal((await runSync({ statePath, bus: 'https://bus.test', topic: 'ruether-go-test-unit' })).changed, true);
   assert.equal(calls[0].url, 'https://bus.test/ruether-go-test-unit/json?poll=1&since=12h');
   const s = JSON.parse(await readFile(statePath, 'utf8'));
   assert.equal(s.lastMsgTime, 1001);
   assert.equal(s.players[a.id].nickname, 'Sebi');
   assert.ok(Object.keys(s.players).some(id => id.startsWith('legacy:')), 'Startstand übernommen');
   const m1 = (await stat(statePath)).mtimeMs;
-  assert.equal(await runSync({ statePath, bus: 'https://bus.test', topic: 'ruether-go-test-unit' }), false);
+  assert.equal((await runSync({ statePath, bus: 'https://bus.test', topic: 'ruether-go-test-unit' })).changed, false);
   assert.equal(calls[1].url, 'https://bus.test/ruether-go-test-unit/json?poll=1&since=971');
   assert.equal((await stat(statePath)).mtimeMs, m1);
   // Zurücksetzen: leere state.json → leerer Stand (+ die letzten 12 h vom Bus)
   await writeFile(statePath, '');
-  assert.equal(await runSync({ statePath, bus: 'https://bus.test', topic: 'ruether-go-test-unit' }), true);
+  assert.equal((await runSync({ statePath, bus: 'https://bus.test', topic: 'ruether-go-test-unit' })).changed, true);
   const r = JSON.parse(await readFile(statePath, 'utf8'));
   assert.deepEqual(Object.keys(r.players), [a.id]);
+});
+
+// ---------- Audit-Fixes ----------
+test('online: Arena-Meldung ohne Änderung (gleicher Besitzer, gleiches Level) und doppelte Events lässt der Merge weg', async () => {
+  const a = await signer(), b = await signer();
+  const t0 = Date.now() - 3600_000;
+  const claim = (s, lv, t) => makeMessage(s, 'arena', clean('arena', { arenaId: 'keller', level: lv, leader: LEADER }), t);
+  const ev = (s, text, t) => makeMessage(s, 'event', clean('event', { kind: 'achievement', text }), t);
+  const s = merge(emptyState(), items([
+    await makeMessage(a, 'sync', clean('sync', SYNC), t0),
+    await makeMessage(b, 'sync', clean('sync', { ...SYNC, nickname: 'Bea' }), t0),
+    await claim(a, 5, t0 + 1), await claim(a, 5, t0 + 2), await claim(a, 5, t0 + 3), // Farmen in der eigenen Arena
+    await ev(a, 'hat Keller der Rütherschanze gemeistert!', t0 + 4), await ev(a, 'hat Keller der Rütherschanze gemeistert!', t0 + 5),
+    await ev(b, 'hat Keller der Rütherschanze gemeistert!', t0 + 6), // anderer Spieler darf denselben Text
+  ]));
+  assert.equal(s.arenas.keller.since, t0 + 1, '„seit“ bleibt beim ersten Sieg');
+  assert.deepEqual(s.events.map(e => [e.nickname, e.kind]), [['Bea', 'achievement'], ['Sebi', 'achievement'], ['Sebi', 'arena']]);
+  // echte Änderungen erzeugen weiter Einträge: Rauswurf und Rückeroberung mit gleichem Text
+  const s2 = merge(s, items([await claim(b, 5, t0 + 7), await claim(a, 5, t0 + 8), await claim(b, 5, t0 + 9)]));
+  assert.equal(s2.arenas.keller.ownerId, b.id);
+  assert.equal(s2.events.filter(e => e.kind === 'arena').length, 4);
+  // gleicher Text nach mehr als 24 h kommt wieder in den Feed
+  const s3 = merge(s2, items([await ev(a, 'hat Keller der Rütherschanze gemeistert!', t0 + 4 + DUP_WINDOW_MS)]));
+  assert.equal(s3.events[0].text, 'hat Keller der Rütherschanze gemeistert!');
+  assert.equal(s3.events[0].nickname, 'Sebi');
+});
+
+test('online: mine/me hängen an der Kennung, nameTaken wenn der Name einer anderen Kennung gehört', async () => {
+  const a = await signer(), b = await signer();
+  const s = merge(emptyState(), items([
+    await makeMessage(a, 'sync', clean('sync', SYNC)),
+    await makeMessage(b, 'sync', clean('sync', SYNC)), // zweites Gerät, gleicher Name → verworfen
+    await makeMessage(a, 'arena', clean('arena', { arenaId: 'pcsale', level: 2, leader: LEADER })),
+  ]));
+  s.players['legacy:Opa'] = { ...clean('sync', { ...SYNC, nickname: 'Opa' }), t: 1 };
+  const forA = toAppState(s, Date.now(), { id: a.id, nickname: 'Sebi' }), forB = toAppState(s, Date.now(), { id: b.id, nickname: 'sebi' });
+  assert.equal(forA.arenas.pcsale.mine, true);
+  assert.equal(forB.arenas.pcsale.mine, false, 'gleicher Name, aber fremde Kennung');
+  assert.equal(forA.leaderboard.find(p => p.nickname === 'Sebi').me, true);
+  assert.equal(forB.leaderboard.some(p => p.me), false);
+  assert.equal(forA.nameTaken, false);
+  assert.equal(forB.nameTaken, true);
+  assert.equal(nameTaken(s, b.id, 'Opa'), false, 'Altspieler-Namen übernimmt die neue id');
+  assert.equal(nameTaken(s, undefined, 'Sebi'), false, 'ohne eigene Kennung kein Fehlalarm');
+  assert.equal(toAppState(s).arenas.pcsale.mine, false);
+});
+
+test('online-Client: Kennung wandert mit exportKey/importKey aufs neue Gerät', async () => {
+  store.clear();
+  const calls = fakeNet();
+  const o1 = createOnline({ config: CFG, getPayload: () => SYNC });
+  assert.equal(o1.exportKey(), null, 'noch kein Schlüssel');
+  await o1.syncNow();
+  const key = o1.exportKey(), id = o1.id;
+  assert.equal(id.length, 43);
+  assert.equal(JSON.parse(key).d.length, 43);
+  // neues Gerät: leerer Speicher, Import, dann gleiche Kennung auf dem Bus
+  store.clear();
+  const o2 = createOnline({ config: CFG, getPayload: () => ({ ...SYNC, sats: 1 }) });
+  assert.equal(o2.importKey('{kaputt'), false);
+  assert.equal(o2.importKey({ kty: 'EC', crv: 'P-256', x: 'a', y: 'b', d: 'c' }), false);
+  assert.equal(store.size, 0);
+  assert.equal(o2.importKey(key), true);
+  await o2.syncNow();
+  const posts = calls.filter(c => c.method === 'POST').map(c => JSON.parse(c.body));
+  assert.deepEqual(posts.map(m => m.id), [id, id]);
+  assert.equal(o2.id, id);
+  assert.equal(o2.nameTaken, false);
+  // ohne Import: neue Kennung, Name vergeben → Hinweis
+  store.clear();
+  const o3 = createOnline({ config: CFG, getPayload: () => SYNC });
+  await o3.syncNow();
+  mock.timers.enable({ apis: ['Date'], now: Date.now() + 6000 });
+  await o3.fetchState().finally(() => mock.timers.reset());
+  assert.notEqual(o3.id, id);
+  assert.equal(o3.nameTaken, true);
+  assert.equal(o3.lastState.nameTaken, true);
+  const before = calls.length;
+  assert.ok(await o3.postEvent('catch', 'hat einen legendären Micha gefangen!'));
+  assert.equal(calls.filter((c, i) => i >= before && c.method === 'POST').length, 0, 'würde ohnehin verworfen: nicht senden');
+});
+
+test('online-Client: zwei gleichzeitige erste Nachrichten nutzen denselben Schlüssel', async () => {
+  store.clear();
+  const calls = fakeNet();
+  const o = createOnline({ config: CFG, getPayload: () => SYNC });
+  await Promise.all([o.syncNow(), o.postEvent('catch', 'hat einen legendären Micha gefangen!'), o.postEvent('level', 'ist Trainer Lv. 5 geworden!')]);
+  const ids = new Set(calls.filter(c => c.method === 'POST').map(c => JSON.parse(c.body).id));
+  assert.equal(ids.size, 1);
+  assert.equal(JSON.parse(store.get('ruether-go-key')).x.length, 43);
+});
+
+test('online-Client: Sieg in der eigenen Arena auf gleichem Level und doppelte Events werden nicht gesendet', async () => {
+  store.clear();
+  const calls = fakeNet();
+  const o = createOnline({ config: CFG, getPayload: () => SYNC });
+  const posts = () => calls.filter(c => c.method === 'POST').map(c => JSON.parse(c.body).k);
+  await o.syncNow();
+  await o.claimArena('keller', 5, LEADER);
+  await o.claimArena('keller', 5, LEADER); // nochmal gewonnen
+  await o.postEvent('achievement', 'hat Keller der Rütherschanze gemeistert!');
+  await o.postEvent('achievement', 'hat Keller der Rütherschanze gemeistert!');
+  assert.deepEqual(posts(), ['sync', 'arena', 'event']);
+  assert.equal(o.lastState.arenas.keller.mine, true);
+  // jemand anderes hat sie inzwischen (vor dem Senden wird gepollt): dann wieder senden
+  const other = await signer();
+  const later = Date.now() + 6000;
+  const net = fakeNet({ bus: [await makeMessage(other, 'sync', clean('sync', { ...SYNC, nickname: 'Bea' }), later), await makeMessage(other, 'arena', clean('arena', { arenaId: 'keller', level: 5, leader: LEADER }), later)] });
+  mock.timers.enable({ apis: ['Date'], now: later + 1 });
+  try {
+    const r = await o.claimArena('keller', 5, LEADER);
+    assert.equal(r.arenas.keller.mine, true);
+    assert.deepEqual(net.filter(c => c.method === 'POST').map(c => JSON.parse(c.body).k), ['arena']);
+  } finally { mock.timers.reset(); }
+});
+
+test('online-Client: Umbenennen sendet sofort (force), ausstehender sync geht beim Verlassen der App raus', async () => {
+  store.clear();
+  const doc = Object.assign(new EventTarget(), { visibilityState: 'visible' });
+  globalThis.document = doc;
+  mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() });
+  try {
+    const calls = fakeNet();
+    let p = { ...SYNC };
+    const o = createOnline({ config: CFG, getPayload: () => p });
+    const posts = () => calls.filter(c => c.method === 'POST');
+    await o.syncNow();
+    await o.fetchState();
+    mock.timers.tick(10);
+    p = { ...p, nickname: 'Sebastian' };
+    await o.syncNow({ force: true });
+    assert.equal(posts().length, 2, 'Name sofort online');
+    assert.equal(JSON.parse(posts()[1].body).d.nickname, 'Sebastian');
+    assert.equal(o.lastState.leaderboard.find(x => x.me).nickname, 'Sebastian');
+    // geändert, Rate-Limit → nachreichen; App geht vor Ablauf in den Hintergrund
+    p = { ...p, sats: 900 };
+    await o.syncNow();
+    assert.equal(posts().length, 2);
+    doc.dispatchEvent(new Event('visibilitychange')); // noch sichtbar: nichts
+    mock.timers.tick(59_000);
+    doc.visibilityState = 'hidden';
+    doc.dispatchEvent(new Event('visibilitychange'));
+    for (let i = 0; i < 300; i++) await new Promise(r => setImmediate(r));
+    assert.equal(posts().length, 2, 'höchstens einmal pro Minute');
+    mock.timers.tick(1000);
+    doc.dispatchEvent(new Event('visibilitychange'));
+    for (let i = 0; i < 500 && posts().length < 3; i++) await new Promise(r => setImmediate(r));
+    assert.equal(posts().length, 3);
+    assert.equal(JSON.parse(posts()[2].body).d.sats, 900);
+    assert.deepEqual(posts().map(c => c.keepalive), [false, false, true], 'überlebt das Schließen der Seite');
+    mock.timers.tick(SYNC_MIN_MS);
+    for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r));
+    assert.equal(posts().length, 3, 'der Timer ist erledigt, kein zweites Senden');
+  } finally {
+    mock.timers.reset();
+    delete globalThis.document;
+  }
+});
+
+test('online-Client: älterer oder gleicher Snapshot ersetzt den gemergten Stand nicht', async () => {
+  store.clear();
+  const other = await signer();
+  const busMsgs = [await makeMessage(other, 'sync', clean('sync', { ...SYNC, nickname: 'Bea' }))];
+  const calls = fakeNet({ snapshot: { ...emptyState(), lastMsgTime: 500 }, bus: busMsgs });
+  const o = createOnline({ config: CFG, getPayload: () => SYNC });
+  await o.fetchState();
+  assert.ok(o.lastState.leaderboard.some(p => p.nickname === 'Bea'));
+  busMsgs.length = 0; // ntfy hat sie nicht mehr (12 h um), die Action hängt
+  mock.timers.enable({ apis: ['Date'], now: Date.now() + 16 * 60_000 });
+  try {
+    await o.fetchState();
+    assert.equal(calls.filter(c => c.url.startsWith('https://snap.test/')).length, 2);
+    assert.ok(o.lastState.leaderboard.some(p => p.nickname === 'Bea'), 'nichts weggeworfen');
+    assert.match(calls.at(-1).url, /since=970$/, 'Bus ab dem eigenen Stand, nicht ab dem alten Snapshot');
+  } finally { mock.timers.reset(); }
+});
+
+test('online-sync (Action): meldet, wie lange Nachrichten ungemergt liegen', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'rgo-lag-'));
+  const statePath = join(dir, 'state.json');
+  await writeFile(statePath, JSON.stringify({ ...emptyState(), lastMsgTime: 1000 }));
+  const a = await signer();
+  const bus = [await makeMessage(a, 'sync', clean('sync', SYNC)), await makeMessage(a, 'event', clean('event', { kind: 'quest', text: 'hat den Tachionenraub geschafft!' }))];
+  fakeNet({ bus }); // Bus-Zeiten 1000 (schon gemergt, Überlappung) und 1001
+  const now = 1001_000 + STALE_MS + 1;
+  const chk = await runSync({ statePath, bus: 'https://bus.test', topic: 'ruether-go-test-unit', now: now - 1, write: false });
+  assert.deepEqual(chk, { changed: false, lagMs: STALE_MS });
+  assert.equal(JSON.parse(await readFile(statePath, 'utf8')).lastMsgTime, 1000, '--check schreibt nichts');
+  const run = await runSync({ statePath, bus: 'https://bus.test', topic: 'ruether-go-test-unit', now });
+  assert.deepEqual(run, { changed: true, lagMs: STALE_MS + 1 });
+  assert.equal((await runSync({ statePath, bus: 'https://bus.test', topic: 'ruether-go-test-unit', now })).lagMs, 0, 'danach alles gemergt');
+});
+
+test('online-sync (CLI): --check endet mit Fehler, wenn der Stand über 10 h hinter dem Bus hängt', async () => {
+  const { createServer } = await import('node:http');
+  const { execFile } = await import('node:child_process');
+  const a = await signer();
+  const msg = await makeMessage(a, 'sync', clean('sync', SYNC));
+  let busTime = Math.floor(Date.now() / 1000) - 11 * 3600;
+  const srv = createServer((req, res) => res.end(line(msg, busTime))).listen(0, '127.0.0.1');
+  await new Promise(r => srv.once('listening', r));
+  const dir = await mkdtemp(join(tmpdir(), 'rgo-cli-'));
+  const statePath = join(dir, 'state.json');
+  await writeFile(statePath, '{}');
+  const script = fileURLToPath(new URL('../tools/online-sync.mjs', import.meta.url));
+  const env = { ...process.env, ONLINE_BUS: `http://127.0.0.1:${srv.address().port}`, ONLINE_TOPIC: 'ruether-go-test-unit' };
+  const cli = () => new Promise(r => execFile(process.execPath, [script, statePath, '--check'], { env }, (err, out) => r({ code: err?.code ?? 0, out })));
+  try {
+    const stale = await cli();
+    assert.equal(stale.code, 1);
+    assert.match(stale.out, /::error::Online-Stand hängt 11\.0 h/);
+    assert.equal(await readFile(statePath, 'utf8'), '{}', '--check schreibt nichts');
+    busTime = Math.floor(Date.now() / 1000) - 600;
+    assert.equal((await cli()).code, 0);
+  } finally { srv.close(); }
 });
