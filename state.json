@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1792310763,
+ "lastMsgTime": 1792310932,
  "players": {
   "legacy:Josef": {
    "nickname": "Josef",
@@ -172,6 +172,13 @@
   }
  },
  "events": [
+  {
+   "at": 1792310931360,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Viktor erschaffen!",
+   "m": "el2kAv_PnjO6flND"
+  },
   {
    "at": 1792235481474,
    "nickname": "BTC",
@@ -514,13 +521,6 @@
    "kind": "achievement",
    "text": "hat die Haunebu erbeutet und fliegt 10 Minuten lang frei zu jeder Arena!",
    "m": "yFLgIbx_YaM9pXXy"
-  },
-  {
-   "at": 1791657843769,
-   "nickname": "Adolf",
-   "kind": "quest",
-   "text": "hat die Haunebu-Quest „Kalter Keller“ geschafft!",
-   "m": "puMK5q0cYPHuY_dw"
   }
  ]
 }
