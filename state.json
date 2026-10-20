@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1792513050,
+ "lastMsgTime": 1792524390,
  "players": {
   "legacy:Josef": {
    "nickname": "Josef",
@@ -66,13 +66,13 @@
    "trophies": 62,
    "mastered": 5,
    "level": 28,
-   "xp": 1410,
+   "xp": 1770,
    "leader": {
     "id": "christian",
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1792513028164
+   "t": 1792524388617
   },
   "-pWtFGooNqrAhm2bZJVG-34XXqMnpAewbhOBWZCkxAc": {
    "nickname": "Tester",
