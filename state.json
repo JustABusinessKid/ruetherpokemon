@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1792512729,
+ "lastMsgTime": 1792513050,
  "players": {
   "legacy:Josef": {
    "nickname": "Josef",
@@ -61,18 +61,18 @@
   "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
    "nickname": "BTC",
    "avatar": "christian",
-   "sats": 34685,
+   "sats": 34760,
    "dex": 20,
    "trophies": 62,
    "mastered": 5,
    "level": 28,
-   "xp": 1310,
+   "xp": 1410,
    "leader": {
     "id": "christian",
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1792512728177
+   "t": 1792513028164
   },
   "-pWtFGooNqrAhm2bZJVG-34XXqMnpAewbhOBWZCkxAc": {
    "nickname": "Tester",
@@ -172,6 +172,34 @@
   }
  },
  "events": [
+  {
+   "at": 1792513048798,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Viktor erschaffen!",
+   "m": "q-NkaeSwlSJG3cNc"
+  },
+  {
+   "at": 1792513047454,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Viktor erschaffen!",
+   "m": "r83Xnll5816kS_5T"
+  },
+  {
+   "at": 1792513042005,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Christian erschaffen!",
+   "m": "mpYLQz_lcoj1xV5G"
+  },
+  {
+   "at": 1792513040587,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Christian erschaffen!",
+   "m": "EtXGiMUSpsQ63Yq5"
+  },
   {
    "at": 1792310931360,
    "nickname": "BTC",
@@ -493,34 +521,6 @@
    "kind": "fusion",
    "text": "hat per Fusion einen epischen Christian erschaffen!",
    "m": "vrWg8qFsRT0PkZU4"
-  },
-  {
-   "at": 1791660527084,
-   "nickname": "BTC",
-   "kind": "quest",
-   "text": "hat die Haunebu-Quest „Michas PS3“ geschafft!",
-   "m": "90Pc7lI5qDhM30q-"
-  },
-  {
-   "at": 1791660416990,
-   "nickname": "BTC",
-   "kind": "achievement",
-   "text": "hat die Haunebu erbeutet und fliegt 10 Minuten lang frei zu jeder Arena!",
-   "m": "YCQyTK4uEDLYRXzs"
-  },
-  {
-   "at": 1791660366923,
-   "nickname": "BTC",
-   "kind": "quest",
-   "text": "hat die Haunebu-Quest „Hangar-Sabotage“ geschafft!",
-   "m": "fCvPwBla-mDDzgfU"
-  },
-  {
-   "at": 1791660221063,
-   "nickname": "BTC",
-   "kind": "achievement",
-   "text": "hat die Haunebu erbeutet und fliegt 10 Minuten lang frei zu jeder Arena!",
-   "m": "yFLgIbx_YaM9pXXy"
   }
  ]
 }
