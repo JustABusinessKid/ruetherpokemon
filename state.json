@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1792609247,
+ "lastMsgTime": 1792609547,
  "players": {
   "legacy:Josef": {
    "nickname": "Josef",
@@ -61,18 +61,18 @@
   "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
    "nickname": "BTC",
    "avatar": "christian",
-   "sats": 29340,
+   "sats": 32340,
    "dex": 20,
    "trophies": 62,
    "mastered": 5,
    "level": 28,
-   "xp": 2140,
+   "xp": 2930,
    "leader": {
     "id": "christian",
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1792609245503
+   "t": 1792609545503
   },
   "-pWtFGooNqrAhm2bZJVG-34XXqMnpAewbhOBWZCkxAc": {
    "nickname": "Tester",
@@ -172,6 +172,13 @@
   }
  },
  "events": [
+  {
+   "at": 1792609539651,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Viktor erschaffen!",
+   "m": "b-2Zuk7bzMqENdIW"
+  },
   {
    "at": 1792513048798,
    "nickname": "BTC",
@@ -514,13 +521,6 @@
    "kind": "fusion",
    "text": "hat per Fusion einen epischen Viktor erschaffen!",
    "m": "6jL-ugKOA8E8Pvi6"
-  },
-  {
-   "at": 1791660573455,
-   "nickname": "BTC",
-   "kind": "fusion",
-   "text": "hat per Fusion einen epischen Christian erschaffen!",
-   "m": "vrWg8qFsRT0PkZU4"
   }
  ]
 }
