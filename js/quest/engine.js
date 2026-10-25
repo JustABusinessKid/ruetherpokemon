@@ -109,6 +109,7 @@ const FAIL = {
   ability: 'Das kann der nicht.', extract: 'Abheben geht erst, wenn das Ziel erfüllt ist und alle auf der Plattform stehen.',
   noPair: 'Zum Tratschen braucht es zwei.', charges: 'Für heute ist Feierabend aufgebraucht.', quits: 'Der kündigt nicht.', far: 'Zu weit weg.',
   noDoze: 'Keine Wache in der Nähe, die ein Nickerchen braucht.', noRumor: 'Keine Wache in der Nähe, die das Gerücht hört.', noWay: 'Da kommt die Wache nicht hin.',
+  notYours: 'Das ist nicht dein Rüther.', // v11 Koop: Befehl an die Einheit des Partners
 };
 const NO_TARGET = { family: 'noEnemy', mittag: 'noDoze', crash: 'noRumor' }; // self-Fähigkeiten ohne Gegner im Umkreis
 const END_TEXT = { allDown: 'Alle liegen flach. Die Haunebu fliegt ohne euch.', soloDown: 'liegt flach. Die Haunebu fliegt ohne dich.', time: 'Die Zeit ist um.', late: 'Die Zeit ist um. Ziel erfüllt, aber die Haunebu ist ohne euch abgehoben.', abort: 'Abgebrochen. Die Haunebu sammelt euch ein.', caught: 'Erwischt! „Das wird teuer!“' };
@@ -179,7 +180,8 @@ function resolveSetup(m, setup, variant, rng) {
 // mission: Objekt oder id; setup: { layoutId, variantId, mirror, seed } (leer = pickSetup per rng);
 // variant: nur Kompatibilität (id/Objekt); team: Kampfwerte (makeFighter), 1–3; bei mission.solo nur dieser Rüther.
 // team[i].loadout (loadoutFor aus progress.js): [{id, level}, {id, level}, {id, level}|null]; fehlt es, gelten die 2 festen auf Stufe 1.
-export function createQuest({ mission, setup, variant, team, rng = Math.random }) {
+// v11 Koop: maxUnits (Koop 4, alle Karten haben 9 Plattform-Felder); team[i].owner 'host'|'guest' wird unit.owner (sonst null).
+export function createQuest({ mission, setup, variant, team, rng = Math.random, maxUnits = 3 }) {
   const m = typeof mission === 'string' ? MISSION_BY_ID[mission] : mission;
   if (!m) throw new Error('Unbekannte Mission');
   if (!team?.length) throw new Error('Kein Team');
@@ -213,10 +215,11 @@ export function createQuest({ mission, setup, variant, team, rng = Math.random }
   // Start auf der Plattform, von der Mitte aus
   const cx = st.pads.reduce((s, p) => s + p.x, 0) / st.pads.length, cy = st.pads.reduce((s, p) => s + p.y, 0) / st.pads.length;
   st.spots = [...st.pads].sort((a, b) => Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy));
-  const squad = m.solo ? [team.find(f => f.id === m.solo) || team[0]] : team.slice(0, 3);
+  const squad = m.solo ? [team.find(f => f.id === m.solo) || team[0]] : team.slice(0, maxUnits);
   squad.forEach((f, i) => {
     const p = st.spots[i % st.spots.length], seen = new Set();
-    const abilities = (f.loadout || (FIXED[f.id] || []).map(id => ({ id, level: 1 })))
+    // Loadout kann im Koop vom Partner kommen: nur Listen gelten, der Filter prüft Fähigkeit, Rüther und Stufe
+    const abilities = (Array.isArray(f.loadout) ? f.loadout : (FIXED[f.id] || []).map(id => ({ id, level: 1 })))
       .filter(a => a && ABILITIES[a.id]?.unit === f.id && !seen.has(a.id) && seen.add(a.id)).map(a => ({ id: a.id, level: lvl(a.level) }));
     const charges = {};
     for (const a of abilities) { const c = params(a.id, a.level).charges; if (c != null) charges[a.id] = c; }
@@ -225,6 +228,7 @@ export function createQuest({ mission, setup, variant, team, rng = Math.random }
       x: p.x + 0.5, y: p.y + 0.5, dir: 0, state: 'idle', path: [], goal: { x: p.x, y: p.y }, intent: null, busy: null,
       carry: 0, item: false, cd: {}, down: false, swingAt: 0,
       abilities, charges, disguiseUntil: 0, disguiseK: 1, vpSend: null, quickSteal: false,
+      owner: f.owner === 'host' || f.owner === 'guest' ? f.owner : null,
     });
   });
   const up = st.units.reduce((s, u) => s + u.abilities.reduce((t, a) => t + a.level - 1, 0), 0); // Stufen über 1 im Team
@@ -277,6 +281,66 @@ export function questSummary(st) {
     score: Math.max(0, o.done - leftBehind), objective: { done: o.done, total: o.total, min: o.min }, timeMs: st.time, alarmFree,
     delivered: st.delivered, leftBehind, kieser: st.kieser, fine: st.fine,
   };
+}
+
+// ---------- v11 Koop: Schnappschuss (Host → Gast) ----------
+// Alles außer dem Statischen (gleich aus createQuest mit gleichen Argumenten). Rasterflächen dünn als [i, bis, i, bis, …], nur aktive.
+// ponytail: immer volle Schnappschüsse (ca. 6–8 KB); Deltas erst, wenn es über echtes Bluetooth ruckelt.
+const STATIC = new Set(['tiles', 'paths', 'rng', 'mission', 'variant', 'layout', 'theme', 'w', 'h', 'gate', 'pads', 'spots', 'setup']);
+const GRIDS = new Set(['gas', 'smoke', 'wall', 'fwOpaque']);
+const KEEP = new Set(['units', 'enemies', 'objs', 'doors']); // Objekt-Identität bleibt (die View hängt Interpolation per WeakMap daran)
+// JSON-fest: Unendlich → ±MAX_VALUE (vergleicht sich gleich), undefined/NaN → null, Kommazahlen auf 3 Stellen, -0 → 0
+function pack(v) {
+  if (typeof v === 'number') return Number.isFinite(v) ? (Number.isInteger(v) ? v : Math.round(v * 1000) / 1000) || 0 : v > 0 ? Number.MAX_VALUE : v < 0 ? -Number.MAX_VALUE : null;
+  if (v === undefined) return null;
+  if (!v || typeof v !== 'object') return v;
+  if (Array.isArray(v)) return v.map(pack);
+  const o = {};
+  for (const k in v) o[k] = pack(v[k]);
+  return o;
+}
+// Events für das Netz (dieselbe Regel wie der Schnappschuss)
+export const packEvents = ev => pack(ev);
+
+export function questSnapshot(st) {
+  const s = {};
+  for (const k in st) {
+    if (STATIC.has(k)) continue;
+    const v = st[k];
+    if (GRIDS.has(k)) { const a = []; for (let i = 0; i < v.length; i++) if (v[i] > st.time) a.push(i, pack(v[i])); s[k] = a; } else s[k] = pack(v);
+  }
+  return s;
+}
+
+// Eingehende Daten: nur vorhandene eigene Schlüssel, keine __proto__-Zuweisung, Rasterindizes geprüft
+const assign = (o, x, skip) => { for (const k of Object.keys(x)) if (k !== '__proto__' && !skip?.has(k)) o[k] = x[k]; return o; };
+const isObj = x => !!x && typeof x === 'object' && !Array.isArray(x);
+// Wer eine Einheit ist, setzt createQuest auf beiden Geräten mit gleichen Argumenten; der Schnappschuss ändert das nie
+// (Spec §0: id, Seltenheit usw. landen beim Gast in Bildpfaden und Klassen, sie kommen nicht vom Host)
+const UNIT_ID = new Set(['i', 'id', 'name', 'rarity', 'level', 'owner', 'abilities']);
+export function applyQuestSnapshot(st, snap) {
+  if (!isObj(snap)) return;
+  for (const k of Object.keys(snap)) {
+    if (STATIC.has(k) || !Object.hasOwn(st, k)) continue;
+    const v = snap[k];
+    if (GRIDS.has(k)) {
+      const a = st[k];
+      a.fill(0);
+      if (Array.isArray(v)) for (let j = 0; j + 1 < v.length; j += 2) { const i = v[j]; if (Number.isInteger(i) && i >= 0 && i < a.length) a[i] = +v[j + 1] || 0; }
+    } else if (KEEP.has(k)) {
+      if (!Array.isArray(v)) continue;
+      const arr = st[k];
+      if (k === 'units') { v.forEach((x, i) => { if (isObj(arr[i]) && isObj(x)) assign(arr[i], x, UNIT_ID); }); continue; } // Anzahl fest
+      v.forEach((x, i) => { if (isObj(arr[i]) && isObj(x)) assign(arr[i], x); else arr[i] = x; }); // neue Verstärkungen hängen sich an
+      arr.length = v.length;
+    } else if (k === 'effects') {
+      if (!Array.isArray(v)) continue;
+      const old = new Map(st.effects.map(f => [f.id, f]));
+      st.effects = v.filter(isObj).map(f => (old.has(f.id) ? assign(old.get(f.id), f) : f));
+    } else st[k] = v;
+  }
+  // Aufgebrochene Türen: die Kachel ist statisch, folgt aber den Türen (Sicht, Wege, Zeichnen)
+  for (const d of st.doors) if (isObj(d) && !d.locked && tileAt(st, d.x, d.y) === 'L') st.tiles[Math.floor(d.y) * st.w + Math.floor(d.x)] = 'D';
 }
 
 // Kegelmaße; liefert ein geteiltes Objekt (Sichtprüfung je Gegner × Rüther × Schritt ohne Allokation), sofort auslesen
@@ -336,7 +400,9 @@ export function tick(st, dt, cmds = []) {
   if (st.over) return ev;
   for (const c of cmds) {
     if (st.paused && c.type !== 'resume' && c.type !== 'abort') continue;
+    const n = ev.length;
     command(st, c, ev);
+    if (c.by) for (let k = n; k < ev.length; k++) if (ev[k].type === 'fail') ev[k].by = c.by; // Koop: Meldung nur beim Absender
     if (st.over) return ev;
   }
   if (st.paused || !(dt > 0)) return ev; // taktische Pause: nur Befehle
@@ -419,6 +485,8 @@ function command(st, c, ev) {
   if (c.type === 'extract') return canExtract(st) ? end(st, 'success', 'extract', ev) : fail(ev, null, 'extract', 'extract');
   const u = st.units[c.unit];
   if (!u) return;
+  // v11 Koop: c.by ('host'|'guest') darf nur eigene Einheiten steuern; ohne by oder owner wie bisher. Wiederbeleben fremder geht (Ziel, nicht Täter)
+  if (c.by && u.owner && u.owner !== c.by) return fail(ev, u, c.type, 'notYours');
   if (u.down) return fail(ev, u, c.type, 'down');
   if (c.type === 'stop') { cancelBusy(u, 'befehl', ev); u.path = []; u.intent = null; u.goal = null; return; }
   // Fähigkeiten: c.ability, c.target, dazu je Zieltyp c.target2 {x,y}, c.dir 'h'|'v', c.face (Index des Teammitglieds)

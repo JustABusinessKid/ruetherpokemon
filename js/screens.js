@@ -52,7 +52,7 @@ export const distText = m => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).to
 const emptyState = (icon, text, sub = '') =>
   `<div class="empty">${ico(icon, 'ico-xl empty-ico')}<p>${esc(text)}</p>${sub ? `<p class="sub">${esc(sub)}</p>` : ''}</div>`;
 // Versionsanzeige im Profil; bei jedem Release mitziehen
-export const VERSION = 'v10';
+export const VERSION = 'v11';
 // Jeder Knopf-Tipp baut die Liste neu auf: ein schneller zweiter Tipp träfe das nachgerückte Exemplar (falsches verkauft oder
 // gefüttert, zwei Super-Münzen gekauft). Darum schluckt node 300 ms nach einem Knopf-Tipp alle weiteren Klicks.
 function tapGuard(node, ms = 300) {
@@ -570,12 +570,32 @@ export function createQuestTeamScreen({ el, onStart, onEquip, onBack }) {
 // ---------- v8 §5.1: Ergebnis der Haunebu-Quest ----------
 // show({ mission, setup, summary (onEnd der Quest, mit text der Engine), reward (questResult), team (Exemplare) }); onDone() = Heimflug
 // v9: Karte und Variante aus setup, Kieser-Trainings (camping) und Strafe (Ranger hat erwischt: reward.fine)
+// v11 (Spec Mehrspieler §4/§5): together = { mode: 'coop'|'race', me, partner } ({ name, avatar }) zeigt „Koop mit <Name>“ bzw. das
+// Rennen mit beiden echten Gesichtern; setRace(r) zieht den Rennstand nach (r = { rival, mine, his, done, winner, lost, bonus }).
 export function createQuestResultScreen({ el, onDone }) {
   el.innerHTML = '<div class="qr-body"></div>';
   const body = el.querySelector('.qr-body');
+  let tg = null;
   body.addEventListener('click', e => { if (e.target.closest('.qr-done')) onDone?.(); });
+  const player = (p, line) => `<div class="qr-p"><div class="frame r-normal"><img src="${spriteOf(p?.avatar)}" alt=""></div><b>${esc(p?.name || '')}</b>${line == null ? '' : `<span class="qr-p-n">${line}</span>`}</div>`;
+  // Rennen: warten (Live-Stand des Partners), Sieger mit beiden Scores, oder ohne Wertung
+  function setRace(r) {
+    const box = body.querySelector('.qr-race');
+    if (!box || !tg || !r) return;
+    const them = tg.partner, rv = r.rival || {};
+    const live = rv.lost ? 'Verbindung weg' : rv.over ? (rv.result === 'success' ? 'fertig' : 'gescheitert') : `${rv.done | 0}/${rv.total | 0}`;
+    let head, mine = r.mine ? String(r.mine.score) : '…', his = r.his ? String(r.his.score) : live;
+    if (r.done && !r.his) head = 'Rennen ohne Wertung (Verbindung weg).';
+    else if (r.done) head = r.winner === 'draw' ? 'Unentschieden!' : `${esc((r.winner === 'me' ? tg.me : them).name)} hat das Rennen gewonnen!`;
+    else head = `Warte auf ${esc(them.name)} …`;
+    box.classList.toggle('won', r.done && r.winner === 'me');
+    box.innerHTML = `<p class="qr-race-head">${head}</p><div class="qr-race-row">${player(tg.me, mine)}<span class="qr-vs">VS</span>${player(them, his)}</div>`
+      + (r.done && r.winner === 'me' && r.bonus ? `<div class="qr-gain"><span class="big">+${fmt(r.bonus.sats)}${ico('coin', 'ico-in')}</span><span class="big xp">+${fmt(r.bonus.xp)} XP</span></div>` : '');
+  }
   return {
-    show({ mission, setup, summary, reward, team }) {
+    setRace,
+    show({ mission, setup, summary, reward, team, together = null }) {
+      tg = together;
       const ok = summary.result === 'success', o = summary.objective || { done: 0, total: 0 };
       const layout = mission.layouts?.find(l => l.id === setup?.layoutId), variant = layout?.variants.find(v => v.id === setup?.variantId);
       const r = QUEST_SATS[mission.id] || {}, kieser = summary.kieser || 0, fine = reward?.fine || 0, caught = summary.reason === 'caught';
@@ -584,9 +604,11 @@ export function createQuestResultScreen({ el, onDone }) {
       el.classList.toggle('won', ok);
       const clean = summary.alarmFree ? `nie ausgelöst${ok && QUEST_SATS[mission.id]?.clean ? ` · +${fmt(QUEST_SATS[mission.id].clean)} Bonus` : ''}` : 'ausgelöst';
       body.innerHTML = `
-        <div class="qr-faces">${team.map((inst, i) => `<div class="frame r-${inst.rarity}" style="--d:${i * 120}ms"><img src="${spriteOf(inst.id)}" alt="${esc(RUETHER_BY_ID[inst.id]?.name || '')}"><span class="shine"></span></div>`).join('')}</div>
+        <div class="qr-faces">${team.map((inst, i) => `<div class="frame r-${RARITY_BY_ID[inst.rarity] ? inst.rarity : 'normal'}" style="--d:${i * 120}ms"><img src="${spriteOf(inst.id)}" alt="${esc(RUETHER_BY_ID[inst.id]?.name || '')}"><span class="shine"></span></div>`).join('')}</div>
         <h2 class="qr-title">${ok ? 'Mission erfüllt!' : caught ? 'Erwischt!' : summary.result === 'abort' ? 'Abgebrochen' : 'Mission gescheitert'}</h2>
         <p class="qr-mission">${esc(mission.name)}${layout ? ` · ${esc(layout.name)}` : ''}${variant ? ` · ${esc(variant.name)}` : ''}${setup?.mirror ? ' · gespiegelt' : ''}</p>
+        ${tg?.mode === 'coop' ? `<div class="qr-together">${player(tg.me)}<span class="qr-vs">Koop mit ${esc(tg.partner.name)}</span>${player(tg.partner)}</div>` : ''}
+        ${tg?.mode === 'race' ? '<div class="qr-race panel"></div>' : ''}
         <div class="qr-card panel">
           <div class="qr-row"><span>${esc(mission.objective.label)}</span><b>${o.done}/${o.total}</b></div>
           <div class="qr-row"><span>Zeit</span><b>${clock(summary.timeMs || 0)}</b></div>
@@ -598,7 +620,8 @@ export function createQuestResultScreen({ el, onDone }) {
           <div class="qr-gain"><span class="big">+${fmt(reward?.sats || 0)}${ico('coin', 'ico-in')}</span>${fine ? `<span class="big fine">−${fmt(fine)}${ico('coin', 'ico-in')}</span>` : ''}<span class="big xp">+${fmt(reward?.xp || 0)} XP</span></div>
         </div>
         <p class="qr-text">${esc(summary.text || (ok ? mission.texts.success : mission.texts.fail))}</p>
-        <button class="qr-done primary">Rückflug</button>`;
+        <button class="qr-done primary">${tg ? 'Zur Lobby' : 'Rückflug'}</button>`;
+      if (tg?.race) setRace(tg.race);
     },
   };
 }
@@ -648,12 +671,13 @@ export function createLeaderboardScreen({ el }) {
 }
 
 // ---------- Profil ----------
-export function createProfileScreen({ el, onRename, onAvatar, onSettings, onShare, onExport, onImport, onReset, onShop }) {
+export function createProfileScreen({ el, onRename, onAvatar, onSettings, onShare, onExport, onImport, onReset, onShop, onTogether }) {
   const $ = s => el.querySelector(s);
   const pick = $('.profile-avatar-pick');
   let save = null;
   $('.version').textContent = `Rüther GO ${VERSION}`;
   $('.go-shop').addEventListener('click', () => onShop?.());
+  $('.go-together').addEventListener('click', () => onTogether?.()); // v11: Lobby „Zusammen spielen“
   $('.share').addEventListener('click', () => onShare?.());
   $('.export').addEventListener('click', () => onExport?.());
   $('.edit-name').addEventListener('click', async () => {

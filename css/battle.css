@@ -4,8 +4,8 @@
    Bewegung in ganzen Pixeln bzw. mit steps(); keine weichen Schatten, keine Verläufe außer Dither und Segmenten.
    Einmal-Animationen nutzen translate/rotate/scale einzeln, damit sie sich nicht gegenseitig überschreiben.
    Ebenen: .bg 0 · Boss 1 · .rage::after/.enemy-helpers 2 · .fx 3 · .combo/.stage-hint/.helpers (sichtbar)/.enemy-helpers.arrive 4
-   · .flash 5 (Wildkampf und solange Helfer bzw. Reiter auf der Bühne sind 0) · .switch 6 · .enemy-say 7 · .intro 8 · .quit 9 · .overlay 10. In .fx: Dimmer 4 · Requisit 5
-   · Sheet/₿-Regen 6 · echtes Gesicht des Wilden (erstes Kind), Requisit mit echtem Gesicht/.rush 7 · Text 8 (WUT! 9, im Wildkampf 6)
+   · Warnrand .flash 5 (in .stage) · .switch 6 · .enemy-say 7 · .intro 8 · .quit 9 · .overlay 10. In .fx: Dimmer 4 · Requisit 5
+   · Sheet/₿-Regen/Ausweich-Knopf 6 · echtes Gesicht des Wilden (erstes Kind), Requisit mit echtem Gesicht/.rush 7 · Text 8 (WUT! 9, im Wildkampf 6)
    · Banner-Brett und Sprechblasen-Requisit 9 · mega 10. Echte Gesichter (.helpers, .rush, Reiter, der Wilde) liegen über Dimmer,
    Requisiten und Einschlägen, Texte weichen ihnen aus (--fx-hit-*, --fx-info-me-y, TXT.beside, INFO_SIDE in battle-ui.js). */
 
@@ -26,16 +26,49 @@
 #screen-battle[data-arena="haunebu"] { --arena-bg: url(../art/bg-mondbasis.png); } /* Beschwörung: Mondbasis-Hangar */
 #screen-battle[data-arena="neuschwabenland"] { --arena-bg: url(../art/bg-neuschwabenland.png); } /* v8: Eis-Bunker, Tachionenbitcoin */
 
-/* Warn-Blinken vor Boss-Angriffen: gelb = schnell, rot = Lade-Attacke. Im Wildkampf unter der Bühne (blinkt nur um sie herum),
-   sonst tönte es das echte Gesicht des Gegners rot bzw. gelb */
-#screen-battle .flash { position: absolute; inset: 0; z-index: 5; pointer-events: none; opacity: 0; }
-#screen-battle[data-arena="wild"] .flash { z-index: 0; }
-/* … ebenso, solange echte Gesichter auf der Bühne über .fx liegen (Christian und Micha beim Familientreffen, .helpers z 4) oder
-   in einem Requisit fliegen (Reiter in .fx z 3: Hildegards Handtasche, Viktors Gaswolke, mein Gesicht im Strahl) */
-#screen-battle:has(.helpers:not(.hidden), .fx-prop > img.rider) .flash { z-index: 0; }
-#screen-battle .flash.yellow { background: var(--gold); animation: bt-flash .3s steps(1) infinite; }
-#screen-battle .flash.red { background: var(--red); animation: bt-flash .2s steps(1) infinite; }
-@keyframes bt-flash { 0% { opacity: .1; } 50% { opacity: .35; } }
+/* Warnung vor Boss-Angriffen (v11): dicker Pixel-Rand innen an der Bühne (battle-ui.js hängt .flash in .stage), über allen
+   Effekten und dem Banner, blinkt gelb (schnell) bzw. rot (Lade-Attacke) gegen Papier, bis ausgewichen ist. Nur Rand, keine Fläche:
+   tönt kein echtes Gesicht, auch nicht im Wildkampf oder bei Reitern (früher lag die Tönung dort unter der Bühne, also unsichtbar) */
+#screen-battle .flash { position: absolute; inset: 0; z-index: 5; pointer-events: none; border: 6px solid transparent; }
+#screen-battle .flash:is(.yellow, .red, .locked) { box-shadow: inset 0 0 0 2px var(--ink); } /* Ink-Kante: auch auf heller Kulisse (Wildkampf) klar */
+#screen-battle .flash.yellow { border-color: var(--gold); animation: bt-flash .3s steps(1) infinite; }
+#screen-battle .flash.red { border-color: var(--red); animation: bt-flash .2s steps(1) infinite; }
+@keyframes bt-flash { 50% { border-color: var(--paper); } }
+#screen-battle .flash.locked { border-color: var(--ink-soft); } /* Angriff läuft, aber gesperrt (Knopf zeigt den Grund): steht grau, blinkt nicht */
+
+/* Ausweich-Knopf (v11) unten rechts auf der Bühne, für alle, die nicht wischen wollen, und die Uhr dazu. Liegt in .fx (z 6):
+   über Dimmer, Requisiten und Banner-Dimmer, aber unter allen echten Gesichtern (der Wilde, Reiter, .rush 7, Helfer) und Texten.
+   Ruhig Papier „Ausweichen"; bei einer Warnung gelb bzw. rot „AUSWEICHEN!" mit Zeitbalken bis zum Einschlag, die türkise Kerbe
+   am linken Ende = letzte 300 ms (Perfekt), „JETZT!" (türkis) kommt eine Reaktionszeit davor. Danach Rückmeldung (grün/gold),
+   in der Sperre nach einem Fehlversuch Papier-2 mit dem kurzen Grund, bei Heilung/Beschwörung „nicht abwehrbar" ohne Balken.
+   Ohne Laufweite: „AUSGEWICHEN!" braucht sonst 1 px mehr als die 98 px Innenbreite */
+#screen-battle .dodge-btn {
+  position: absolute; right: 6px; bottom: 6px; z-index: 6; pointer-events: auto;
+  display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 4px;
+  width: 116px; min-height: 44px; padding: 4px 6px;
+  font: 800 12px/1 var(--font-body); text-transform: uppercase; color: var(--ink);
+  background: var(--paper); border: 3px solid var(--ink); box-shadow: 3px 3px 0 var(--ink);
+  touch-action: none; -webkit-user-select: none; user-select: none;
+}
+#screen-battle .dodge-btn .dl { display: block; text-align: center; white-space: nowrap; overflow: hidden; }
+#screen-battle .dodge-btn .dbar { position: relative; display: block; height: 8px; border: 2px solid var(--ink); background: var(--paper-2); visibility: hidden; }
+#screen-battle .dodge-btn .dbar i { display: block; height: 100%; width: 0; background: var(--ink); }
+#screen-battle .dodge-btn .dbar::after { content: ''; position: absolute; top: -2px; bottom: -2px; left: var(--zone, 30%); width: 3px; background: var(--teal); }
+#screen-battle .dodge-btn:is(.on, .done) .dbar { visibility: visible; }
+#screen-battle .dodge-btn.on { font: 700 14px/1 var(--font-pixel); background: var(--gold); animation: bt-dodge-on .3s steps(1) infinite; }
+#screen-battle .dodge-btn.on.charged { color: var(--paper); background: var(--red); animation-duration: .2s; }
+#screen-battle .dodge-btn.on.charged .dbar i { background: var(--paper); }
+#screen-battle .dodge-btn.on.now { color: var(--ink); background: var(--teal); animation: none; }
+#screen-battle .dodge-btn.on.now .dbar i { background: var(--ink); }
+@keyframes bt-dodge-on { 50% { border-color: var(--paper); } }
+#screen-battle .dodge-btn.done { color: var(--paper); background: var(--green); }
+#screen-battle .dodge-btn.done .dbar i { background: var(--paper-2); }
+#screen-battle .dodge-btn.done.perfect { color: var(--ink); background: var(--gold); }
+#screen-battle .dodge-btn.done.perfect .dbar i { background: var(--ink); }
+#screen-battle .dodge-btn.locked { color: var(--red); background: var(--paper-2); box-shadow: none; }
+#screen-battle .dodge-btn.immune { font-size: 11px; text-transform: none; color: var(--ink-soft); background: var(--paper-2); box-shadow: none; }
+#screen-battle .dodge-btn.shake-x { animation: bt-shake-x .4s steps(1); }
+#screen-battle .fighter.me .mining.glow { animation: bt-glow .6s steps(1); } /* Perfekt: + Mining */
 
 /* HUD-Panels: Papier im Holzrahmen (wie .panel.thin aus theme.css) */
 #screen-battle .fighter {
@@ -95,8 +128,9 @@
   position: absolute; inset: 0; z-index: 0; pointer-events: none; image-rendering: pixelated;
   background: repeating-conic-gradient(rgba(27, 43, 75, .4) 0 25%, transparent 0 50%) 0 0 / 4px 4px, var(--arena-bg, none) center / cover no-repeat, var(--night);
 }
-#screen-battle .stage-hint { /* über den Effekten (Rednerpult, Krupp-Blase), sonst wird er alle 2,3 s verdeckt */
-  position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; margin: 0; padding: 3px 6px; pointer-events: none;
+#screen-battle .stage-hint { /* über den Effekten (Rednerpult, Krupp-Blase), sonst wird er alle 2,3 s verdeckt; rechts steht der Ausweich-Knopf */
+  position: absolute; left: 6px; right: 128px; bottom: 6px; z-index: 4; margin: 0; padding: 3px 6px; pointer-events: none; /* innerhalb des Warnrands, links vom Knopf */
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   text-align: center; font: 800 11px/1.2 var(--font-body); color: var(--paper); background: rgba(30, 42, 34, .8);
 }
 /* … aber weg, solange ein Requisit mit echtem Gesicht fliegt: Reiter steigen vom Bühnenboden auf (Rakete, Hildegards Handtasche),
@@ -663,5 +697,5 @@
   #screen-battle .stage.blow::before { display: none; }
   #screen-battle .enemy-sprite.hide { opacity: 0; } /* Bunker: einfach kurz weg */
   #screen-battle .fx .rush img { animation: none !important; left: calc(var(--fx-me-x) + 6% + var(--i, 0) * 60px); }
-  #screen-battle .flash.yellow, #screen-battle .flash.red { animation: none; opacity: .25; }
+  #screen-battle .flash.yellow, #screen-battle .flash.red, #screen-battle .dodge-btn.on { animation: none; } /* Rand und Knopf stehen statisch */
 }

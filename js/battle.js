@@ -32,8 +32,14 @@ export function createBattle({ team, enemy, rng = Math.random, duration = enemy.
   return {
     team: structuredClone(team), active: 0, enemy: structuredClone(enemy),
     time: 0, duration, summons: [], enemySummons: [], tapCooldown: 0, over: false, won: null, reason: null, rng,
+    // Abwehr: dodgeAt = gemerkter Wisch ohne Warnung (Puffer), dodgeLockUntil = Sperre nach Fehlversuch (dodgeLockQuiet: seitdem
+    // nicht mehr gewischt), lastAttackAt/lastWarning = letzter Einschlag und seine Warnung (abwehrbar? ausgewichen?)
+    dodgeAt: null, dodgeLockUntil: 0, dodgeLockQuiet: false, dodgeMisses: 0, lastAttackAt: -Infinity, lastWarning: null,
   };
 }
+
+// Abwehrbar ist, was trifft: Schaden, Gift oder Betäubung. Reine Heilung/Beschwörung wirkt immer („nicht abwehrbar").
+export const dodgeable = atk => atk.damage > 0 || !!atk.poison || !!atk.stun;
 
 const alive = f => f.btc > 0;
 const stunned = (f, t) => f.status.stunUntil > t;
@@ -70,9 +76,10 @@ function resolveEnemyAttack(s, me, ev) {
   const e = s.enemy, w = e.warning, atk = w.attack;
   let factor = 1;
   if (e.status.weakenedUntil > s.time) factor *= CONST.WEAKEN_FACTOR;
-  if (w.dodged) factor *= CONST.DODGE_FACTOR;
+  if (w.dodged) factor *= w.perfect ? 0 : CONST.DODGE_FACTOR;
   const dealt = atk.damage > 0 ? hurt(me, atk.damage * factor) : 0;
-  ev.push({ type: 'enemyAttack', kind: w.kind, attack: atk, damage: dealt, dodged: w.dodged, fighter: me }); // fighter: KO-Wechsel im selben Schritt steht schon in s.active
+  s.lastAttackAt = s.time; s.lastWarning = w;
+  ev.push({ type: 'enemyAttack', kind: w.kind, attack: atk, damage: dealt, dodged: w.dodged, perfect: !!w.perfect, fighter: me }); // fighter: KO-Wechsel im selben Schritt steht schon in s.active
   if (!w.dodged) {
     if (atk.poison) { poison(me, atk.poison, s.time); ev.push({ type: 'poisoned', target: 'me', ms: atk.poison.ms }); }
     if (atk.stun) { me.status.stunUntil = s.time + atk.stun; ev.push({ type: 'stun', target: 'me', ms: atk.stun }); }
@@ -111,12 +118,62 @@ function enemyStep(s, me, ev) {
     const kind = chargedFirst ? 'charged' : 'fast';
     const attack = chargedFirst ? e.charged[e.chargedIndex] : e.fast;
     const dueAt = chargedFirst ? e.nextChargedAt : e.nextFastAt;
-    if (s.time >= dueAt - attack.warn) {
-      e.warning = { kind, attack, firesAt: Math.max(dueAt, s.time + attack.warn), dodged: false };
-      ev.push({ type: 'warn', kind, attack, ms: e.warning.firesAt - s.time });
+    // Mindestabstand zum letzten Einschlag: sonst ginge eine Warnung nahtlos in die nächste über (schnell → Lade 17 ms)
+    if (s.time >= dueAt - attack.warn && s.time >= s.lastAttackAt + CONST.ATTACK_GAP) {
+      const w = e.warning = { kind, attack, startAt: s.time, firesAt: Math.max(dueAt, s.time + attack.warn), dodged: false, perfect: false, dodgeable: dodgeable(attack) };
+      spareLock(s);
+      ev.push({ type: 'warn', kind, attack, ms: w.firesAt - s.time, dodgeable: w.dodgeable });
+      if (w.dodgeable && s.dodgeAt != null && s.time - s.dodgeAt <= CONST.DODGE_BUFFER) dodgeWarning(s, w, me, ev, true); // gemerkter Wisch
     }
   }
   if (e.warning && s.time >= e.warning.firesAt) resolveEnemyAttack(s, me, ev);
+}
+
+// Ausweichen gelingt: im Puffer (buffered) normal, sonst „Perfekt!" in den letzten DODGE_PERFECT ms
+function dodgeWarning(s, w, me, ev, buffered = false) {
+  const ms = w.firesAt - s.time;
+  w.dodged = true;
+  w.perfect = !buffered && ms <= CONST.DODGE_PERFECT;
+  s.dodgeAt = null; s.dodgeMisses = 0;
+  if (w.perfect) me.energy = Math.min(CONST.MAX_ENERGY, me.energy + CONST.PERFECT_ENERGY);
+  ev.push({ type: 'dodge', kind: w.kind, perfect: w.perfect, ms });
+}
+
+// Ein einzelner Fehlversuch (keiner davor in Folge, seitdem nicht mehr gewischt) sperrt keine abwehrbare Warnung: weder die
+// Reaktion auf den nächsten Angriff noch den zweiten Versuch nach einem knapp zu frühen Wisch. Wer in der Sperre weiterwischt
+// oder im Takt wischt (Fehlversuche in Folge), bleibt gesperrt
+function spareLock(s) {
+  const w = s.enemy.warning;
+  if (w?.dodgeable && s.dodgeLockQuiet && s.dodgeMisses === 1 && s.time < s.dodgeLockUntil) s.dodgeLockUntil = s.time;
+}
+
+// Sperre nach Fehlversuchen: DODGE_LOCK je Fehlversuch in Folge (höchstens 3×). Ruhe (2 × DODGE_LOCK nach der Sperre) oder ein
+// gelungenes Ausweichen setzen die Folge zurück; so hilft auch Wischen im Takt (alle 0,7–1,5 s) nicht
+const lockMs = s => CONST.DODGE_LOCK * Math.min(3, Math.max(1, s.dodgeMisses));
+
+// Wisch (input.dodge): in der Sperre verlängert er sie; mit abwehrbarer Warnung zählt er sofort (ein zweiter verpufft);
+// sonst wird er DODGE_BUFFER ms gemerkt (dodgeStep)
+function tryDodge(s, me, ev) {
+  const w = s.enemy.warning;
+  if (s.time < s.dodgeLockUntil) { s.dodgeLockUntil = s.time + lockMs(s); s.dodgeLockQuiet = false; return; }
+  if (s.time >= s.dodgeLockUntil + 2 * CONST.DODGE_LOCK) s.dodgeMisses = 0;
+  if (w?.dodgeable) { if (!w.dodged) dodgeWarning(s, w, me, ev); return; }
+  s.dodgeAt ??= s.time;
+}
+
+// Gemerkter Wisch ohne passende Warnung: Fehlversuch „zu früh" bzw. „zu spät" (bis DODGE_LATE nach einem Einschlag),
+// „nicht abwehrbar" während oder kurz nach einer Heilung/Beschwörung; Sperre ab dem Wisch. Der erste Wisch kurz nach einem
+// ausgewichenen Einschlag (nervöser Doppelwisch) verpufft still: kein Fehlversuch, keine Sperre
+function dodgeStep(s, ev) {
+  if (s.dodgeAt == null || s.time - s.dodgeAt <= CONST.DODGE_BUFFER) return;
+  const w = s.enemy.warning, lw = s.lastWarning, late = s.dodgeAt - s.lastAttackAt <= CONST.DODGE_LATE, at = s.dodgeAt;
+  s.dodgeAt = null;
+  if (late && lw.dodged && !lw.spare) { lw.spare = true; return; }
+  const reason = (w && !w.dodgeable) || (late && !lw.dodgeable) ? 'immune' : late ? 'late' : 'early';
+  s.dodgeMisses++;
+  s.dodgeLockUntil = at + lockMs(s); s.dodgeLockQuiet = true;
+  spareLock(s);
+  ev.push({ type: 'dodgeMiss', reason, lockMs: Math.max(0, s.dodgeLockUntil - s.time) });
 }
 
 // Spielzeit bis zur Warnung vor der nächsten Lade-Attacke, mindestens (0, solange sie läuft). Die UI lässt einen
@@ -177,10 +234,7 @@ export function tick(s, dt, input = {}) {
     s.tapCooldown = CONST.FAST_COOLDOWN;
     ev.push({ type: 'fast', damage: d });
   }
-  if (input.dodge && s.enemy.warning && !s.enemy.warning.dodged) {
-    s.enemy.warning.dodged = true;
-    ev.push({ type: 'dodge' });
-  }
+  if (input.dodge) tryDodge(s, me, ev);
   if (input.special != null) {
     const atk = me.attacks[input.special];
     if (atk && !meStunned && me.energy >= atk.cost && !(atk.once && me.used[atk.name])) {
@@ -198,6 +252,7 @@ export function tick(s, dt, input = {}) {
     enemyStep(s, me, ev);
     s.enemySummons = helperStep(s, s.enemySummons, me, 'enemySummon', ev); // enemySummonStep
   }
+  dodgeStep(s, ev);
   poisonStep(s, me, 'me', ev, dt);
   poisonStep(s, s.enemy, 'enemy', ev, dt);
 

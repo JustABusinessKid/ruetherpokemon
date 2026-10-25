@@ -211,31 +211,33 @@ test('v8: Erfolge haunebu, tachionen, quest1, quest_all', () => {
 });
 
 // ---------- §2 Balance: Tachionenbitcoin mit der echten Engine ----------
-// Spielermodell: normal = 3 Tipps/s und 50 % der Warnungen ausgewichen, gut = 3,5 Tipps/s und 70 %.
-// Spezial-Attacke bei vollem Mining, Teamwechsel bei K.o. macht die Engine. Alle 10 Dreier-Teams aus den
-// 5 Rüthern, je SEEDS Kämpfe mit festen Seeds (deterministisch).
+// Spielermodell (v11, menschliches Timing wie test/dodge.test.mjs): normal = 3 Tipps/s, wischt bei 50 % der abwehrbaren
+// Warnungen mit Reaktion 350–550 ms; gut = 3,5 Tipps/s, 70 %, Reaktion 250–450 ms. Der Wisch zählt 40–90 ms nach
+// Bewegungsbeginn (Schwelle), im nächsten 50-ms-Schritt. Vorher wich das Modell im nächsten Schritt aus (Reaktion 0 ms),
+// das gab es im Spiel nicht. Spezial-Attacke bei vollem Mining, Teamwechsel bei K.o. macht die Engine. Alle 10 Dreier-Teams
+// aus den 5 Rüthern, je SEEDS Kämpfe mit festen Seeds (deterministisch).
 const SEEDS = 60;
 const TEAMS = [];
 for (let a = 0; a < 5; a++) for (let b = a + 1; b < 5; b++) for (let c = b + 1; c < 5; c++) TEAMS.push([a, b, c].map(i => RUETHERS[i].id));
-const NORMAL = { taps: 3, dodge: 0.5, name: 'normal' }, GOOD = { taps: 3.5, dodge: 0.7, name: 'gut' };
+const NORMAL = { taps: 3, dodge: 0.5, react: [350, 550], name: 'normal' }, GOOD = { taps: 3.5, dodge: 0.7, react: [250, 450], name: 'gut' };
 function bestSpecial(me) {
   let best;
   me.attacks.forEach((a, i) => { if (me.energy >= a.cost && !(a.once && me.used[a.name]) && (best == null || a.cost > me.attacks[best].cost)) best = i; });
   return best;
 }
-function simBattle(def, arenaLevel, ids, inst, { taps, dodge }, seed) {
+function simBattle(def, arenaLevel, ids, inst, { taps, dodge, react: [r0, r1] }, seed) {
   const rng = seededRng(seed), tapMs = 1000 / taps;
   const s = createBattle({ team: ids.map(id => makeFighter(RUETHER_BY_ID[id], { uid: id, ...inst })), enemy: makeBoss(def, arenaLevel), rng });
-  let dodgeNext = false, nextTap = tapMs;
+  let dodgeAt = Infinity, nextTap = tapMs;
   while (!s.over) {
     const me = s.team[s.active], inp = {};
     if (s.time + 50 >= nextTap) inp.taps = 1;
-    if (dodgeNext) { inp.dodge = true; dodgeNext = false; }
+    if (s.time + 50 >= dodgeAt) { inp.dodge = true; dodgeAt = Infinity; }
     if (me.energy >= CONST.MAX_ENERGY) inp.special = bestSpecial(me);
     const ev = tick(s, 50, inp);
     // Takt halten; nach einer Betäubung neu ansetzen statt nachzuholen
     if (ev.some(e => e.type === 'fast')) nextTap = (s.time - nextTap < tapMs ? nextTap : s.time) + tapMs;
-    if (ev.some(e => e.type === 'warn')) dodgeNext = rng() < dodge;
+    if (ev.some(e => e.type === 'warn' && e.dodgeable) && rng() < dodge) dodgeAt = s.time + r0 + rng() * (r1 - r0) + 40 + rng() * 50;
   }
   return s.won;
 }
@@ -252,10 +254,11 @@ const checkRates = rows => {
     assert.ok(r >= min && r <= max, `Arena-Lv. ${lvl}, ${inst.rarity} Lv. ${inst.level}, ${play.name}: ${r} nicht in [${min}, ${max}]`);
   }
 };
-// Ergebnis mit SEEDS = 60 (Anteil gewonnener Kämpfe über alle 10 Teams):
-//   Lv1 selten12 gut 0,97 · normal 0,62 · Lv2 selten15 gut 0,90 · episch15 normal 0,80 · Lv3 episch16 gut 0,94
-//   Lv4 episch18 gut 0,77 · legendär18 normal 0,73 · Lv5 legendär20 gut 0,94 · normal 0,54
-//   Hürde: Lv1 normal8 normal 0,02 · Lv5 episch15 normal 0,05 · episch15 gut auf Lv1–5: 1,00 0,99 0,91 0,58 0,44
+// Ergebnis mit SEEDS = 60 (Anteil gewonnener Kämpfe über alle 10 Teams), v11 (Timing-Modell, Tachionen 1100 BTC,
+// Überlicht-Hash 30, Halving 140):
+//   Lv1 selten12 gut 0,98 · normal 0,60 · Lv2 selten15 gut 0,94 · episch15 normal 0,77 · Lv3 episch16 gut 0,95
+//   Lv4 episch18 gut 0,80 · legendär18 normal 0,65 · Lv5 legendär20 gut 0,95 · normal 0,50
+//   Hürde: Lv1 normal8 normal 0,12 · Lv5 episch15 normal 0,11 · episch15 gut auf Lv1–5: 1,00 0,99 0,94 0,73 0,49
 // checkRates: [Arena-Level, Team, Spiel, Siegquote mindestens, höchstens]
 
 test('Tachionen Balance: auf jedem Arena-Level fair spielbar', () => {

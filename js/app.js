@@ -20,7 +20,7 @@ import { playSummon, playBeam, playReturn } from './flight.js';
 import { makeWild } from './wild.js';
 import { reachText } from './format.js';
 import { createTicker } from './ticker.js';
-import { dayKey, ensureDailyQuests, trackQuest, claimQuest, claimableCount, applyStreak, checkAchievements, featuredRuether, isHappyHour } from './quests.js';
+import { dayKey, ensureDailyQuests, trackQuest, claimQuest, claimableCount, applyStreak, checkAchievements, featuredRuether, isHappyHour, seededRng } from './quests.js';
 import { spinReward, stopReady, useStop, fakeStops } from './stops.js';
 import { fetchStops } from './overpass.js';
 import { setScreen, toast, popup, onTab, setTabBadge, esc, ico } from './ui.js';
@@ -29,6 +29,10 @@ import { sfx, haptic, setHapticsEnabled } from './audio.js';
 import { createOnline, onlineConfig } from './online.js';
 import { MISSIONS, MISSION_BY_ID, pickSetup } from './quest/missions.js';
 import { ABILITIES, FIXED, POOLS } from './quest/abilities.js';
+import { createLobby } from './lobby.js';
+import { createDuelScreen } from './duel-ui.js';
+import { duelReward, duelFighters } from './duel.js';
+import { RACE } from './quest/race.js';
 
 const $ = s => document.querySelector(s);
 // Fehler beim Start: Hinweis im Splash und ein Ausweg, falls es am Spielstand liegt (sonst hängt jeder Start; eine Kopie bleibt)
@@ -92,6 +96,10 @@ function onBackKey() {
   if (current === 'screen-battle') {
     const done = el.querySelector('.overlay:not(.hidden) .done');
     return done ? done.click() : toast('Aufgeben: × oben rechts.');
+  }
+  if (current === 'screen-duel') { // v11: wie im Kampf, kein Popup über dem laufenden Duell
+    const done = el.querySelector('.d-overlay:not(.hidden) .d-done');
+    return done ? done.click() : toast('Aufgeben: × oben links.');
   }
   if (current === 'screen-stop') return show('screen-map');
   const btn = el.querySelector(current === 'screen-quest' ? '.q-quit' : current === 'screen-questresult' ? '.qr-done' : '.back');
@@ -193,7 +201,7 @@ function gainXp(n) {
     pendingLevelUps.push(lv);
     if (lv % 5 === 0 && lv <= 20) online.postEvent('level', `ist Trainer Lv. ${lv} geworden!`);
   }
-  if (current !== 'screen-catch' && current !== 'screen-battle') showLevelUps();
+  if (current !== 'screen-catch' && current !== 'screen-battle' && current !== 'screen-duel') showLevelUps();
 }
 function showLevelUps() {
   for (const lv of pendingLevelUps.splice(0)) {
@@ -527,6 +535,13 @@ const profile = createProfileScreen({
   },
   onReset() { storage.clear(); location.reload(); },
   onShop() { show('screen-shop'); },
+  onTogether() { // v11: braucht nur das Profil; nicht mitten im Haunebu-Flug oder in der Quest
+    if (!save.profile) return;
+    if (flying || questRun || $('.flight')) return toast('Erst landen.', { icon: 'haunebu' });
+    sfx.play('click');
+    lobby.open();
+    show('screen-lobby');
+  },
 });
 
 // ---------- Stop ----------
@@ -613,13 +628,15 @@ function bookArena(arena, uids, won) {
   return { ups, unlocked: !wasUnlocked && questsUnlocked(save) };
 }
 const arenaScreen = createArenaScreen({ el: $('#screen-arena'), bosses: BOSSES, onBack() { show('screen-map'); }, onFight: startBattle, onBeam: beamTo });
+// Statistik und Tagesquests aus Kampf und Duell (special, gelungenes dodge, combo); gespeichert wird mit dem Ergebnis
+function fightEvent(e) {
+  if (e.type === 'special') { save.stats.specials = (save.stats.specials || 0) + 1; trackQuest(save, 'special'); }
+  if (e.type === 'dodge') { save.stats.dodges = (save.stats.dodges || 0) + 1; trackQuest(save, 'dodge'); }
+  if (e.type === 'combo') { if (e.value > (save.stats.maxCombo || 0)) save.stats.maxCombo = e.value; if (e.value >= 8) trackQuest(save, 'combo8'); }
+}
 const battleScreen = createBattleScreen({
   el: $('#screen-battle'),
-  onEvent(e) {
-    if (e.type === 'special') { save.stats.specials = (save.stats.specials || 0) + 1; trackQuest(save, 'special'); }
-    if (e.type === 'dodge') { save.stats.dodges = (save.stats.dodges || 0) + 1; trackQuest(save, 'dodge'); }
-    if (e.type === 'combo') { if (e.value > (save.stats.maxCombo || 0)) save.stats.maxCombo = e.value; if (e.value >= 8) trackQuest(save, 'combo8'); }
-  },
+  onEvent: fightEvent,
   // Sofort beim Kampfende verbuchen und speichern, nicht erst mit „Weiter": Neuladen oder App-Kill davor verliert sonst Sieg und Fang
   onResult(res) {
     const f = fight;
@@ -793,7 +810,7 @@ async function returnHome() {
 }
 // Jede Sekunde (updateBanners): Knopf und Countdown-Chip nur im Fenster, Toast + Haptik bei 1:00 und am Ende (nicht während
 // einer Quest, die läuft weiter); Fenster zu → Rückflug, aber nicht mitten im Kampf, Fang, Stop, Siegesscreen, Team-Wahl oder Quest
-const BEAM_WAIT = ['screen-battle', 'screen-catch', 'screen-stop', 'screen-victory', 'screen-questteam', 'screen-quest', 'screen-questresult'];
+const BEAM_WAIT = ['screen-battle', 'screen-catch', 'screen-stop', 'screen-victory', 'screen-questteam', 'screen-quest', 'screen-questresult', 'screen-lobby', 'screen-duel'];
 let haunebuWasActive = haunebuActive(save, Date.now()), haunebuWarned = 0;
 function beamTick() {
   const now = Date.now(), active = haunebuActive(save, now), left = (save.haunebuUntil || 0) - now, chip = $('#beam-chip');
@@ -833,6 +850,11 @@ const questResultScreen = createQuestResultScreen({ el: $('#screen-questresult')
 let questScreen = null, questView = null;
 // Der Quest-Modus (js/quest/view.js) lädt erst beim ersten Abflug
 const loadQuestView = () => (questView ||= import('./quest/view.js').catch(e => { questView = null; throw e; }));
+// Ein Quest-Screen für Solo, Koop und Rennen; onProgress geht nur im Rennen an den Partner (lobby.progress prüft das)
+async function questScreenReady() {
+  const view = await loadQuestView();
+  return (questScreen ||= view.createQuestScreen({ el: $('#screen-quest'), onEnd: endQuest, onProgress: p => lobby.progress(p) }));
+}
 // v9 §3: Solo-Missionen nehmen das stärkste Exemplar dieses Rüthers
 const soloInst = id => save.box.filter(i => i.id === id).sort((a, b) => fighterStats(RUETHER_BY_ID[b.id], b).btc - fighterStats(RUETHER_BY_ID[a.id], a).btc)[0] || null;
 async function openQuest(id) {
@@ -856,9 +878,7 @@ async function launchQuest(id, uids, { setup = null, kieser = false } = {}) {
   if (!haunebuActive(save, Date.now())) { toast('Die Haunebu ist weg. Beschwöre sie neu.', { icon: 'haunebu' }); return show('screen-quests'); }
   if (!insts.length) return toast(mission.solo ? `Fang erst ${RUETHER_BY_ID[mission.solo].name}.` : 'Nimm mindestens einen Rüther mit.');
   flying = true; // sperrt schon beim Laden: Doppeltipp auf „Abflug" startet sonst zwei Flüge
-  let view;
-  try { view = await loadQuestView(); } catch (e) { flying = false; console.warn('Quest-Modus', e); return toast('Der Quest-Modus lädt nicht. Bitte Seite neu laden.'); }
-  questScreen ||= view.createQuestScreen({ el: $('#screen-quest'), onEnd: endQuest });
+  try { await questScreenReady(); } catch (e) { flying = false; console.warn('Quest-Modus', e); return toast('Der Quest-Modus lädt nicht. Bitte Seite neu laden.'); }
   const b = save.beam;
   questRun = { mission, setup: setup || pickSetup(mission, Math.random), insts, home: homePos || b?.from || (b ? null : pos), beam: b ? { arenaId: b.arenaId, from: b.from } : null, kieser };
   show('screen-map');
@@ -876,6 +896,7 @@ async function launchQuest(id, uids, { setup = null, kieser = false } = {}) {
 }
 // onEnd({ result, missionId, score, objective, timeMs, alarmFree, setup, kieser, fine, … }): verbuchen, Ergebnis-Screen
 function endQuest(summary) {
+  if (together) return endTogetherQuest(summary);
   const run = questRun;
   if (!run || run.ended) return;
   run.ended = true;
@@ -887,6 +908,7 @@ function endQuest(summary) {
   show('screen-questresult');
 }
 async function questHome() {
+  if (together) { together = null; show('screen-lobby'); lobby.back(); return showLevelUps(); } // v11: kein Flug, zurück in die Lobby
   const run = questRun;
   if (!run?.ended || flying) return;
   show('screen-map');
@@ -908,6 +930,75 @@ async function questHome() {
     : 'Die Haunebu hat euch nach Hause gebracht und fliegt zurück zu Hitler.', { icon: 'haunebu' });
 }
 
+// ---------- v11: Zusammen spielen (Spec Mehrspieler §2–§6) ----------
+// Lobby (js/lobby.js) → Duell (js/duel-ui.js), Koop-Quest oder Quest-Rennen (js/quest/view.js). Kein questRun, kein Flug.
+// together = { mode, role, link, mission, setup, seed, teams, names, partner, booked } solange ein Modus läuft (bis zurück in der Lobby).
+// Belohnungen werden sofort beim Entscheid verbucht und gespeichert (onResult bzw. onEnd), wie bei Arena und Quest.
+let together = null;
+const lobby = createLobby({
+  el: $('#screen-lobby'),
+  getSave: () => save,
+  persist,
+  onExit() { together = null; show('screen-profile'); },
+  onStart: startTogether,
+  onRace(r) { // Rennen: Gegner-Chip im Quest-Screen, Live-Stand auf dem Ergebnis-Screen
+    if (together?.mode !== 'race') return;
+    if (current === 'screen-quest' && !together.booked) questScreen?.setRival(r.rival);
+    if (current === 'screen-questresult' && !r.done) questResultScreen.setRace(r); // entschieden: die Endanzeige setzt bookRace (mit Bonus)
+  },
+  onRaceDone: bookRace,
+});
+const duelScreen = createDuelScreen({
+  el: $('#screen-duel'),
+  onEvent: fightEvent,
+  onResult(o) { // genau einmal: duelReward kennt Aufgeben, Abbruch und MIN_REWARD_MS
+    const r = duelReward(o);
+    save.sats += r.sats;
+    if (r.xp) gainXp(r.xp);
+    afterChange();
+  },
+  onEnd() { together = null; show('screen-lobby'); lobby.back(); showLevelUps(); },
+});
+// Kämpfer aus Picks (die Lobby hat sie gesäubert, duelFighters rechnet die Werte neu): Quest-Modi mit Loadout, Koop mit owner
+const questFighters = (picks, owner) => duelFighters(picks).map((f, i) => ({ ...f, loadout: picks[i].loadout, ...(owner && { owner }) }));
+async function startTogether(g) {
+  const t = together = { ...g, booked: false };
+  if (g.mode === 'duel') {
+    show('screen-duel');
+    return duelScreen.start({ link: g.link, role: g.role, teams: g.teams, names: g.names });
+  }
+  let qs;
+  try { qs = await questScreenReady(); } catch (e) { console.warn('Quest-Modus', e); together = null; toast('Der Quest-Modus lädt nicht. Bitte Seite neu laden.'); return lobby.back(); }
+  if (together !== t) return; // inzwischen abgebrochen
+  const coop = g.mode === 'coop';
+  // Koop: erst die Picks des Hosts, dann die des Gasts (gleiche Reihenfolge auf beiden Geräten); Rennen: nur das eigene Team
+  const fighters = coop ? [...questFighters(g.teams.host, 'host'), ...questFighters(g.teams.guest, 'guest')] : questFighters(g.teams[g.role]);
+  show('screen-quest');
+  await qs.start({ mission: g.mission, setup: g.setup, fighters, rng: seededRng(g.seed), tutorial: false, ...(coop && { coop: { link: g.link, role: g.role, partner: g.partner } }) });
+  if (!coop && together === t && !t.booked) qs.setRival({ ...g.partner, done: 0, total: 0, over: false }); // start() räumt den Chip ab
+}
+// Ende von Koop oder Rennen: eigene Zusammenfassung verbuchen (Koop: die des Hosts, Score und Strafe gemeinsam), Ergebnis zeigen
+function endTogetherQuest(summary) {
+  const t = together;
+  if (t.booked) return;
+  t.booked = true;
+  const reward = questResult(save, t.mission.id, summary.result, summary.score, summary.alarmFree, { kieser: summary.kieser, fine: summary.fine });
+  if (reward) gainXp(reward.xp);
+  afterChange();
+  const race = t.mode === 'race' ? { rival: { ...t.partner, done: 0, total: 0 }, mine: { score: summary.score } } : null;
+  questResultScreen.show({ mission: t.mission, setup: summary.setup || t.setup, summary, reward, team: summary.team || [], together: { mode: t.mode, me: t.names[t.role], partner: t.partner, race } });
+  show('screen-questresult');
+  if (race) lobby.raceEnd({ result: summary.result, score: summary.score, timeMs: summary.timeMs });
+}
+// Rennen entschieden (beide rend da) oder ohne Wertung (Verbindung weg): Sieger bekommt den Bonus, sofort gespeichert
+function bookRace(r) {
+  const bonus = r.winner === 'me' ? { sats: RACE.WIN_SATS, xp: RACE.WIN_XP } : null;
+  if (bonus) { save.sats += bonus.sats; gainXp(bonus.xp); afterChange(); sfx.play('win'); }
+  if (current === 'screen-questresult' && together?.mode === 'race') questResultScreen.setRace({ ...r, done: true, bonus });
+  else if (bonus) toast(`Rennen gewonnen: +${fmt(bonus.sats)} Sats, +${bonus.xp} XP`, { kind: 'sats' });
+  else if (!r.his) toast('Rennen ohne Wertung (Verbindung weg).');
+}
+
 // ---------- Onboarding ----------
 const onboarding = createOnboarding({
   el: $('#screen-onboarding'),
@@ -921,6 +1012,7 @@ const onboarding = createOnboarding({
       toast(`Willkommen, ${nickname}! +${CONST.STARTER_SATS} Sats und eine Super-Münze.`, { icon: 'bag', kind: 'sats' });
     }
     save.seen.onboarding = true;
+    save.seen.news = VERSION; // Neulinge brauchen kein „Was ist neu“
     persist();
     online.syncNow();
     show('screen-map'); // mit Tagescheck
@@ -997,6 +1089,31 @@ $('#dbg-weakboss').addEventListener('click', e => { debugWeakBoss = !debugWeakBo
 $('#dbg-reset').addEventListener('click', () => { storage.clear(); location.reload(); });
 $('#dbg-close').addEventListener('click', () => debug.classList.add('hidden'));
 
+// ---------- v11: Was ist neu / App-Update ----------
+// Einmal pro Version „Was ist neu“ (Web und App). Die App (APK) fragt dazu version.json im Repo ab und bietet eine
+// neuere APK zum Herunterladen an (der Link geht über Capacitor in den Browser, der lädt die Datei).
+const VERSION = 11;
+const NEWS = [
+  'Zusammen spielen ohne Netz (nur in der App): Arena-Duell 3 gegen 3, Koop-Quest und Quest-Rennen über Bluetooth und WLAN-Direct. Profil → Zusammen spielen.',
+  'Abwehr im Kampf neu: Ausweichen zählt sofort beim Wischen (jede Richtung) oder per Ausweichen-Knopf. Kurz vor dem Einschlag gibt es „Perfekt!“: kein Schaden und Bonus-Mining.',
+  'Der Ausweichen-Knopf zeigt mit einem Zeitbalken, wann es einschlägt, und sagt dir, ob du zu früh oder zu spät warst. Auch beim Tachionenbitcoin.',
+];
+const VERSION_URL = 'https://raw.githubusercontent.com/JustABusinessKid/ruetherpokemon/main/version.json';
+const newsHtml = list => `<ul class="news">${list.map(n => `<li>${esc(n)}</li>`).join('')}</ul>`;
+function newsCheck() {
+  if (!save.profile || current !== 'screen-map') return; // nie über Kampf, Fang oder Quest; dann beim nächsten Start
+  if ((save.seen.news || 0) < VERSION) {
+    save.seen.news = VERSION; persist();
+    popup({ title: 'Neu in Rüther GO', icon: 'star', html: newsHtml(NEWS) });
+  }
+  if (!globalThis.Capacitor?.isNativePlatform?.()) return; // im Browser aktualisiert der Service Worker von selbst
+  fetch(`${VERSION_URL}?t=${Date.now()}`, { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).then(async v => {
+    if (!v || !(v.v > VERSION) || !/^https:\/\/github\.com\//.test(v.apk || '')) return;
+    const i = await popup({ title: 'Neue App-Version', icon: 'star', html: `<p>Version ${esc(String(v.v))} ist da. Herunterladen, öffnen und installieren, dein Spielstand bleibt.</p>${newsHtml(v.news || [])}`, buttons: [{ label: 'Später' }, { label: 'Herunterladen', primary: true }] });
+    if (i === 1) location.href = v.apk;
+  }).catch(() => {}); // offline: nächstes Mal
+}
+
 // ---------- Start ----------
 // Intervalle erst hier: bricht der Start oben ab (Leaflet oder ein Modul fehlt), liefen sie sonst ins Leere und
 // würfen jede Sekunde Fehler (Variablen weiter unten noch nicht angelegt)
@@ -1019,5 +1136,5 @@ setTimeout(() => {
   $('#splash').classList.add('gone');
   setTimeout(() => $('#splash').remove(), 400);
   if (!save.profile) { onboarding.start({ profileOnly: save.seen.onboarding || save.box.length > 0 }); show('screen-onboarding'); }
-  else { if (!resumeSummon()) show('screen-map'); online.syncNow().then(() => online.fetchState()); } // Karte mit Tagescheck
+  else { if (!resumeSummon()) show('screen-map'); online.syncNow().then(() => online.fetchState()); newsCheck(); } // Karte mit Tagescheck
 }, CONST.SPLASH_MS);

@@ -43,24 +43,26 @@ test('Spezial: ohne Energie verweigert, mit 100 Energie 40 Schaden', () => {
   assert.equal(s.team[0].energy, 0);
 });
 
-test('Warnung 600 ms vor dem schnellen Angriff, Ausweichen im Fenster = 25 % Schaden', () => {
+test('Warnung 800 ms vor dem schnellen Angriff, Ausweichen im Fenster = 25 % Schaden', () => {
   const s = B([F('christian')], 'ps3');
-  let ev = run(s, 1850);
+  let ev = run(s, 1650);
   assert.ok(!has(ev, 'warn'));
-  ev = run(s, 50); // t = 1900
+  ev = run(s, 50); // t = 1700
   const w = find(ev, 'warn');
   assert.equal(w.kind, 'fast');
-  assert.equal(w.ms, 600);
+  assert.equal(w.ms, 800);
+  assert.equal(w.dodgeable, true);
   ev = tick(s, 50, { dodge: true });
   assert.ok(has(ev, 'dodge'));
-  ev = run(s, 550); // t = 2500
+  assert.equal(find(ev, 'dodge').perfect, false); // 750 ms vor dem Einschlag: normal
+  ev = run(s, 750); // t = 2500
   const a = find(ev, 'enemyAttack');
   assert.equal(a.dodged, true);
   assert.equal(a.damage, 3); // floor(12 × 0,25)
   assert.equal(s.team[0].btc, 97);
 });
 
-test('Ausweichen außerhalb der Warnung tut nichts, voller Schaden 12', () => {
+test('Ausweichen weit vor der Warnung tut nichts (zu früh), voller Schaden 12', () => {
   const s = B([F('christian')], 'ps3');
   let ev = tick(s, 50, { dodge: true });
   assert.ok(!has(ev, 'dodge'));

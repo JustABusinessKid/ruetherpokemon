@@ -41,7 +41,18 @@ export const CONST = {
   FAST_ENERGY: 10,
   FAST_COOLDOWN: 250,
   MAX_ENERGY: 100,
-  DODGE_FACTOR: 0.25,
+  DODGE_FACTOR: 0.25,      // normal ausgewichen: 25 % Schaden, ohne Gift/Betäubung (auch im Duell, js/duel.js)
+  // Abwehr im Boss-Kampf (js/battle.js): Ausweichen zählt während der ganzen Warnung; ein Wisch bis DODGE_BUFFER davor wird
+  // gemerkt und zählt beim Start der Warnung. In den letzten DODGE_PERFECT ms vor dem Einschlag „Perfekt!": kein Schaden und
+  // PERFECT_ENERGY Mining. Ein Fehlversuch sperrt DODGE_LOCK ms ab dem Wisch (in Folge 2×, 3×), jeder Wisch in der Sperre verlängert
+  // sie (Dauerwischen hilft nicht); bis DODGE_LATE nach einem Einschlag heißt er „Zu spät!". Zwischen Einschlag und nächster Warnung
+  // mindestens ATTACK_GAP (vorher ging die Lade-Warnung 17 ms nach dem schnellen Treffer los).
+  DODGE_BUFFER: 250,
+  DODGE_PERFECT: 300,
+  DODGE_LOCK: 600,
+  DODGE_LATE: 600,
+  ATTACK_GAP: 700,
+  PERFECT_ENERGY: 15,
   WEAKEN_FACTOR: 0.75,
   SUMMON_INTERVAL: 1000,
   CHARGED_EVERY: 10_000,
@@ -243,10 +254,12 @@ export const RUETHERS = [
 ];
 
 // fast: schneller Angriff (every = Abstand, warn = Warnzeit). charged: Lade-Attacken, abwechselnd.
+// Warnzeit schnell 800 ms (Tachionen 700, Wildkampf 800, vorher überall 600): Reaktion 350–550 ms + Wisch bis zur Schwelle +
+// Geräte-Latenz passen sicher hinein; mit 600 ms klappte Ausweichen bei normaler Reaktion nur in rund 25–70 % (test/dodge.test.mjs).
 export const BOSSES = {
   ps3: {
     id: 'ps3', name: 'Playstation 3', btc: 260,
-    fast: { name: 'Blu-ray-Wurf', damage: 12, every: 2500, warn: 600, fx: 'disc' },
+    fast: { name: 'Blu-ray-Wurf', damage: 12, every: 2500, warn: 800, fx: 'disc' },
     charged: [
       { name: 'Yellow Light of Death', damage: 25, warn: 1200, poison: { perSec: 3, ms: 6000 }, fx: 'yellow' },
       { name: 'Firmware-Update', damage: 0, warn: 1200, stun: 2000, fx: 'firmware' },
@@ -254,7 +267,7 @@ export const BOSSES = {
   },
   schanze: {
     id: 'schanze', name: 'Herr der Rütherschanze', btc: 360,
-    fast: { name: 'Kurssturz', damage: 15, every: 2500, warn: 600, fx: 'crash' },
+    fast: { name: 'Kurssturz', damage: 15, every: 2500, warn: 800, fx: 'crash' },
     charged: [
       { name: 'Blockchain-Kette', damage: 25, warn: 1200, poison: { perSec: 5, ms: 6000 }, fx: 'chain' },
       { name: 'Mining', damage: 0, warn: 1200, heal: 40, fx: 'mining' },
@@ -262,7 +275,7 @@ export const BOSSES = {
   },
   satoshi: {
     id: 'satoshi', name: 'Satoshi Nakamoto', btc: 440,
-    fast: { name: 'Genesis Block', damage: 18, every: 2500, warn: 600, fx: 'block' },
+    fast: { name: 'Genesis Block', damage: 18, every: 2500, warn: 800, fx: 'block' },
     charged: [
       { name: 'Halving', damage: 45, warn: 1200, fx: 'half' },
       { name: 'Private Key verloren', damage: 0, warn: 1200, heal: 40, fx: 'key' },
@@ -271,7 +284,7 @@ export const BOSSES = {
   // v7: Arena im Keller der Rütherschanze
   heizung: {
     id: 'heizung', name: 'Bitcoin-Heizung', btc: 500,
-    fast: { name: 'Dosenbier-Aufguss', damage: 14, every: 2200, warn: 600, fx: 'heat' },
+    fast: { name: 'Dosenbier-Aufguss', damage: 14, every: 2200, warn: 800, fx: 'heat' },
     charged: [
       { name: 'Plus 70 Grad', damage: 30, warn: 1200, poison: { perSec: 4, ms: 6000 }, fx: 'overheat' },
       { name: 'Umluft mit Viktor-Aroma', damage: 10, warn: 1200, stun: 1800, fx: 'fan' },
@@ -281,7 +294,7 @@ export const BOSSES = {
   // v7: Shop-Beschwörung der Haunebu, keine Arena (Kampf-Modus 'haunebu')
   hitler: {
     id: 'hitler', name: 'Adolf Hitler', btc: 600,
-    fast: { name: 'Krupp-Rede', damage: 16, every: 2300, warn: 600, fx: 'krupp', flavour: ['Wenn du meine Arbeit für richtig hältst …', 'Hart wie Kruppstahl!'] },
+    fast: { name: 'Krupp-Rede', damage: 16, every: 2300, warn: 800, fx: 'krupp', flavour: ['Wenn du meine Arbeit für richtig hältst …', 'Hart wie Kruppstahl!'] },
     charged: [
       { name: 'Wolfsschanzen-Beschwörung', damage: 0, warn: 1200, summon: [{ id: 'goebbels', name: 'Goebbels', damage: 3 }, { id: 'himmler', name: 'Himmler', damage: 3 }], summonMs: 10_000, fx: 'wolfsschanze' }, // Gegner-Helfer (Spec v7 §2b)
       { name: 'Flugscheiben-Strahl', damage: 20, warn: 1200, stun: 1500, fx: 'ray' },
@@ -290,10 +303,13 @@ export const BOSSES = {
   },
   // v8: Endgegner in Neuschwabenland, mit Abstand der stärkste Gegner. duration = eigene Kampfdauer.
   tachionen: {
+    // Schaden v11 (Überlicht-Hash 20 → 30, Halving 120 → 140, BTC bleibt 1100): seit Ausweichen bei menschlichem Timing klappt
+    // (und „Perfekt!" nichts kostet), gewannen auch schwache Teams zu oft. Wer nicht ausweicht, zahlt jetzt mehr; mit den höheren
+    // Treffern halten die Balance-Ziele in test/v8.test.mjs wieder
     id: 'tachionen', name: 'Tachionenbitcoin', btc: 1100, duration: 90_000,
-    fast: { name: 'Überlicht-Hash', damage: 20, every: 2000, warn: 600, fx: 'tachyon' },
+    fast: { name: 'Überlicht-Hash', damage: 30, every: 2000, warn: 700, fx: 'tachyon' },
     charged: [
-      { name: 'Tachionen-Halving', damage: 120, warn: 1000, fx: 'thalving' },
+      { name: 'Tachionen-Halving', damage: 140, warn: 1000, fx: 'thalving' },
       { name: 'Kausalitätsbruch', damage: 35, warn: 1000, stun: 2000, poison: { perSec: 10, ms: 6000 }, fx: 'causality' },
       { name: 'Zeitschleife', damage: 0, warn: 1200, heal: 250, fx: 'timeloop' },
     ],

@@ -1,5 +1,5 @@
 // Service Worker: Rüther GO läuft komplett offline (auch als installierte App). Erzeugt von tools/make_sw.py – nicht von Hand ändern.
-const VERSION = '524e33cec1e1';
+const VERSION = 'dae397028538';
 const APP = `app-${VERSION}`, FONTS = 'fonts-1', TILES = 'tiles-1', TILE_MAX = 3000;
 const PRECACHE = [
   './',
@@ -9,6 +9,7 @@ const PRECACHE = [
   'css/app.css',
   'css/battle.css',
   'css/catch.css',
+  'css/duel.css',
   'css/flight.css',
   'css/quest.css',
   'css/screens.css',
@@ -20,10 +21,13 @@ const PRECACHE = [
   'js/catch-logic.js',
   'js/catch.js',
   'js/data.js',
+  'js/duel-ui.js',
+  'js/duel.js',
   'js/flight.js',
   'js/format.js',
   'js/fx.js',
   'js/geo.js',
+  'js/lobby.js',
   'js/map.js',
   'js/onboarding.js',
   'js/online-merge.js',
@@ -39,11 +43,14 @@ const PRECACHE = [
   'js/ui.js',
   'js/wild.js',
   'js/quest/abilities.js',
+  'js/quest/coop.js',
   'js/quest/draw.js',
   'js/quest/engine.js',
   'js/quest/missions.js',
   'js/quest/path.js',
+  'js/quest/race.js',
   'js/quest/view.js',
+  'js/net/link.js',
   'art/ab-crash.png',
   'art/ab-deo.png',
   'art/ab-feierabend.png',

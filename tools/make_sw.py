@@ -4,7 +4,7 @@ import hashlib, pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 FILES = ['./', 'index.html', 'style.css', 'manifest.json']
-for pattern in ['css/*.css', 'js/*.js', 'js/quest/*.js', 'art/*.png', 'sprites/*.png', 'vendor/leaflet/*.js', 'vendor/leaflet/*.css', 'vendor/leaflet/images/*.png']:
+for pattern in ['css/*.css', 'js/*.js', 'js/quest/*.js', 'js/net/*.js', 'art/*.png', 'sprites/*.png', 'vendor/leaflet/*.js', 'vendor/leaflet/*.css', 'vendor/leaflet/images/*.png']:
     FILES += sorted(p.relative_to(ROOT).as_posix() for p in ROOT.glob(pattern))
 
 h = hashlib.sha256()

@@ -71,6 +71,7 @@ const FREEZE = { 'chart-up': 2400, handshake: 1600, can: 1500, handbag: 1500, co
 const NEED = { 'chart-up': [142, 0], handshake: [200, 0], can: [182, 0], handbag: [191, 0], controller: [192, 0], bags: [174, 0], gas: [172, 0.1], mms: [148, 0.1], wallet: [161, 0] };
 const BOSS_SLOW = 1.4; // Boss-Requisiten laufen 1,4× so lang (ohne Freeze)
 const slow = ms => Math.round(ms * BOSS_SLOW);
+const arcHit = ms => Math.round(ms * 0.86); // Wurfbahnen (path-arc-to-me) schlagen bei 86 % ein
 const LINE_MIN = 8000, LINE_SPREAD = 4000; // Gegner-Sprüche alle 8–12 s Spielzeit
 const SAY_MS = 3000; // so lange steht ein Spruch in der Gegner-Blase
 // Betäubung des eigenen Rüthers je Gegner-Attacke (fx) als Text; alles andere zeigt den Firmware-Balken der PS3
@@ -79,13 +80,38 @@ const BUNKER_MS = 1500; // = bt-bunker in css/battle.css
 const KRUPP_MS = 1500; // Krupp-Rede kommt alle 2,3 s (Wut 1,8 s): Pult, Wutblase und Sprechblase sind nach ~1,6 s weg
 const WOLF_MS = 1600; // Wolfsschanzen-Beschwörung: Banner + Freeze, Goebbels und Himmler rennen derweil über dem Dimmer herein
 const bubbleText = s => { const t = document.createElement('span'); t.className = 'bubble-text'; t.textContent = s; return t.outerHTML; };
-// Tachionenbitcoin (v8, Neuschwabenland): Pixel-Echos der Münze, Bildschirm-Riss, Zeitschleife
+// Tachionenbitcoin (v8, Neuschwabenland): Pixel-Echos der Münze, Bildschirm-Riss, Zeitschleife. Das Vor-Echo („Ich treff dich,
+// bevor ich werfe.") blitzt mit dem Beginn der Warnung auf, nicht mehr davor: wer darauf wischt, ist im Fenster (v11)
 const ECHO_ART = 'art/fx-echo.png'; // optional; fehlt es, ist das Echo eine getönte Kopie des Boss-Bilds
-const ECHO_LEAD = 300; // so lange vor der Warnung blitzt die Münze schon auf („Ich treff dich, bevor ich werfe.")
 const ECHO_DASH_MS = 420, ECHO_GAP = 70; // = bt-echo-dash in css/battle.css; 3 Echos gestaffelt
 const REWIND_MS = 1400; // Zeitschleife: so lange spult die Bühne zurück
 const CRACK_LINES = ['62,0 55,14 60,22 48,38 53,47 41,63 46,72 35,88 38,100', '48,38 30,44 22,40', '53,47 70,55 78,52', '41,63 28,70', '46,72 60,82 66,92'];
 const CRACK_SVG = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" shape-rendering="crispEdges">${['k', 'v', 'p'].map(c => CRACK_LINES.map(l => `<polyline class="${c}" points="${l}"/>`).join('')).join('')}</svg>`;
+const HEAT_WAVE_AT = 280; // Dosenbier-Aufguss: die Hitzewelle rollt los, sobald die Dose auf der Heizung klatscht
+
+// Abwehr (v11): Boss-Angriffe fliegen schon während der Warnung und schlagen genau beim Feuern der Engine ein (firesAt);
+// wer auf das fliegende Requisit wischt, ist also noch im Fenster. BOSS_HIT = ms vom Start der Animation bis zum Einschlag
+// bei mir, nie länger als die Warnzeit (test/dodge.test.mjs). 0 = startet erst beim Feuern (Heilung am Boss, Banner, Firmware-Balken).
+const BOSS_HIT = {
+  disc: slow(360), yellow: slow(450), firmware: 0, crash: slow(550), chain: slow(650), mining: 0, block: slow(360), half: slow(500), key: 0,
+  heat: HEAT_WAVE_AT + arcHit(slow(400)), overheat: arcHit(slow(900)), fan: arcHit(slow(900)), found: slow(450),
+  krupp: 450, wolfsschanze: 0, ray: slow(500), bunker: Math.round(BUNKER_MS * 0.75),
+  tachyon: 2 * ECHO_GAP + Math.round(ECHO_DASH_MS * 0.85), thalving: Math.round(slow(900) * 0.72), causality: Math.round(slow(900) * 0.6),
+  timeloop: REWIND_MS - 300, 'wild-fast': 220,
+  wild: atk => (atk.prop === 'family' ? 760 : atk.damage > 0 ? arcHit(slow(800)) : 0),
+};
+export const bossHitMs = atk => { const h = BOSS_HIT[atk.fx]; return (typeof h === 'function' ? h(atk) : h) || 0; };
+// Wisch = Ausweichen, sobald der Finger SWIPE_PX weit gezogen ist, in jede Richtung (schon beim Ziehen, nicht erst beim Loslassen);
+// darunter ist es ein Tipp. Rückgabe: Richtung der Ausweich-Animation oder null
+export const SWIPE_PX = 28;
+export const swipeDir = (dx, dy) => (Math.hypot(dx, dy) < SWIPE_PX ? null : dx < 0 ? 'left' : 'right');
+const MISS_TEXT = { early: 'Zu früh!', late: 'Zu spät!', immune: 'Nicht abwehrbar!' };
+const LOCK_TEXT = { ...MISS_TEXT, immune: 'Zwecklos!' }; // auf dem Knopf (116 px): „Nicht abwehrbar!" passt nicht hinein
+// „JETZT!" kommt NOW_LEAD ms vor dem Perfekt-Fenster (die Kerbe): wer darauf reagiert (Reaktion + Wisch bis zur Schwelle), landet
+// darin. Genau an der Kerbe gezeigt, kam jede Reaktion zu spät (stand nur 300 ms, Reaktion + Wisch dauern länger)
+export const NOW_LEAD = 250;
+const NOTE_MS = 700; // so lange steht „Ausgewichen!"/„Perfekt!" nach dem Einschlag noch auf dem Knopf
+const DODGE_STATES = ['on', 'now', 'fast', 'charged', 'done', 'perfect', 'locked', 'immune'];
 
 export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
   const $ = s => el.querySelector(s);
@@ -118,34 +144,56 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
   mining.className = 'mining';
   energyBar.replaceWith(mining);
   mining.append(icon('mining', 'ico-sm'), Object.assign(document.createElement('span'), { textContent: 'Mining' }), energyBar, miningV);
+  // v11 Abwehr: Ausweich-Knopf unten rechts in .fx (über Effekten und Banner-Dimmer, unter echten Gesichtern; start() hängt ihn
+  // nach dem Aufräumen wieder ein), Warnrahmen als blinkender Pixel-Rand innen an der Bühne statt Vollflächen-Tönung
+  const dodgeBtn = Object.assign(document.createElement('button'), { type: 'button', className: 'dodge-btn' });
+  dodgeBtn.setAttribute('aria-label', 'Ausweichen');
+  dodgeBtn.innerHTML = '<span class="dl"></span><span class="dbar"><i></i></span>';
+  const dodgeLabel = dodgeBtn.querySelector('.dl'), dodgeFill = dodgeBtn.querySelector('.dbar i');
+  stage.append(flash);
+  $('.stage-hint').textContent = 'Tippen: Angriff · Wischen: Ausweichen'; // kürzer, links neben dem Knopf
 
-  let state = null, raf = 0, countRaf = 0, lastTs = 0, running = false, ended = false, down = null;
-  let input = freshInput(), dodgeDir = 'left', koPending = false, batchDelay = 0;
+  let state = null, raf = 0, countRaf = 0, lastTs = 0, running = false, ended = false;
+  const ptrs = new Map(); // pointerId -> { x, y, swiped }: jeder Finger für sich (zweiter Daumen tippt, ohne den Wisch zu löschen)
+  let input = freshInput(), dodgeDir = 'left', koPending = false, batchDelay = 0, lockText = '', dodgeNote = null, dodgeFloat = null; // dodgeNote: { cls, label, until }
+  // Boss-Angriff der laufenden Warnung: { w, hit, launched, impactAt, parts, timers }. Startet so, dass er bei w.firesAt einschlägt
+  // (launchShot); bricht die Warnung ab (Betäubung, Boss pleite), verpufft er (cancelShot). shot = Sammler, solange seine
+  // Animation Teile anlegt: prop/node/sheet/mega und later() merken sich dort, was beim Abbruch weg muss
+  let bossShot = null, shot = null;
   let combo = 0, lastHitAt = -Infinity, stunTextAt = -Infinity;
   let pauseUntil = 0, heldBtc = null, nextLineAt = Infinity, sayTimer = 0, bossFx = '', bossHit = null;
   // Spieler-Leiste wie heldBtc: zeigt Treffer erst beim Einschlag (meHoldUntil) und nach einem K.o. den alten Rüther,
   // bis der neue hereinrutscht (shownMe); so passen Gesicht, Name, Balken und Knöpfe zusammen
   let shownMe = null, meHoldUntil = 0;
   let rede = []; // laufende Krupp-Rede (Pult, Wutblase, Sprechblase): die nächste Rede baut sie ab
-  let echoAt = null, echoSrc = ECHO_ART; // Vor-Echo: für welchen Überlicht-Hash (nextFastAt) es schon geblitzt hat
+  let echoSrc = ECHO_ART;
   let ctx = {}; // { mode, arena, arenaLevel, reward, masteredAfter, wild }
   const timers = new Set();
   const pending = new Map(); // node -> { cls: timerId }: Neustart derselben Animation löscht den alten Entfern-Timer
   const paused = () => performance.now() < pauseUntil;
 
   // ---------- Timer und Einmal-Animationen (alles wird in stop() aufgeräumt) ----------
-  function later(fn, ms) {
-    const id = setTimeout(() => { timers.delete(id); fn(); }, ms);
+  function later(fn, ms, own = shot) {
+    const id = setTimeout(() => {
+      timers.delete(id);
+      const was = shot;
+      shot = own;
+      try { fn(); } finally { shot = was; }
+    }, ms);
     timers.add(id);
+    own?.timers.push(id);
     return id;
   }
+  const keep = part => { shot?.parts.push(part); return part; };
   function anim(node, cls, ms) {
     const m = pending.get(node) || pending.set(node, {}).get(node);
     if (m[cls]) { clearTimeout(m[cls]); timers.delete(m[cls]); }
     node.classList.remove(cls);
     void node.offsetWidth; // Reflow, damit die Animation neu startet
     node.classList.add(cls);
-    m[cls] = later(() => { delete m[cls]; node.classList.remove(cls); }, ms);
+    const id = m[cls] = later(() => { delete m[cls]; node.classList.remove(cls); }, ms, null); // Klasse fällt immer wieder ab, auch nach Abbruch
+    // … und beim Abbruch eines Boss-Wurfs sofort (z. B. Hitler im Bunker unsichtbar, Bühne im Umluft-Wind), solange sie noch seine ist
+    if (shot) keep({ stop: () => { if (m[cls] !== id) return; clearTimeout(id); timers.delete(id); delete m[cls]; node.classList.remove(cls); } });
   }
   const setText = (n, s) => { if (n.textContent !== s) n.textContent = s; };
   const setWidth = (n, pct) => { const w = `${pct}%`; if (n.style.width !== w) n.style.width = w; };
@@ -158,17 +206,18 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
     d.className = cls;
     parent.appendChild(d);
     later(() => d.remove(), ms);
+    keep({ stop: () => d.remove() });
     return d;
   }
   // Requisit in .fx; vars setzt Pfad-Variablen am Element (--spin, --dx, --rider-*)
   function prop(name, path, opts, vars = {}) {
-    const p = propFx(fx, name, path, opts);
+    const p = keep(propFx(fx, name, path, opts));
     for (const [k, v] of Object.entries(vars)) p.el.style.setProperty(k, v);
     return p;
   }
   // Reiter = echtes Gesicht des Angreifers im Requisit (Spec §0.2)
   const rider = f => ({ rider: f.id, riderRarity: f.rarity || 'normal' });
-  const sheet = (name, at, opts = {}) => playSheet(fx, name, { ...AT[at], ...opts });
+  const sheet = (name, at, opts = {}) => keep(playSheet(fx, name, { ...AT[at], ...opts }));
   let numSeq = 0; // Zahlen in drei Höhen (−22/0/+22 px) staffeln, damit schnelle Tipps nicht übereinander liegen
   const num = (t, at, kind = 'info', ms = 900) => {
     const p = TXT[at === 'me' && ctx.wild ? 'wildMe' : at];
@@ -190,7 +239,7 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
   // Mega-Zahl über dem Gegner (1,4 s); Tipp-Zahlen und -Einschläge darunter rücken rechts daneben (.side), neue landen dort (hitEnemy)
   function mega(t) {
     fx.querySelectorAll(':scope > .fx-text:not(.burst), :scope > .fx-sheet[data-sheet="impact"]').forEach(n => n.classList.add('side'));
-    floatText(fx, t, { x: '50%', y: 'calc(var(--fx-enemy-y) - 10%)', kind: 'mega', ms: 1400 });
+    keep(floatText(fx, t, { x: '50%', y: 'calc(var(--fx-enemy-y) - 10%)', kind: 'mega', ms: 1400 }));
   }
   // Einschlag einer Spezial-Attacke: ₿-Explosion, große Zahl 1,6 s, Beben, Boss blitzt zweimal, ab 20 Schaden ₿-Regen
   function specialHit(n) {
@@ -214,10 +263,9 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
   }
   // Drehender Bitcoin wandert vom Boss zum eigenen Rüther: die Hülle läuft die Bahn (css), das Sheet dreht darin
   const drainCoin = () => playSheet(node('drain', 900), 'btcspin', { x: '0px', y: '0px', size: 56, ms: 900 });
-  // Familientreffen gegen dich (wilde Hildegard): die echten Christian und Micha rennen von rechts herein und kloppen
+  // Familientreffen gegen dich (wilde Hildegard): die echten Christian und Micha rennen von rechts herein und kloppen (nach 760 ms, BOSS_HIT)
   function familyRush() {
     node('rush', 1600).innerHTML = ['christian', 'micha'].map((id, i) => `<img src="${sprite(id)}" alt="" style="--i:${i}">`).join('');
-    return 760;
   }
   // Pixel-Echo der Tachionen-Münze (art/fx-echo.png, sonst das Boss-Bild violett-türkis getönt: .self); cls = Bahn in css/battle.css
   function echo(cls, ms, i = 1) {
@@ -238,15 +286,6 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
       const a = (i / 10) * 2 * Math.PI + 0.3;
       return `<i style="--dx:${Math.round(Math.cos(a) * 110)}px;--dy:${Math.round(Math.sin(a) * 90)}px"></i>`;
     }).join('');
-  }
-  // Tachionenbitcoin: die Münze blitzt schon vor der Warnung zum Überlicht-Hash einmal auf und ein Echo löst sich (Spec v8 §2)
-  function preEcho() {
-    const e = state.enemy, t = state.time;
-    if (e.fast?.fx !== 'tachyon' || e.warning || e.status.stunUntil > t || e.nextChargedAt <= e.nextFastAt) return;
-    if (echoAt === e.nextFastAt || t < e.nextFastAt - e.fast.warn - ECHO_LEAD) return;
-    echoAt = e.nextFastAt;
-    anim(enemySprite, 'blink', 240);
-    echo('echo-pre', 400);
   }
   // Combo: schnelle Treffer mit < COMBO_WINDOW Abstand (Spielzeit), Anzeige ab ×2, ab ×10 „hot"
   function comboHit() {
@@ -343,49 +382,45 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
     },
     family() { return 0; }, // die echten Christian und Micha kommen mit dem summoned-Event
   };
-  // Gegner-Attacken nach attack.fx, 1,4× so lang wie in v5. Rückgabe: ms bis zum Einschlag beim Spieler.
-  // Requisit fliegt vom Gegner zu mir, ohne Drehung; Einschlag bei 86 % (path-arc-to-me)
-  const toMe = (name, ms, size) => { prop(name, 'arc-to-me', { ms, size }, { '--spin': '0deg' }); return Math.round(ms * 0.86); };
+  // Gegner-Attacken nach attack.fx, 1,4× so lang wie in v5. Einschlag bei mir nach BOSS_HIT[fx] ms (launchShot startet sie
+  // so, dass er auf firesAt fällt). Requisit fliegt vom Gegner zu mir, ohne Drehung; Einschlag bei 86 % (path-arc-to-me)
+  const toMe = (name, ms, size) => prop(name, 'arc-to-me', { ms, size }, { '--spin': '0deg' });
   const BOSS_FX = {
-    disc() { prop('disc', 'drop-on-me', { ms: slow(500), size: 96 }); return slow(360); },
-    yellow() { prop('yellow-light', 'rise-at-enemy', { ms: slow(1200), size: 192 }); return slow(450); },
-    firmware() { return 0; }, // Requisit mit laufendem Balken kommt mit dem stun-Event (bar-on-me)
-    crash() { prop('crash', 'crash-at-me', { ms: slow(700), size: 144 }); return slow(550); },
-    chain() { prop('chain', 'drop-on-me', { ms: slow(900), size: 144 }); return slow(650); }, // drop-on-me rasselt nach dem Aufprall
-    mining() { prop('pickaxe', 'swing-at-enemy', { ms: slow(900), size: 144 }); return 0; },
-    block() { prop('block', 'drop-on-me', { ms: slow(500), size: 112 }); return slow(360); },
-    half() { prop('halving', 'drop-on-me', { ms: slow(700), size: 192 }); return slow(500); },
-    key() { prop('key', 'rise-at-enemy', { ms: slow(1200), size: 128 }); return 0; },
+    disc() { prop('disc', 'drop-on-me', { ms: slow(500), size: 96 }); },
+    yellow() { prop('yellow-light', 'rise-at-enemy', { ms: slow(1200), size: 192 }); },
+    firmware() {}, // Requisit mit laufendem Balken kommt mit dem stun-Event (bar-on-me)
+    crash() { prop('crash', 'crash-at-me', { ms: slow(700), size: 144 }); },
+    chain() { prop('chain', 'drop-on-me', { ms: slow(900), size: 144 }); }, // drop-on-me rasselt nach dem Aufprall
+    mining() { prop('pickaxe', 'swing-at-enemy', { ms: slow(900), size: 144 }); },
+    block() { prop('block', 'drop-on-me', { ms: slow(500), size: 112 }); },
+    half() { prop('halving', 'drop-on-me', { ms: slow(700), size: 192 }); },
+    key() { prop('key', 'rise-at-enemy', { ms: slow(1200), size: 128 }); },
     // Bitcoin-Heizung (Keller): Aufguss, Überhitzung mit rot glühender Kulisse, Umluft weht die Bühne durch, Strom-Heilung.
     // Wer im Attackennamen steckt, ist mit echtem Gesicht dabei (Spec v7 §1): Viktor in der Gaswolke, Hildegard auf der Handtasche.
-    heat() { // Dosenbier klatscht auf die Heizung, Dampf, dann rollt die Hitzewelle auf mich
-      prop('beer-can', 'arc-to-enemy', { ms: slow(400), size: 80 }, { '--spin': '40deg' });
-      later(() => sheet('smoke', 'enemy', { size: 128 }), slow(340));
-      later(() => toMe('heat', slow(500), 128), slow(300));
-      return slow(300) + Math.round(slow(500) * 0.86);
+    heat() { // Dosenbier klatscht auf die Heizung, Dampf, dann rollt die Hitzewelle auf mich (passt in die 800 ms Warnzeit)
+      prop('beer-can', 'arc-to-enemy', { ms: slow(250), size: 80 }, { '--spin': '40deg' });
+      later(() => sheet('smoke', 'enemy', { size: 128 }), HEAT_WAVE_AT);
+      later(() => toMe('heat', slow(400), 128), HEAT_WAVE_AT);
     },
     overheat() {
-      const hit = toMe('heat', slow(900), 224);
+      toMe('heat', slow(900), 224);
       later(() => mega('+70 °C'), slow(200));
-      later(() => anim(stage, 'overheat', 1000), hit);
-      return hit;
+      later(() => anim(stage, 'overheat', 1000), BOSS_HIT.overheat);
     },
-    // fan, found, ray: Ausruf-Blase weg, sobald die Attacke einschlägt (sie stand die Warnzeit davor), wie bei der Wolfsschanze:
-    // Viktors bzw. Hildegards Gesicht und meins im Strahl steigen auf kleinen Bühnen bis unter sie
+    // fan, found, ray: Ausruf-Blase weg, sobald ein echtes Gesicht losfliegt (Viktors bzw. Hildegards und meins im Strahl steigen
+    // auf kleinen Bühnen bis unter sie); bis dahin steht dort der Attackenname
     fan() { // Lüfter dreht, bläst Viktors grüne Gaswolke mit seinem echten Gesicht auf mich
-      hideSay();
+      later(hideSay, 300);
       prop('fan', 'spin-at-enemy', { ms: slow(1400), size: 176 });
       anim(stage, 'blow', slow(1400));
       anim(stage, 'side-hits', slow(900)); // Tipp-Treffer rechts neben Viktors Gesicht, solange er losfliegt
       prop('gas', 'arc-to-me', { ms: slow(900), size: 176, rider: 'viktor' }, { '--spin': '0deg', '--rider-x': '30%', '--rider-y': '24%', '--rider-size': '40%', '--rider-filter': 'sepia(1) hue-rotate(60deg) saturate(2.2)' });
-      return Math.round(slow(900) * 0.86);
     },
     found() { // Hildegard reitet auf ihrer Handtasche von unten zur Heizung und zahlt: ₿-Explosion, Heilung
-      hideSay();
+      later(hideSay, slow(300));
       prop('handbag', 'rise-from-bottom', { ms: slow(1000), size: 128, rider: 'hildegard' }, { '--rider-x': '30%', '--rider-y': '-34%' });
       anim(stage, 'side-hits', slow(1000)); // Tipp-Treffer und Heilung rechts neben Hildegards Gesicht
-      later(() => sheet('btcburst', 'enemy', { size: 208 }), slow(450));
-      return slow(450);
+      later(() => sheet('btcburst', 'enemy', { size: 208 }), BOSS_HIT.found);
     },
     // Adolf Hitler (Haunebu, lächerlicher Verlierer): Krupp-Rede, Wolfsschanzen-Beschwörung, Flugscheiben-Strahl, ab in den Bunker
     krupp(atk) { // Rednerpult steigt vor ihm hoch, er bebt, „!!", Sprechblase mit einem flavour-Text auf mich
@@ -398,64 +433,80 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
       const speech = prop('speech', 'bubble-at-me', { ms: KRUPP_MS - 250, delay: 250, size: 160, html: bubbleText(line) });
       speech.el.classList.add('krupp-speech'); // unten rechts, Zipfel zeigt auf ihn (css/battle.css)
       rede = [prop('lectern', 'lectern-up', { ms: KRUPP_MS, size: 144 }), prop('rant', 'rant-pop', { ms: 700, size: 72 }), speech];
-      return 450;
     },
     wolfsschanze(atk) { // Holzbanner, Spielzeit steht; Goebbels und Himmler kommen mit dem enemySummoned-Event
       pauseUntil = Math.max(pauseUntil, performance.now() + WOLF_MS);
       hideSay(); // das Banner trägt den Namen selbst; der Ausruf stand die 1,2 s Warnzeit davor
       banner(fx, { title: `${atk.name}!`, sub: 'Goebbels! Himmler! Sofort zu mir!', portrait: bossArt(state.enemy.id), ms: WOLF_MS });
-      return 0;
     },
     ray(atk, me) { // Flugscheibe schwebt über mir ein, der Strahl zieht mein echtes Gesicht (Reiter) hoch
-      hideSay();
       const ms = slow(1400);
       prop('haunebu', 'hover-over-me', { ms, size: 144 });
-      later(() => prop('tractor-beam', 'beam-on-me', { ms: ms - slow(300), size: 208, ...rider(me) }, { '--rider-x': 'calc(50% - 40px)', '--rider-y': 'calc(100% - 92px)', '--rider-size': '80px' }), slow(300));
-      return slow(500);
+      later(() => {
+        hideSay();
+        prop('tractor-beam', 'beam-on-me', { ms: ms - slow(300), size: 208, ...rider(me) }, { '--rider-x': 'calc(50% - 40px)', '--rider-y': 'calc(100% - 92px)', '--rider-size': '80px' });
+      }, slow(300));
     },
-    bunker() { anim(enemySprite, 'hide', BUNKER_MS); sheet('smoke', 'enemy', { size: 176 }); return Math.round(BUNKER_MS * 0.75); }, // Heilung, wenn er wieder auftaucht
-    // Tachionenbitcoin (v8, Neuschwabenland). Überlicht-Hash: 3 Pixel-Echos rasen gestaffelt auf mich (das Vor-Echo kam schon, preEcho)
+    bunker() { anim(enemySprite, 'hide', BUNKER_MS); sheet('smoke', 'enemy', { size: 176 }); }, // Heilung, wenn er wieder auftaucht
+    // Tachionenbitcoin (v8, Neuschwabenland). Überlicht-Hash: 3 Pixel-Echos rasen gestaffelt auf mich (das Vor-Echo kam mit der Warnung)
     tachyon() {
       anim(enemySprite, 'blink', 240);
       for (let i = 0; i < 3; i++) later(() => echo('echo-dash', ECHO_DASH_MS, i), i * ECHO_GAP);
-      return 2 * ECHO_GAP + Math.round(ECHO_DASH_MS * 0.85);
     },
-    thalving() { // riesige Halving-Münze in Violett fällt auf mich, beim Aufprall reißt der Bildschirm
-      const ms = slow(900), hit = Math.round(ms * 0.72); // drop-on-me schlägt bei 72 % auf
-      prop('halving', 'drop-on-me', { ms, size: 240 }).el.classList.add('thalving');
-      later(() => { node('crack', 1400).innerHTML = CRACK_SVG; }, hit);
-      return hit;
+    // Riss, Negativ und Glitch sind der Treffer: ausgewichen (shot.w = Warnung bzw. enemyAttack-Event) fallen sie weg wie sonst das Beben
+    thalving() { // riesige Halving-Münze in Violett fällt auf mich, beim Aufprall (72 % von drop-on-me) reißt der Bildschirm
+      prop('halving', 'drop-on-me', { ms: slow(900), size: 240 }).el.classList.add('thalving');
+      later(() => { if (!shot?.w.dodged) node('crack', 1400).innerHTML = CRACK_SVG; }, BOSS_HIT.thalving);
     },
-    causality() { // Uhr zwischen uns tickt rückwärts und zerspringt; Bühne flackert negativ, meine Leiste glitcht (Betäubung, Gift: Engine)
-      const ms = slow(900), hit = Math.round(ms * 0.6); // = Zerspringen in bt-clock-burst
-      prop('clock', 'clock-burst', { ms, size: 128 });
-      later(() => { shards(); anim(stage, 'negative', 700); anim(mePanel, 'glitch', 900); }, hit);
-      return hit;
+    causality() { // Uhr zwischen uns tickt rückwärts und zerspringt (60 % von bt-clock-burst); Bühne flackert negativ, meine Leiste glitcht
+      prop('clock', 'clock-burst', { ms: slow(900), size: 128 });
+      later(() => { shards(); if (!shot?.w.dodged) { anim(stage, 'negative', 700); anim(mePanel, 'glitch', 900); } }, BOSS_HIT.causality);
     },
     timeloop() { // Bühne spult zurück (Bandstreifen, ◀◀ in Pixeln), die Echos fliegen rückwärts in die Münze, dann heilt sie
       anim(stage, 'rewind', REWIND_MS);
       node('rewind', REWIND_MS).innerHTML = '<span class="rew"></span>';
       for (let i = 0; i < 3; i++) later(() => echo('echo-back', ECHO_DASH_MS, i), 200 + i * 150);
-      return REWIND_MS - 300;
     },
     // Wilder Rüther: Rempler = er springt nach vorn; Lade-Attacke = sein Requisit mit seinem Gesicht fliegt zu dir
-    'wild-fast'() { anim(enemySprite, 'lunge', 450); return 220; },
+    'wild-fast'() { anim(enemySprite, 'lunge', 450); },
     wild(atk) {
       if (atk.prop === 'family') return familyRush();
-      const hits = atk.damage > 0, ms = slow(800), size = atk.prop === 'speech' ? 176 : 128;
+      const hits = atk.damage > 0, size = atk.prop === 'speech' ? 176 : 128;
       const html = atk.prop === 'speech' ? bubbleText(atk.flavour || pickLine(atk.ownerId, 'fight')) : '';
       // Gesicht im Requisit statt darüber: am Scheitel von Bogen bzw. Aufstieg steckte es sonst unter der Gegner-Blase
       // (sein Ausruf steht dort); bei der Sprechblase unter dem Text. Vor seinem echten Gesicht eingehängt: kommt hinter ihm hervor
-      const p = prop(atk.prop || 'chart-up', hits ? 'arc-to-me' : 'rise-at-enemy', { ms, size, html, rider: atk.ownerId || ctx.wild?.id, riderRarity: ctx.wild?.rarity || 'normal' },
+      const p = prop(atk.prop || 'chart-up', hits ? 'arc-to-me' : 'rise-at-enemy', { ms: slow(800), size, html, rider: atk.ownerId || ctx.wild?.id, riderRarity: ctx.wild?.rarity || 'normal' },
         // Sprechblase: Viktors Gesicht unter dem Text ragt um −30° gedreht bis me-y + 112 px, beim Ausblenden (1,075×) bis 126 px:
         // höher landen, sonst schnitte der Bühnenboden es ab
         { '--spin': '-30deg', '--rider-x': '30%', '--rider-y': atk.prop === 'speech' ? '72%' : '34%', ...(atk.prop === 'speech' && { '--fx-me-y': 'min(86%, calc(100% - 128px))' }) });
       p.el.classList.add('from-face');
       fx.prepend(p.el);
-      return hits ? Math.round(ms * 0.86) : 0;
     },
   };
   const run = (table, atk, me) => (table[atk.fx] || (() => 0))(atk, me);
+  // Boss-Animation mit Sammler b starten: alles, was sie anlegt, landet in b.parts/b.timers
+  function own(b, fn) {
+    const was = shot;
+    shot = b;
+    try { fn(); } finally { shot = was; }
+  }
+  // Wurf der laufenden Warnung starten, sobald er bis firesAt genau einschlägt (Spielzeit: im Freeze fliegt nichts los)
+  function launchShot() {
+    const b = bossShot, w = state.enemy.warning;
+    if (!b) return;
+    if (state.over || w !== b.w) return cancelShot(); // Betäubung, Boss pleite: der Wurf verpufft
+    if (b.launched || !b.hit || paused() || state.time < w.firesAt - b.hit) return;
+    b.launched = true;
+    b.impactAt = performance.now() + b.hit;
+    own(b, () => run(BOSS_FX, w.attack, state.team[state.active]));
+  }
+  function cancelShot() {
+    const b = bossShot;
+    bossShot = null;
+    if (!b) return;
+    for (const id of b.timers) { clearTimeout(id); timers.delete(id); }
+    b.parts.forEach(p => p.stop());
+  }
 
   // ---------- Events → Animationen ----------
   function handle(e) {
@@ -465,6 +516,15 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
       case 'fast': hitEnemy(e.damage); comboHit(); break;
       case 'special': { // Kinosequenz: Spielzeit steht, Banner mit Gesicht + Spruch, Requisit mit Reiter, dann Einschlag
         const me = e.fighter, atk = e.attack, freeze = FREEZE[atk.fx] || CONST.CINEMATIC_MS; // e.fighter: KO-Wechsel im selben Schritt steht schon in state.active
+        // Ein Boss-Wurf, der schon fliegt, liefe im Freeze weiter (CSS-Animation, Echtzeit) und schlüge sichtbar ein, obwohl das
+        // Fenster noch offen ist: abbrechen, nach dem Freeze neu werfen (launchShot) und den Einschlag der Engine so weit schieben,
+        // dass er wieder genau aufs Requisit fällt. Der Wurf dauert nie länger als die Warnung (BOSS_HIT)
+        if (bossShot?.launched && bossShot.impactAt > performance.now()) {
+          const b = bossShot;
+          cancelShot();
+          bossShot = { ...b, launched: false, impactAt: 0, parts: [], timers: [] };
+          b.w.firesAt = Math.max(b.w.firesAt, state.time + b.hit);
+        }
         pauseUntil = performance.now() + freeze;
         // eigenes Banner oben frei: Reiter-Gesichter der Requisiten liegen knapp darunter. Was der Gegner gerade sagt
         // (z. B. der Ausruf seiner Lade-Attacke, die nach dem Freeze einschlägt), steht danach für den Rest wieder da
@@ -491,24 +551,46 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
         if (now - stunTextAt > 1200) { stunTextAt = now; text('betäubt', 'me', 'info', true); } // stunTextAt kann in der Zukunft liegen (stun)
         break;
       }
-      case 'warn':
-        sfx.play('warn'); // Blinken und Ausholen hängen am Zustand (render)
+      case 'warn': // Rahmen, Ausholen und der Ausweich-Knopf mit Zeitbalken hängen am Zustand (render), der Wurf startet in launchShot
+        sfx.play('warn');
+        if (e.dodgeable) haptic(15);
         if (e.kind === 'charged') { // Lade-Attacke (Boss-Spezial bzw. die des Wilden) als Ausruf; schnelle Attacken kämen zu oft
           talk(`${e.attack.name}!`, true);
           nextLineAt = state.time + SAY_MS + 500; // nächster Spruch gleich nach dem Ausruf, damit er vor dem nächsten ausreden kann
         }
+        if (e.attack.fx === 'tachyon') { anim(enemySprite, 'blink', 240); echo('echo-pre', 400); } // Vor-Echo = Beginn der Warnung
+        cancelShot();
+        bossShot = { w: state.enemy.warning, hit: bossHitMs(e.attack), launched: false, impactAt: 0, parts: [], timers: [] };
         break;
-      case 'dodge': anim(meSprite, `dodge-${dodgeDir}`, 450); text('Ausgewichen!', 'me', 'info', true); sfx.play('dodge'); break;
+      // Mein Gesicht ist schon beim Wischen ausgewichen (dodgeNow); hier die Bestätigung. Perfekt = in den letzten 300 ms
+      // Im Wildkampf nur auf dem Knopf: der Text läge unten rechts genau auf ihm und auf dem echten Gesicht des Wilden (Rempler)
+      case 'dodge':
+        dodgeNote = { cls: e.perfect ? 'done perfect' : 'done', label: e.perfect ? 'Perfekt!' : 'Ausgewichen!', until: performance.now() + e.ms + NOTE_MS };
+        if (!ctx.wild) { dodgeFloat?.stop(); dodgeFloat = text(dodgeNote.label, 'me', e.perfect ? 'heal' : 'info', true); }
+        if (e.perfect) anim(mining, 'glow', 600); // + Mining-Bonus
+        sfx.play('dodge'); haptic(10);
+        break;
+      case 'dodgeMiss':
+        lockText = LOCK_TEXT[e.reason] || ''; dodgeNote = null;
+        if (!ctx.wild) { dodgeFloat?.stop(); dodgeFloat = text(MISS_TEXT[e.reason] || '', 'me', 'hurt', true); } // nur die letzte Rückmeldung, sonst stapeln sie sich
+        anim(dodgeBtn, 'shake-x', 400);
+        break;
       case 'enemyAttack': {
         bossFx = e.attack.fx; bossHit = e.fighter; // eine Betäubung danach im selben Schritt gehört zu dieser Attacke
-        batchDelay = run(BOSS_FX, e.attack, e.fighter);
+        // Der Wurf fliegt seit der Warnung und schlägt jetzt ein; kam keiner (Aufholen, Heilung am Boss), startet die Animation jetzt
+        const b = bossShot?.w.attack === e.attack ? bossShot : null;
+        bossShot = null;
+        if (b?.launched) batchDelay = Math.max(0, Math.round(b.impactAt - performance.now()));
+        else { batchDelay = bossHitMs(e.attack); own({ w: e, parts: [], timers: [] }, () => run(BOSS_FX, e.attack, e.fighter)); } // nicht abbrechbar, kennt nur dodged
+        if (e.dodged && dodgeNote) dodgeNote.until = performance.now() + batchDelay + NOTE_MS; // Rückmeldung bis kurz nach dem sichtbaren Einschlag
         if (batchDelay > 0) { // Balken, BTC und Status (Gift, betäubt) erst beim Einschlag
           const until = meHoldUntil = performance.now() + batchDelay;
           later(() => { if (meHoldUntil === until) meHoldUntil = 0; render(); }, batchDelay); // render: nach KO läuft die Schleife nicht mehr
         }
         const ray = e.attack.fx === 'ray', at = ray ? 'beside' : 'me'; // im Strahl hängt mein echtes Gesicht am Anker: kein Einschlag, Zahl daneben
+        if (e.perfect) later(() => sheet('sparkle', at === 'beside' ? 'me' : at, { size: 112, ms: 600 }), batchDelay); // pariert: kein Kratzer
         if (e.damage > 0) later(() => {
-          if (e.dodged) { num(`-${e.damage}`, at); return; }
+          if (e.dodged) { num(`-${e.damage}`, at); return; } // gestreift: kleine graue Zahl, kein Beben
           const q = quakeFor(e.damage, e.kind === 'charged');
           anim(stage, q, QUAKE_MS[q]);
           anim(meSprite, 'shake', 300);
@@ -668,10 +750,14 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
     const left = Math.max(0, Math.ceil((state.duration - t) / 1000));
     setText(timerEl, String(left));
     timerEl.classList.toggle('low', left < 10 && !state.over);
-    const w = state.over || frozen ? null : e.warning;
-    flash.classList.toggle('yellow', !!w && w.kind === 'fast');
-    flash.classList.toggle('red', !!w && w.kind === 'charged');
+    // Warnung bleibt auch im Freeze sichtbar (die Spielzeit steht, das Fenster auch): wer im Banner wischt, weicht danach aus
+    // Rand und Knopf sagen dasselbe: in der Sperre (Weiterwischen nach einem Fehlversuch) steht der Rand grau statt zu blinken
+    const w = state.over ? null : e.warning, open = !!w?.dodgeable && !w.dodged, locked = t < state.dodgeLockUntil, hot = open && !locked;
+    flash.classList.toggle('yellow', hot && w.kind === 'fast');
+    flash.classList.toggle('red', hot && w.kind === 'charged');
+    flash.classList.toggle('locked', open && locked);
     enemySprite.classList.toggle('windup', !!w);
+    renderDodge(w, t);
     enemySprite.classList.toggle('stunned', e.status.stunUntil > t);
     enemySprite.classList.toggle('weak', e.status.weakenedUntil > t);
     enemySprite.classList.toggle('poisoned', !!e.status.poison); // mein echtes Gesicht bleibt ungetönt, „Gift" steht in der Leiste
@@ -688,18 +774,47 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
     const swap = specials.querySelector('.swap');
     if (swap) swap.disabled = !!shownMe || state.over || frozen || !state.team.some((f, i) => i !== state.active && f.btc > 0);
   }
+  // Ausweich-Knopf = Warnung + Zeitbalken: gelb (schnell) bzw. rot (Lade-Attacke) „AUSWEICHEN!", der Balken läuft bis zum
+  // Einschlag leer; die Kerbe markiert die letzten DODGE_PERFECT ms („Perfekt!"), „JETZT!" kommt eine Reaktionszeit davor
+  // (NOW_LEAD). Danach die Rückmeldung (steht nach dem Einschlag noch NOTE_MS), in der Sperre nach einem Fehlversuch dessen
+  // Grund (kurz), bei Heilung/Beschwörung „nicht abwehrbar"
+  function renderDodge(w, t) {
+    let cls = '', label = 'Ausweichen', left = 0;
+    const locked = t < state.dodgeLockUntil, note = dodgeNote && performance.now() < dodgeNote.until ? dodgeNote : null;
+    if (w?.dodgeable) {
+      const total = Math.max(1, w.firesAt - w.startAt);
+      left = Math.max(0, w.firesAt - t) / total;
+      const zone = `${Math.min(100, (100 * CONST.DODGE_PERFECT) / total).toFixed(1)}%`;
+      if (dodgeBtn.style.getPropertyValue('--zone') !== zone) dodgeBtn.style.setProperty('--zone', zone);
+      if (w.dodged) { cls = w.perfect ? 'done perfect' : 'done'; label = w.perfect ? 'Perfekt!' : 'Ausgewichen!'; }
+      else if (locked) { cls = 'locked'; label = lockText || 'Gesperrt'; }
+      else if (w.firesAt - t <= CONST.DODGE_PERFECT + NOW_LEAD) { cls = `on now ${w.kind}`; label = 'JETZT!'; }
+      else { cls = `on ${w.kind}`; label = 'AUSWEICHEN!'; }
+    } else if (w) { cls = 'immune'; label = 'nicht abwehrbar'; }
+    else if (note) { cls = note.cls; label = note.label; }
+    else if (locked) { cls = 'locked'; label = lockText || 'Gesperrt'; }
+    const on = cls.split(' ');
+    for (const k of DODGE_STATES) dodgeBtn.classList.toggle(k, on.includes(k));
+    setText(dodgeLabel, label);
+    setWidth(dodgeFill, (100 * left).toFixed(1));
+  }
 
   // ---------- Schleife ----------
   // Feste Zeitschritte mit Aufholen: auch bei gedrosseltem rAF (Hintergrund-Tab,
   // sparsamer Browser) folgt die Spielzeit der echten Zeit. Tipps werden auf die
   // Schritte verteilt, Spezial/Ausweichen/Wechsel gelten im ersten Schritt.
-  // Freeze (pauseUntil, echte Zeit): Spielzeit steht, Eingaben verfallen, nur rendern. Startet ein Freeze (Spezial,
-  // Wolfsschanze), wird der Rest des Aufholens verworfen, damit die Sequenz nicht in eingeholter Spielzeit verpufft.
+  // Freeze (pauseUntil, echte Zeit): Spielzeit steht, Tipps und Knöpfe verfallen, nur rendern. Ein Wisch im Freeze zählt sofort
+  // zur stehenden Spielzeit (tick mit dt 0; die Warnung ist ja mit eingefroren). Startet ein Freeze
+  // (Spezial, Wolfsschanze), wird der Rest des Aufholens verworfen, damit die Sequenz nicht in eingeholter Spielzeit verpufft.
   const STEP = 1000 / 60, MAX_CATCHUP = 1500;
   function loop(ts) {
     if (!running) return;
     if (ts < pauseUntil) {
-      lastTs = ts; input = freshInput();
+      lastTs = ts;
+      // Wisch im Freeze gleich verarbeiten (dt 0: die Spielzeit steht, das Fenster auch), damit Knopf und Text sofort bestätigen
+      if (input.dodge) for (const e of tick(state, 0, { dodge: true })) handle(e);
+      input = freshInput();
+      launchShot();
       render();
       raf = requestAnimationFrame(loop);
       return;
@@ -721,7 +836,7 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
       if (paused()) break;
     }
     batchDelay = 0; koPending = false;
-    if (!state.over && !paused()) preEcho();
+    launchShot();
     if (!state.over && !paused() && state.time >= nextLineAt) speak();
     render();
     raf = state.over ? 0 : requestAnimationFrame(loop);
@@ -761,17 +876,34 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
   }
 
   // ---------- Eingabe ----------
-  stage.addEventListener('pointerdown', e => {
+  // Ausweichen: Wisch (ab SWIPE_PX schon beim Ziehen, jede Richtung), Knopf oder Pfeiltaste. Mein Gesicht weicht sofort aus,
+  // auch im Freeze; ob es zählt, entscheidet die Engine im nächsten Schritt (Puffer, Sperre, Perfekt). In der Sperre wackelt der Knopf
+  function dodgeNow(dir) {
     if (!running || state.over) return;
-    down = { x: e.clientX, y: e.clientY };
+    dodgeDir = dir;
+    input.dodge = true;
+    if (state.time < state.dodgeLockUntil) anim(dodgeBtn, 'shake-x', 400);
+    else anim(meSprite, `dodge-${dir}`, 450);
+  }
+  stage.addEventListener('pointerdown', e => {
+    if (!running || state.over || e.target.closest('.dodge-btn')) return;
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, swiped: false });
     try { stage.setPointerCapture(e.pointerId); } catch { /* egal */ }
   });
+  stage.addEventListener('pointermove', e => {
+    const p = ptrs.get(e.pointerId);
+    if (!p || p.swiped) return;
+    const dir = swipeDir(e.clientX - p.x, e.clientY - p.y);
+    if (dir) { p.swiped = true; dodgeNow(dir); } // ein Wisch = ein Ausweichen, Loslassen tippt dann nicht mehr
+  });
   stage.addEventListener('pointerup', e => {
-    if (!down) return;
-    const dx = e.clientX - down.x;
-    down = null;
-    if (!running || state.over || paused()) return; // im Freeze verfallen Tipps
-    if (Math.abs(dx) > 40) { input.dodge = true; dodgeDir = dx < 0 ? 'left' : 'right'; return; }
+    const p = ptrs.get(e.pointerId);
+    if (!p) return;
+    ptrs.delete(e.pointerId);
+    if (p.swiped || !running || state.over) return;
+    const dir = swipeDir(e.clientX - p.x, e.clientY - p.y);
+    if (dir) return dodgeNow(dir); // ohne pointermove dazwischen (sehr schneller Wisch)
+    if (paused()) return; // im Freeze verfallen Tipps
     input.taps += 1;
     sfx.play('tap');
     const r = stage.getBoundingClientRect();
@@ -779,11 +911,14 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
     ring.style.left = `${e.clientX - r.left}px`;
     ring.style.top = `${e.clientY - r.top}px`;
   });
-  stage.addEventListener('pointercancel', () => { down = null; });
-  el.addEventListener('click', e => { if (e.target.closest('button')) sfx.play('click'); }); // alle Buttons im Kampf-Screen
+  stage.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); }); // z. B. Android-Zurück-Geste vom Rand: ein schon gezählter Wisch bleibt
+  // Knopf: schon beim Drücken (nicht erst beim Loslassen); Tastatur (Enter/Leertaste) über click ohne Zeiger
+  dodgeBtn.addEventListener('pointerdown', e => { e.preventDefault(); dodgeNow(dodgeDir === 'left' ? 'right' : 'left'); });
+  dodgeBtn.addEventListener('click', e => { if (e.detail === 0) dodgeNow('left'); });
+  el.addEventListener('click', e => { if (e.target.closest('button:not(.dodge-btn)')) sfx.play('click'); }); // alle Buttons im Kampf-Screen
   function onKey(e) {
-    if (!running || state.over || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
-    input.dodge = true; dodgeDir = e.key === 'ArrowLeft' ? 'left' : 'right';
+    if (!running || state.over || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') || e.repeat) return;
+    dodgeNow(e.key === 'ArrowLeft' ? 'left' : 'right');
     e.preventDefault();
   }
 
@@ -877,12 +1012,13 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
     rede.forEach(p => p.stop()); rede = [];
     flash.className = 'flash'; stage.classList.remove('rage', 'quake-s', 'quake-m', 'quake-l', 'overheat', 'blow', 'side-hits', 'aside', 'negative', 'rewind');
     enemySprite.className = 'enemy-sprite sprite'; meSprite.className = 'sprite';
-    specials.classList.remove('shake-x'); enemyPanel.classList.remove('glow'); mePanel.classList.remove('glow', 'glitch');
-    resetCombo(); stunTextAt = -Infinity; echoAt = null;
+    specials.classList.remove('shake-x'); enemyPanel.classList.remove('glow'); mePanel.classList.remove('glow', 'glitch'); mining.classList.remove('glow');
+    dodgeBtn.className = 'dodge-btn'; dodgeLabel.textContent = 'Ausweichen'; dodgeFill.style.width = '0%'; dodgeNote = null; lockText = ''; dodgeFloat = null;
+    resetCombo(); stunTextAt = -Infinity;
     pauseUntil = 0; heldBtc = null; shownMe = null; meHoldUntil = 0; nextLineAt = Infinity; sayTimer = 0; bossFx = ''; bossHit = null;
     sw.classList.add('hidden'); overlay.classList.add('hidden'); intro.classList.add('hidden'); hideSay();
     overlay.querySelector('.confetti').innerHTML = '';
-    down = null; input = freshInput();
+    ptrs.clear(); input = freshInput(); bossShot = null; shot = null;
   }
 
   function start({ team, enemy, rng = Math.random, mode = 'arena', arena = null, arenaLevel = 1, reward = 0, masteredAfter = false, wild = null, shownLine = '', canRetry = null }) {
@@ -900,6 +1036,7 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
     enemySprite.src = w ? sprite(w.id) : bossArt(state.enemy.id);
     // echtes Gesicht im Seltenheitsrahmen, in der Effekt-Ebene über Dimmer, Requisiten und ₿-Regen (css/battle.css)
     if (w) { enemySprite.classList.add('face', `r-${w.rarity}`); fx.prepend(enemySprite); }
+    fx.append(dodgeBtn);
     meSprite.src = sprite(me.id);
     setFrame(me);
     anim(meSprite, 'slide-in', 500);

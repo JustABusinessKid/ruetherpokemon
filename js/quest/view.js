@@ -14,8 +14,15 @@
 // Uhren: gt = Spielzeit (steht in der Pause, treibt Effekte, Würfe, Blasen), rt = echte Zeit (Auswahl-Puls, Untertasse, Abspann).
 // Bedienung: Antippen wählt/läuft/interagiert, Doppeltipp auf einen Rüther = Kreismenü, Zielmodus mit Reichweite, Ziehen = Kamera,
 // Zwei-Finger-Zoom und ±. Sounds: vorhandene sfx plus step/alarm/steal/gas (audio.js; unbekannte Namen sind stumm).
-import { createQuest, tick, canExtract, visibleCone, abilitiesFor, abilityTargets, tratschMeet, ABILITIES, ENEMY_TYPES } from './engine.js';
+// v11 (Spec Mehrspieler §4/§5): createQuestScreen({ el, onEnd, onProgress }) -> { start, stop, send, setRival, debug }.
+//   start({ …, coop: { link, role: 'host'|'guest', partner: { name, avatar } } }): Koop mit bis zu 4 Einheiten (fighters erst Host,
+//   dann Gast, je mit owner). Host rechnet wie sonst und schickt alle 200 ms qs; der Gast tickt nie, schickt Befehle als qc (coop.js).
+//   onProgress({ done, total, min, timeMs, alarm, over, result }) höchstens 1× pro s und beim Ende (Rennen);
+//   setRival({ name, avatar, done, total, over, result, lost? } | null): Gegner-Chip in der oberen Leiste.
+import { createQuest, tick, canExtract, visibleCone, abilitiesFor, abilityTargets, tratschMeet, questSummary, questSnapshot, applyQuestSnapshot, packEvents, ABILITIES, ENEMY_TYPES } from './engine.js';
 import { MISSION_BY_ID, MELEE_HINT } from './missions.js';
+import { COOP, cleanCmd, cleanSummary } from './coop.js';
+import { RACE } from './race.js';
 import { makeFighter } from '../battle.js';
 import { RUETHER_BY_ID } from '../data.js';
 import { QUEST_SATS } from '../progress.js';
@@ -32,7 +39,7 @@ const DOUBLE_MS = 350, DOUBLE_PX = 30, DRAG_PX = 10, SPREAD = 0.9; // SPREAD: Mi
 const RING_UP = 30; // Kreismenü: Abstand der oberen Plätze über der Rüther-Mitte (Gesicht bis Zoom 2 frei)
 const RING_W = [78, 100]; // Kreismenü: Abstand der Seitenplätze, weiter raus, wenn ein Teamkamerad drunter läge
 const SUS_BAR = new Set(['patrol', 'suspicious', 'investigate', 'distracted']); // Misstrauens-Balken nur bei eingeschaltetem Kegel
-const face = id => `sprites/${id}.png`;
+const face = id => `sprites/${RUETHER_BY_ID[id] ? id : 'unknown'}.png`; // Koop: ids kommen auch vom Host (Spec §0), nur bekannte
 const fxArt = n => `art/fx-${n}.png`;
 const short = id => id[0].toUpperCase() + id.slice(1); // „Onkel Micha“ → Micha
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
@@ -42,7 +49,9 @@ const GOAL_ART = { steal: 'art/q-coin.png', sabotage: 'art/q-saucer.png', fetch:
 const FACE_LEFT = new Set(['dackel']); // Sprite schaut nach links: Spiegeln umgekehrt
 const KIESER_LINES = [['bernd', 'Erst Kieser, dann Kaffee!'], ['viktor', 'Ich wollte doch nur nicht duschen …'], ['bernd', 'Danach bin ich so breit, ich pass durch keine Tür mehr!']];
 const MINI_W = 40; // Minikarte ab mehr als 40 Kacheln Breite
-const fmt = n => n.toLocaleString('de-DE');
+const fmt = n => (Number(n) || 0).toLocaleString('de-DE'); // landet in innerHTML: nie fremder Text (Koop-Events)
+const isObj = x => !!x && typeof x === 'object' && !Array.isArray(x);
+const whose = n => (/[sßxz]$/i.test(n) ? `${n}’` : `${n}s`); // „Papas Rüther“, „Klaus’ Rüther“
 const THROWN = { can: fxArt('beer-can'), mms: fxArt('mms'), controller: fxArt('controller'), phone: 'art/q-phone.png' };
 const MMS = ['#B03B2B', '#3F8EF5', '#5BB55A', '#F2C94C', '#E0A52B', '#7A4A2A'];
 const RED = '#E0634C', GREEN = '#5BB55A', TEAL = '#3FC1B0', AMBER = '#E0A52B', PINK = '#F29BC8', LILAC = '#C77DFF', SKY = '#9fd0ea';
@@ -77,6 +86,7 @@ const HTML = `
   <div class="q-goal"><img class="q-goal-ico" alt=""><span class="q-goal-label"></span><b class="q-goal-n"></b></div>
   <b class="q-time">0:00</b>
   <div class="q-alarm"><span>Alarm</span><div class="bar"><div class="fill"></div></div><b class="q-note hidden"></b></div>
+  <div class="q-rival hidden"><span class="q-rival-tag">Rennen</span><img alt=""><span class="q-rival-name"></span><b class="q-rival-n"></b></div>
 </div>
 <div class="q-stage">
   <canvas class="q-cv"></canvas>
@@ -98,7 +108,7 @@ const HTML = `
   <div class="q-row q-ctrl"><button class="q-pause">Pause</button><button class="q-extract primary" disabled>Abheben</button><button class="q-quit danger">Aufgeben</button></div>
 </div>`;
 
-export function createQuestScreen({ el, onEnd }) {
+export function createQuestScreen({ el, onEnd, onProgress }) {
   el.classList.add('q-screen');
   el.innerHTML = HTML;
   const $ = s => el.querySelector(s);
@@ -107,7 +117,7 @@ export function createQuestScreen({ el, onEnd }) {
   const alarmBox = $('.q-alarm'), alarmFill = $('.q-alarm .fill');
   const teamEl = $('.q-team'), powersEl = $('.q-powers'), pauseBtn = $('.q-pause'), extractBtn = $('.q-extract'), quitBtn = $('.q-quit');
   const aimEl = $('.q-aim'), aimOpts = $('.q-aim-opts'), pausedEl = $('.q-paused'), msgEl = $('.q-msg'), ringEl = $('.q-ring'), tutEl = $('.q-tut'), cardEl = $('.q-card'), stampEl = $('.q-stamp');
-  const noteEl = $('.q-note'), mapBtn = $('.q-mapbtn'), miniEl = $('.q-mini'), miniCv = $('.q-mini-cv'), cutEl = $('.q-cut');
+  const noteEl = $('.q-note'), mapBtn = $('.q-mapbtn'), miniEl = $('.q-mini'), miniCv = $('.q-mini-cv'), cutEl = $('.q-cut'), rivalEl = $('.q-rival');
 
   let st = null, th = null, mapCv = null, gasPat = null, deoPat = null, seq = 0, abs = []; // abs[i]: abilitiesFor(st.units[i]), fest für die Quest
   let mini = null, cut = null, caught = null, hasWater = false, catcher = {}; // mini: { s, base, was } solange offen; cut: laufende Cutscene
@@ -121,6 +131,13 @@ export function createQuestScreen({ el, onEnd }) {
   const scolder = new Map(), chatAt = new Map(); // Junge: Gegner → schimpfende Einheit; nächster Spruch je Gegner (Schimpfen, Streit)
   const ptrs = new Map();
   let gesture = null;
+  // v11 Koop: { link, role, partner, ready (Gast hat qr geschickt), gone (Verbindung weg), alone (Host allein weiter), out (Events fürs
+  // nächste qs), endEv, offs (Link-Abos), timer, qrAt } oder null. Rennen läuft ohne coop (nur onProgress/setRival).
+  let coop = null, progAt = -1e9;
+  const remote = () => coop?.role === 'guest'; // Gast: tickt nie, zeigt den Zustand des Hosts
+  const hosting = () => coop?.role === 'host' && !coop.alone;
+  const isMine = i => { const o = st.units[i]?.owner; return !coop || !o || o === coop.role; };
+  const istep = () => (remote() ? COOP.SEND_MS : STEP); // Interpolation: Gast über ein qs-Intervall
 
   function freshFx() { return { parts: [], texts: [], bubbles: [], rings: [], projs: [], sprites: [], helpers: [], bolts: [] }; }
   function later(fn, ms) { const id = setTimeout(() => { timers.delete(id); fn(); }, ms); timers.add(id); return id; }
@@ -128,13 +145,15 @@ export function createQuestScreen({ el, onEnd }) {
   const age = born => Math.max(0, gt - born);
 
   // ---------- Positionen (interpoliert zwischen zwei Logik-Schritten) ----------
-  function snap() {
-    for (const u of st.units) prev.set(u, { x: u.x, y: u.y, dir: u.dir });
-    for (const e of st.enemies) prev.set(e, { x: e.x, y: e.y, dir: e.dir });
-    for (const f of st.effects) if (f.kind === 'decoy' || f.kind === 'horde') prev.set(f, { x: f.x, y: f.y, dir: f.dir });
+  // shown: von der gerade gezeichneten Lage aus (Koop-Gast: ein früh eintreffendes qs lässt nichts springen)
+  function snap(shown = false) {
+    const keep = o => prev.set(o, shown ? pos(o) : { x: o.x, y: o.y, dir: o.dir });
+    for (const u of st.units) keep(u);
+    for (const e of st.enemies) keep(e);
+    for (const f of st.effects) if (f.kind === 'decoy' || f.kind === 'horde') keep(f);
   }
   function pos(ent) {
-    const p = prev.get(ent), a = acc / STEP;
+    const p = prev.get(ent), a = Math.min(1, acc / istep());
     return p ? { x: p.x + (ent.x - p.x) * a, y: p.y + (ent.y - p.y) * a, dir: p.dir + angDiff(p.dir, ent.dir) * a, moved: p.x !== ent.x || p.y !== ent.y } : { x: ent.x, y: ent.y, dir: ent.dir, moved: false };
   }
   // Rüther dicht beieinander auffächern, damit kein echtes Gesicht verdeckt ist (§0); Zeichnen und Tippen nutzen dasselbe (draw.js fan)
@@ -149,7 +168,8 @@ export function createQuestScreen({ el, onEnd }) {
 
   // ---------- Effekt-Bausteine (alles in Spielzeit gt, Weltpixel) ----------
   // Geburtszeit der Effekte: Engine-Zeit; in der Pause die stehende Zeichenzeit gt (< st.time), sonst fehlten Wurf, Ring und Blase bis „Weiter“
-  const now = () => (paused ? gt : st.time);
+  // Gast: gt läuft der Host-Zeit ein qs-Intervall hinterher, Effekte starten sofort
+  const now = () => (paused || remote() ? gt : st.time);
   function text(ref, t, color = PAPER, size = 16, ms = 1100) { fx.texts.push({ ref, t, color, size, ms, born: now() }); }
   function say(ref, t, ms = 2600, delay = 0) { // eine Blase je Figur, höchstens 5 gleichzeitig; delay in Spielzeit
     if (!t) return;
@@ -181,13 +201,28 @@ export function createQuestScreen({ el, onEnd }) {
   function pulseEdge() { edge.classList.remove('pulse'); void edge.offsetWidth; edge.classList.add('pulse'); }
 
   // ---------- Befehle ----------
-  function send(cmd) { if (!st || st.over) return []; const ev = tick(st, 0, [cmd]); handle(ev); return ev; }
+  // Koop: der Gast schickt den Befehl an den Host (liefert []), der Host stempelt eigene Befehle mit by: 'host'
+  function send(cmd) {
+    if (!st || st.over) return [];
+    if (remote()) { coop.link.send({ t: 'qc', cmd }); return []; }
+    const ev = tick(st, 0, [coop ? { ...cmd, by: 'host' } : cmd]);
+    feed(ev);
+    return ev;
+  }
+  // Events animieren; der Host legt sie fürs nächste qs auf den Stapel und schickt nach dem Ende sofort
+  function feed(ev) {
+    handle(ev);
+    if (!hosting() || !ev.length) return;
+    coop.out.push(...ev);
+    if (st.over) flush();
+  }
   const abOf = (i, id) => abs[i]?.find(a => a.id === id);
-  const upUnits = () => st.units.filter(u => !u.down).map(u => u.i);
+  const upUnits = () => st.units.filter(u => !u.down && isMine(u.i)).map(u => u.i);
   const actors = () => sel.filter(i => !st.units[i].down);
   const nearest = (ids, x, y) => ids.reduce((b, i) => (b == null || Math.hypot(st.units[i].x - x, st.units[i].y - y) < Math.hypot(st.units[b].x - x, st.units[b].y - y) ? i : b), null);
 
   function select(ids, { keepFollow = false } = {}) {
+    if (coop) { ids = ids.filter(isMine); if (!ids.length) return; } // Koop: nur eigene
     const up = ids.filter(i => st.units[i] && !st.units[i].down);
     sel = up.length ? up : ids.slice(0, 1);
     if (!keepFollow) follow = true;
@@ -262,6 +297,7 @@ export function createQuestScreen({ el, onEnd }) {
     const hit = pick(sx, sy), w = toWorld(sx, sy), wx = w.x / TILE, wy = w.y / TILE;
     if (hit?.kind === 'unit') {
       const i = hit.ref.i;
+      if (!isMine(i)) { lastTap = {}; return msg(`Das ist ${whose(coop.partner.name)} Rüther.`); }
       if (lastTap.u === i && t - lastTap.t < DOUBLE_MS) { lastTap = {}; return openMenu(i); }
       lastTap = { u: i, t, sx, sy };
       select([i]); sfx.play('tap');
@@ -378,7 +414,7 @@ export function createQuestScreen({ el, onEnd }) {
   const chg = ab => (ab.charges != null ? '<b class="q-chg"></b>' : '');
   function openMenu(i) {
     const u = st.units[i];
-    if (!u || u.down || st.over || briefingOpen()) return;
+    if (!u || u.down || st.over || briefingOpen() || !isMine(i)) return;
     select([i], { keepFollow: true });
     endAim();
     menuFor = i;
@@ -417,13 +453,15 @@ export function createQuestScreen({ el, onEnd }) {
   function buildTeam() {
     teamEl.innerHTML = '';
     for (const u of st.units) {
-      const b = document.createElement('button');
-      b.className = 'q-por';
+      const b = document.createElement('button'), theirs = !isMine(u.i); // Koop: Rüther des Partners mit Namens-Etikett, Gesicht unverändert
+      b.className = theirs ? 'q-por theirs' : 'q-por';
       b.dataset.u = u.i;
-      b.setAttribute('aria-label', short(u.id));
-      b.innerHTML = `<img class="r-${esc(u.rarity)}" src="${face(u.id)}" alt=""><span class="q-hp"><i></i></span><span class="q-carry hidden"></span>`;
+      b.setAttribute('aria-label', theirs ? `${short(u.id)} (${coop.partner.name})` : short(u.id));
+      b.innerHTML = `<img class="r-${esc(u.rarity)}" src="${face(u.id)}" alt=""><span class="q-hp"><i></i></span><span class="q-carry hidden"></span>`
+        + (theirs ? `<span class="q-owner">${esc(coop.partner.name)}</span>` : '');
       b.addEventListener('click', () => {
         if (!st || st.over) return;
+        if (!isMine(u.i)) return msg(`Das ist ${whose(coop.partner.name)} Rüther.`);
         if (lastTap.p === u.i && performance.now() - lastTap.t < DOUBLE_MS) { lastTap = {}; return openMenu(u.i); }
         lastTap = { p: u.i, t: performance.now() };
         select([u.i]);
@@ -441,7 +479,7 @@ export function createQuestScreen({ el, onEnd }) {
     if (key === powersKey) return;
     powersKey = key;
     powersEl.innerHTML = '';
-    if (!one) { powersEl.innerHTML = '<span class="q-powers-none">Ganzes Team gewählt</span>'; return; }
+    if (!one) { powersEl.innerHTML = `<span class="q-powers-none">${coop && !coop.alone ? 'Deine Rüther gewählt' : 'Ganzes Team gewählt'}</span>`; return; }
     for (const ab of abs[one.i]) {
       const b = document.createElement('button');
       b.className = 'q-ab';
@@ -510,11 +548,17 @@ export function createQuestScreen({ el, onEnd }) {
     pauseBtn.disabled = briefing;
     setText(pauseBtn, paused && !briefing ? 'Weiter' : 'Pause');
     pauseBtn.classList.toggle('on', paused && !briefing);
-    pausedEl.classList.toggle('hidden', !paused || !!ending || briefing || !!mini || !!cut);
+    const gone = !!coop?.gone; // Koop: Verbindung weg
+    setText(pausedEl, gone ? `Verbindung zu ${coop.partner.name} weg …` : 'Pause · Befehle gehen trotzdem');
+    pausedEl.classList.toggle('hidden', !(paused || gone) || !!ending || briefing || !!mini || !!cut);
     if (mini) drawMini();
   }
 
-  function setPaused(p) { paused = !!p; if (!paused) lastTs = 0; }
+  // Koop-Gast: Pause ist ein Wunsch an den Host (qp); paused selbst kommt mit jedem qs zurück
+  function setPaused(p) {
+    if (remote()) { if (!st?.over) coop.link.send({ t: 'qp', on: !!p }); return; }
+    paused = !!p; if (!paused) lastTs = 0;
+  }
   // Bei offener Minikarte heißt der Knopf „Weiter“: Karte zu und weiter, nicht blind hinter der Karte weiterspielen
   function togglePause() { if (mini) { closeMini(); setPaused(false); } else setPaused(!paused); }
   pauseBtn.addEventListener('click', () => { if (st && !st.over && tut < 0) togglePause(); });
@@ -524,7 +568,8 @@ export function createQuestScreen({ el, onEnd }) {
     quitAsk = true;
     const was = paused, run = seq;
     setPaused(true);
-    const i = await popup({ title: 'Aufgeben?', html: '<p>Die Haunebu hebt ohne Beute ab. Die Quest zählt als nicht geschafft.</p>', buttons: [{ label: 'Weiterspielen', primary: true }, { label: 'Aufgeben', danger: true }] });
+    const why = coop && !coop.alone ? 'Aufgeben beendet die Quest für euch beide.' : 'Die Haunebu hebt ohne Beute ab. Die Quest zählt als nicht geschafft.';
+    const i = await popup({ title: 'Aufgeben?', html: `<p>${why}</p>`, buttons: [{ label: 'Weiterspielen', primary: true }, { label: 'Aufgeben', danger: true }] });
     quitAsk = false;
     if (run !== seq || !st || st.over) return;
     if (i === 1) send({ type: 'abort' }); else setPaused(was);
@@ -546,12 +591,22 @@ export function createQuestScreen({ el, onEnd }) {
     cardEl.innerHTML = `<p class="q-card-place">${esc(m.place)}</p><h2>${esc(m.name)}</h2>`
       + `<p class="q-card-var">${where}<b>Variante: ${esc(v.name)}.</b> ${esc(v.desc)}</p><p>${esc(m.intro)}</p><p class="q-card-hint">${esc(m.hint)}</p><p class="q-card-melee">${esc(MELEE_HINT)}</p>${warn}`
       + `<div class="q-card-team">${st.units.map(u => `<img class="r-${esc(u.rarity)}" src="${face(u.id)}" alt="${esc(short(u.id))}">`).join('')}</div>`
-      + `<p class="q-card-meta">${esc(m.objective.label)} · ${st.timeLimit == null ? 'Keine Eile' : mmss(st.timeLimit)}${solo}</p><button class="primary q-go">Los!</button>`;
+      + `<p class="q-card-meta">${esc(m.objective.label)} · ${st.timeLimit == null ? 'Keine Eile' : mmss(st.timeLimit)}${solo}${coop ? ` · Koop mit ${esc(coop.partner.name)}` : ''}</p><button class="primary q-go">Los!</button>`;
     cardEl.classList.remove('hidden');
     cardEl.querySelector('.q-go').addEventListener('click', () => {
+      if (goWait()) return;
       cardEl.classList.add('hidden');
       if (withTut) { tut = 0; showTut(); } else setPaused(false);
     });
+    updateGo();
+  }
+  // Koop: Host wartet auf qr des Gasts, der Gast auf das erste qs ohne Pause (Host hat „Los!“ gedrückt)
+  const goWait = () => remote() || (hosting() && !coop.ready);
+  function updateGo() {
+    const b = cardEl.querySelector('.q-go');
+    if (!b) return;
+    b.disabled = goWait();
+    setText(b, goWait() ? `Warte auf ${coop.partner.name} …` : 'Los!');
   }
   function showTut() {
     const s = TUT[tut];
@@ -576,11 +631,14 @@ export function createQuestScreen({ el, onEnd }) {
       const U = e.unit != null ? st.units[e.unit] : null;
       switch (e.type) {
         case 'path':
+          if (!isMine(e.unit)) break; // Wege des Partners zeigt die gestrichelte Linie
           ring(e.to.x + 0.5, e.to.y + 0.5, 0.45, PAPER, 450);
           sfx.play('step');
           tutStep(1);
           break;
-        case 'fail': msg(e.text); sfx.play('warn'); break;
+        case 'fail': // Koop: nur beim Absender des Befehls (by), sonst für eigene Einheiten und ohne Einheit
+          if (e.by ? !coop || e.by === coop.role : e.unit == null || isMine(e.unit)) { msg(e.text); sfx.play('warn'); }
+          break;
         case 'interactStart':
           sfx.play('tap');
           if (e.kind === 'revive') say({ u: e.unit }, 'Steh auf, wir sind noch nicht fertig!', 2000);
@@ -739,8 +797,7 @@ export function createQuestScreen({ el, onEnd }) {
         case 'resumed': {
           const u = st.units[e.unit];
           prev = new WeakMap(); // harter Schnitt: Rüther und Stefan springen, nicht gleiten
-          cam = { x: u.x * TILE, y: u.y * TILE };
-          select([e.unit]);
+          if (isMine(e.unit)) { cam = { x: u.x * TILE, y: u.y * TILE }; select([e.unit]); }
           msg(`Kieser-Training #${st.kieser} überstanden. Zurück an der Haunebu, alles ist ruhig.`, 3000);
           break;
         }
@@ -922,7 +979,8 @@ export function createQuestScreen({ el, onEnd }) {
 
   function endSequence(e) {
     closeMenu(); endAim(); closeMini(); closeCut();
-    tut = -1; tutEl.classList.add('hidden'); msgEl.classList.add('hidden');
+    tut = -1; tutEl.classList.add('hidden'); msgEl.classList.add('hidden'); cardEl.classList.add('hidden');
+    progress(true);
     const lift = e.result === 'success' && (e.reason === 'extract' || e.reason === 'time'); // Raub: Zeit um, Beute an Bord, sie hebt ab
     ending = { at: rt, lift, text: e.text, summary: e.summary, result: e.result, ready: false };
     if (e.reason === 'caught') return caughtScene(e);
@@ -939,17 +997,18 @@ export function createQuestScreen({ el, onEnd }) {
   function finish() {
     if (!ending?.ready || ended) return;
     ended = true;
-    const r = {
+    let r = {
       ...ending.summary, text: ending.text, setup: st.setup, kieser: st.kieser, fine: st.fine,
       team: st.units.map(u => ({ id: u.id, name: u.name, rarity: u.rarity, level: u.level, hp: u.hp, maxHp: u.maxHp, down: u.down })),
     };
+    if (remote()) r = cleanSummary(r); // Koop-Gast: Zahlen und Ergebnis kommen vom Host (Spec §0), der Ergebnis-Screen setzt sie in HTML
     stop();
     onEnd?.(r);
   }
 
   // ---------- Cutscenes (DOM-Overlay über dem Canvas, echte Gesichter); Tippen überspringt nach kurzer Sperre ----------
   function playCut(kind, html, ms, done) {
-    const c = cut = { done, at: performance.now(), closing: false };
+    const c = cut = { kind, done, at: performance.now(), closing: false };
     cutEl.className = `q-cut ${kind}`;
     cutEl.innerHTML = html;
     later(() => { if (cut === c) endCut(); }, ms); // eine früher weggetippte Szene beendet nicht die nächste
@@ -974,6 +1033,7 @@ export function createQuestScreen({ el, onEnd }) {
       + `<div class="q-cut-stamp"><b>Kieser-Training #${n}</b>${sub ? `<span>${esc(sub)}</span>` : ''}</div><span class="q-cut-skip">Tippen zum Überspringen</span>`, 4000, () => {
       const mine = cut;
       cutEl.classList.add('black');
+      if (remote()) return; // Koop-Gast: resume schickt nur der Host, die Szene schließt der nächste unpausierte Zustand (onSnapshot)
       // nur die eigene Szene schließen: erwischt Stefan (oder der Ranger) gleich nach dem Resume wieder, läuft schon die nächste,
       // und deren Ende (resume bzw. Abspann) bliebe sonst nie aus, die Quest stünde still
       later(() => { send({ type: 'resume' }); later(() => { if (cut === mine) closeCut(); }, 300); }, 240);
@@ -1815,26 +1875,138 @@ export function createQuestScreen({ el, onEnd }) {
     rt = ts;
     const real = Math.min(MAX_CATCHUP, lastTs ? Math.max(0, ts - lastTs) : 16);
     lastTs = ts; frameDt = real;
-    if (!st.over && !paused) {
+    if (remote()) { acc += real; if (st.over) overClock += real; watchHost(); } // Koop-Gast: keine Logik, nur Interpolation bis zum nächsten qs
+    else if (!st.over && !paused) {
       acc += real;
-      while (acc >= STEP && !st.over) { snap(); handle(tick(st, STEP)); acc -= STEP; }
-      if (!st.over && !warned && st.timeLimit != null && st.timeLimit - st.time <= 60_000) { warned = true; msg('Noch 1 Minute!'); sfx.play('warn'); }
+      while (acc >= STEP && !st.over) { snap(); feed(tick(st, STEP)); acc -= STEP; }
     } else if (st.over) overClock += real;
-    gt = Math.max(0, st.time - STEP + acc + overClock);
+    if (!st.over && !paused && !warned && st.timeLimit != null && st.timeLimit - st.time <= 60_000) { warned = true; msg('Noch 1 Minute!'); sfx.play('warn'); }
+    gt = Math.max(0, st.time - istep() + (remote() ? Math.min(acc, istep()) : acc) + overClock);
     if (vw && vh) draw();
     hud();
+    progress();
     raf = requestAnimationFrame(frame);
   }
 
-  async function start({ mission, setup, variant, team, fighters, loadouts, rng = Math.random, tutorial } = {}) {
+  // Zwischenstand fürs Rennen (§5): höchstens 1× pro s, beim Ende sofort (force)
+  function progress(force = false) {
+    if (!onProgress || !st || (!force && (st.over || rt - progAt < RACE.PROGRESS_MS))) return;
+    progAt = rt;
+    const o = st.objective;
+    onProgress({ done: o.done, total: o.total, min: o.min, timeMs: st.time, alarm: Math.round(st.alarm * 100) / 100, over: st.over, result: st.result });
+  }
+
+  // Rennen: Chip mit dem echten Gesicht des Gegners und seinem Stand. r: { name, avatar, done, total, over, result, lost? } | null
+  function setRival(r) {
+    if (!isObj(r)) return rivalEl.classList.add('hidden');
+    const n = v => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.round(v)) : 0);
+    const id = typeof r.avatar === 'string' && RUETHER_BY_ID[r.avatar] ? r.avatar : null, im = rivalEl.querySelector('img');
+    im.classList.toggle('hidden', !id);
+    if (id && !im.src.endsWith(face(id))) im.src = face(id);
+    setText(rivalEl.querySelector('.q-rival-name'), String(r.name ?? '').slice(0, 24));
+    const o = st?.objective, steal = o?.type === 'steal', done = n(r.done); // dieselbe Mission: Raub zählt wie hud() gegen min
+    const goal = steal && done >= o.min ? `${done}` : `${done}/${steal ? o.min : n(r.total)}`;
+    setText(rivalEl.querySelector('.q-rival-n'), r.lost ? 'Verbindung weg' : r.over ? (r.result === 'success' ? 'fertig' : 'gescheitert') : goal);
+    rivalEl.classList.toggle('done', !r.lost && !!r.over && r.result === 'success');
+    rivalEl.classList.toggle('lost', !!r.lost);
+    rivalEl.classList.remove('hidden');
+  }
+
+  // ---------- v11 Koop: Netz ----------
+  function flush() { // Host → Gast: voller Schnappschuss, Events seit dem letzten qs; nach dem Ende wiederholt er das end-Event
+    if (!hosting() || !st) return;
+    const ev = coop.out.length ? coop.out : st.over && coop.endEv ? [coop.endEv] : [];
+    coop.endEv ||= ev.find(e => e.type === 'end') || null;
+    coop.out = [];
+    coop.link.send({ t: 'qs', s: questSnapshot(st), ev: packEvents(ev), p: paused });
+  }
+  function sendQr() { coop.qrAt = performance.now(); coop.link.send({ t: 'qr' }); }
+  function linkUp() {
+    const L = coop.link, on = (type, fn) => { const off = L.on?.(type, fn); if (typeof off === 'function') coop.offs.push(off); };
+    on('message', onMsg);
+    on('lost', () => partnerAway(true));
+    on('connected', e => { if (e?.again) partnerAway(false); });
+    on('disconnected', () => partnerLeft());
+    coop.qsAt = performance.now();
+    if (L.state !== 'connected' && L.state !== 'lost') return partnerLeft(); // schon weg, während die Bilder luden (disconnected verpasst)
+    if (hosting()) coop.timer = setInterval(flush, COOP.SEND_MS); // auch in der Pause: Echtzeit, nicht rAF
+    else sendQr();
+  }
+  // Gast: Der Host schickt qs alle 200 ms, auch in der Pause. Steht die Verbindung, aber es kommt nichts mehr (Host hat in einer
+  // Funkstille beendet und den Screen verlassen), endet die Quest wie bei 'disconnected'. Vor dem ersten qs lädt der Host evtl. noch.
+  function watchHost() {
+    if (!coop || coop.alone || coop.gone || ending || st.over || coop.link.state !== 'connected') return; // gone: away (Timer gedrosselt)
+    if (performance.now() - coop.qsAt > (coop.gotQs ? COOP.SILENT_MS : COOP.FIRST_MS)) partnerLeft();
+  }
+  function onMsg(m) {
+    if (!coop || !st || !isObj(m)) return;
+    if (m.t === 'away' || m.t === 'back') return partnerAway(m.t === 'away'); // Lobby: App im Hintergrund bzw. zurück
+    if (hosting()) {
+      if (m.t === 'qr') { coop.ready = true; updateGo(); } else if (m.t === 'qc') {
+        const c = cleanCmd(m.cmd, st.units.length);
+        if (c && !st.over) feed(tick(st, 0, [c]));
+      } else if (m.t === 'qp' && !briefingOpen() && !st.over) setPaused(!!m.on);
+    } else if (remote() && m.t === 'qs') onSnapshot(m);
+  }
+  // Gast: alte Lage merken, Zustand übernehmen (Objekte bleiben dieselben), Events animieren, Interpolation neu
+  function onSnapshot(m) {
+    if (ending || !isObj(m.s)) return;
+    coop.qsAt = performance.now(); coop.gotQs = true;
+    try {
+      // Interpolation nur neu starten, wenn die Host-Zeit weiterlief: in der Pause kommt qs auch, gt bliebe sonst nicht stehen
+      const moved = m.s.time !== st.time;
+      if (moved) snap(true);
+      applyQuestSnapshot(st, m.s);
+      if (moved) acc = 0;
+      paused = !!m.p;
+      if (Array.isArray(m.ev)) handle(m.ev.filter(isObj));
+    } catch (e) { console.warn('Koop: Schnappschuss kaputt', e); }
+    if (cut?.kind === 'kieser' && !st.paused) closeCut();
+    if (briefingOpen() && !ending) { if (!paused) cardEl.classList.add('hidden'); else if (performance.now() - coop.qrAt > 1000) sendQr(); }
+  }
+  function partnerAway(on) {
+    if (!coop || coop.alone || !st || st.over || coop.gone === on) return;
+    coop.gone = on; coop.qsAt = performance.now(); // Wächter des Gasts (watchHost) zählt ab jetzt neu
+    if (!on) return msg(`${coop.partner.name} ist zurück.`, 3000);
+    if (hosting()) setPaused(true); // „Verbindung zu <Name> weg …“ steht im Pause-Banner (hud)
+  }
+  // Endgültig weg: Gast beendet ohne Wertung, Host fragt Aufgeben / Allein weiter (dann steuert er alle Einheiten)
+  async function partnerLeft() {
+    if (!coop || coop.alone || !st || st.over) return;
+    coop.gone = false;
+    const n = coop.partner.name;
+    if (remote()) {
+      Object.assign(st, { over: true, result: 'abort', reason: 'lost', paused: null });
+      return endSequence({ type: 'end', result: 'abort', reason: 'lost', text: `Verbindung zu ${n} weg. Die Quest ist abgebrochen.`, summary: questSummary(st) });
+    }
+    coop.alone = true; // ab jetzt kein qs mehr
+    clearInterval(coop.timer);
+    setPaused(true);
+    const run = seq;
+    const i = await popup({ title: `${n} ist weg.`, html: `<p>Die Verbindung zu ${esc(n)} ist abgerissen. Allein weiter: Du steuerst ab jetzt alle Rüther.</p>`, buttons: [{ label: 'Aufgeben', danger: true }, { label: 'Allein weiter', primary: true }] });
+    if (run !== seq || !st || st.over) return;
+    if (i === 0) return send({ type: 'abort' });
+    for (const u of st.units) u.owner = 'host';
+    buildTeam(); updateGo(); powersKey = '';
+    msg('Du spielst allein weiter.');
+  }
+
+  async function start({ mission, setup, variant, team, fighters, loadouts, rng = Math.random, tutorial, coop: co } = {}) {
     stop();
     const run = seq, m = typeof mission === 'string' ? MISSION_BY_ID[mission] : mission;
+    coop = co?.link ? {
+      link: co.link, role: co.role === 'guest' ? 'guest' : 'host', partner: { name: String(co.partner?.name || 'Partner').slice(0, 24), avatar: co.partner?.avatar ?? null },
+      ready: false, gone: false, alone: false, out: [], endEv: null, offs: [], timer: 0, qrAt: 0, qsAt: 0, gotQs: false,
+    } : null;
+    el.classList.toggle('coop', !!coop);
+    // Koop: Picks des Partners sind Daten von außen; unbekannte Rüther fallen raus
     let squad = (fighters?.length ? fighters : team || []).map((f, i) => {
+      if (!f || !(f.maxBtc || RUETHER_BY_ID[f.id])) return null;
       const x = f.maxBtc ? f : makeFighter(RUETHER_BY_ID[f.id], f), lo = loadouts?.[i] ?? f.loadout;
       return lo ? { ...x, loadout: lo } : x; // v10: createQuest liest team[i].loadout
-    });
+    }).filter(Boolean);
     if (m?.solo) { const own = squad.filter(f => f.id === m.solo).sort((a, b) => b.maxBtc - a.maxBtc); if (own.length) squad = own; } // sein stärkstes Exemplar
-    st = createQuest({ mission: m, setup, variant, team: squad.slice(0, 3), rng });
+    st = createQuest({ mission: m, setup, variant, team: squad, rng, maxUnits: coop ? COOP.MAX_UNITS : 3 });
     abs = st.units.map(u => abilitiesFor(u));
     th = THEMES[st.theme] || THEMES.neuschwabenland;
     el.dataset.theme = st.theme;
@@ -1847,8 +2019,9 @@ export function createQuestScreen({ el, onEnd }) {
     mapBtn.classList.toggle('hidden', st.w <= MINI_W);
     hasWater = st.tiles.includes('W'); miniBase = null;
     buildTeam();
-    sel = [0]; powersKey = ''; follow = true; zoom = 1.25;
-    cam = { x: st.units[0].x * TILE, y: st.units[0].y * TILE };
+    const me = st.units.find(u => isMine(u.i)) || st.units[0]; // Koop: der erste eigene Rüther
+    sel = [me.i]; powersKey = ''; follow = true; zoom = 1.25; progAt = -1e9;
+    cam = { x: me.x * TILE, y: me.y * TILE };
     resize();
     // Cutscene-Kulissen laden nebenbei (groß, erst später gebraucht)
     for (const src of [...(catcher.kieser ? ['art/bg-kieser.png', 'art/boss-bernd.png'] : []), ...(catcher.fine ? ['art/bg-ranger.png'] : [])]) loadImg(src);
@@ -1864,7 +2037,8 @@ export function createQuestScreen({ el, onEnd }) {
     document.addEventListener('visibilitychange', onHide);
     running = true; paused = true; lastTs = 0;
     raf = requestAnimationFrame(frame);
-    showIntro(tutorial ?? !tutSeen());
+    showIntro(coop ? false : tutorial ?? !tutSeen()); // Koop: nie Tutorial
+    if (coop) linkUp(); // erst jetzt: vorher fehlen Karte und Bilder für Schnappschüsse und Events
   }
 
   function stop() {
@@ -1880,11 +2054,13 @@ export function createQuestScreen({ el, onEnd }) {
     acc = 0; overClock = 0; gt = 0; paused = false; ending = null; ended = false; inspect = null; lastTap = {}; reached = false; warned = false; quitAsk = false;
     tut = -1; endAim(); closeMenu();
     mini = null; caught = null; valveAt.clear(); seenE.clear(); closeCut();
-    for (const n of [tutEl, cardEl, stampEl, msgEl, pausedEl, miniEl]) n.classList.add('hidden');
+    for (const n of [tutEl, cardEl, stampEl, msgEl, pausedEl, miniEl, rivalEl]) n.classList.add('hidden');
     edge.className = 'q-edge';
+    if (coop) { for (const off of coop.offs) off(); clearInterval(coop.timer); coop = null; }
   }
 
   // debug(): Zustand und Kachel → Bildschirmpunkt (CSS-px im Canvas) für Tests und das Debug-Panel
-  const debug = () => ({ st, paused, sel, aim, menuFor, cut: cut && cutEl.className, mini: !!mini, send, fx, ending, tile: (x, y) => toScreen(x * TILE, y * TILE) });
-  return { start, stop, send, debug };
+  const debug = () => ({ st, paused, sel, aim, menuFor, cut: cut && cutEl.className, mini: !!mini, send, fx, ending, tile: (x, y) => toScreen(x * TILE, y * TILE),
+    coop: coop && { role: coop.role, ready: coop.ready, gone: coop.gone, alone: coop.alone } });
+  return { start, stop, send, setRival, debug };
 }

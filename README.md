@@ -41,8 +41,42 @@ beim Start keinen fremden Server außer den OpenStreetMap-Kacheln.
   - **Schleichen lohnt sich:** Alarmierte Wachen schlagen im Nahkampf deutlich härter zu und halten mehr aus, mit jeder Fähigkeits-Stufe im Team noch etwas mehr. Ablenken, Umgehen und leise Fähigkeiten sind der bessere Weg, jede Mission geht ohne Kampf.
 - Rangliste: Top 20 nach Trophäen, wer gerade online ist, und ein Feed mit legendären Fängen, Fusionen, gemeisterten Arenen und geschafften Quests.
 - Zurück-Taste (Android) bzw. Browser-Zurück: führt zum Zurück-Knopf des offenen Screens, nicht aus dem Spiel. Im Kampf kommt nur ein Hinweis (Aufgeben über ✕), in der Quest die Aufgeben-Rückfrage.
-- Profil: Trainer-Level und XP, Statistik, Erfolge, Sound/Haptik, Avatar, Spielstand kopieren/einfügen/löschen, Teilen.
+- Profil: Trainer-Level und XP, Statistik, Erfolge, Sound/Haptik, Avatar, Spielstand kopieren/einfügen/löschen, Teilen, **Zusammen spielen** (siehe unten).
 - Events: 18 bis 19 Uhr ist Rüther-Stunde (doppelte Spawns, 50 % mehr Sats). Jeden Tag ist ein anderer Rüther dreimal so häufig.
+
+## Zusammen spielen ohne Netz
+
+Zwei Handys, kein WLAN, keine mobilen Daten (z. B. im Flugzeug): Die Android-App verbindet sich direkt über Google Nearby
+Connections (Bluetooth, BLE, WLAN-Direct). Ablauf:
+
+1. Beide: Bluetooth einschalten. Das geht auch im Flugmodus (Flugmodus an, dann Bluetooth wieder an). Ältere Handys (Android 8 bis 11) brauchen zusätzlich Standort an.
+2. Beide: Profil → „Zusammen spielen“. Einer tippt „Spiel eröffnen“, der andere „Beitreten“. Beim ersten Mal fragt Android nach „Geräte in der Nähe“: erlauben.
+3. Verbunden: Beide sehen sich mit Gesicht und Trainer-Level und einen 4-stelligen Code, der bei beiden gleich sein muss.
+4. Wer eröffnet hat, wählt den Modus (und bei Quests die Mission). Jeder wählt sein Team aus der eigenen Sammlung, beide tippen „Bereit“, dann „Start“. Danach geht es zurück in die Lobby, „Nochmal“ heißt einfach wieder Bereit und Start.
+
+Modi:
+
+- **Arena-Duell 3 gegen 3:** je 1 bis 3 eigene Rüther, 90 Sekunden, doppelte BTC. Tippen = Angriff, Spezial-Knöpfe, Wischen = Ausweichen, wenn der Gegner eine Attacke ankündigt (seine Mining-Leiste steht oben). Wechseln ist frei. Sieg 300 Sats und 150 XP, Niederlage 100 und 50, Unentschieden 150 und 75. Wer aufgibt, kriegt nichts; ein Sieg durch Aufgeben zählt erst ab 30 Sekunden.
+- **Koop-Quest:** dieselbe Quest gemeinsam, jeder steuert bis zu 2 eigene Rüther (unter fremden steht der Name des Partners). Alle Missionen ohne Solo. Jeder bekommt die normale Quest-Belohnung, Score und Strafe gelten gemeinsam.
+- **Quest-Rennen:** dieselbe Mission auf derselben Karte, jeder spielt für sich mit dem eigenen Team (Solo-Missionen: das stärkste eigene Exemplar). Oben steht live der Stand des Partners. Jeder bekommt seine Quest-Belohnung, wer mehr schafft (bei Gleichstand: geschafft vor gescheitert, dann schneller), zusätzlich 1.000 Sats und 100 XP.
+
+Die Quest-Modi brauchen weder die Haunebu noch freigeschaltete Quests. Bricht die Verbindung ab, pausieren Duell und Koop und die
+Apps verbinden sich 60 Sekunden lang neu. Danach gilt: Duell ohne Wertung, Koop beim Gast abgebrochen (der Gastgeber kann allein
+weiterspielen), Rennen ohne Bonus. Belohnungen werden sofort beim Ende gespeichert. Die Bildschirmsperre bleibt in der Lobby aus.
+
+**Im Browser testen** (ohne Handys): Lokalen Server starten und das Spiel in **zwei Fenstern** (nicht Tabs, ein Hintergrund-Tab
+bremst) desselben Browsers öffnen, `http://localhost:8000/?slot=1` und `http://localhost:8000/?slot=2`. Dann verbinden sie sich über
+BroadcastChannel, jeder Slot hat einen eigenen Spielstand (`ruether-go-1`, `ruether-go-2`). `&lag=150` verzögert jede Nachricht
+um 150 ms wie eine echte Funkverbindung.
+
+**Android-App bauen:**
+
+    cd native && node build-www.mjs && npx cap sync android
+    cd android && JAVA_HOME="C:/Program Files/Android/Android Studio/jbr" ./gradlew assembleDebug
+
+Die APK liegt dann unter `native/android/app/build/outputs/apk/debug/app-debug.apk`. Technik: `js/net/link.js` (Verbindung, Herzschlag,
+Wiederverbinden), `native/android/.../NearbyLinkPlugin.java` (Nearby), `js/lobby.js`, `js/duel.js` und `js/duel-ui.js`,
+`js/quest/coop.js` und `js/quest/race.js`; Spezifikation in `docs/superpowers/specs/2026-10-17-ruether-go-multiplayer-design.md`.
 
 ## Online
 

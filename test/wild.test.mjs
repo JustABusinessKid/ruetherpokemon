@@ -11,7 +11,7 @@ test('wildBossDef: Christian Normal Lv. 1', () => {
   assert.equal(d.id, 'christian');
   assert.equal(d.name, 'Christian');
   assert.equal(d.btc, 160); // round(100 × 1,6)
-  assert.deepEqual(d.fast, { name: 'Rempler', damage: 6, every: 2600, warn: 600, fx: 'wild-fast', prop: null, ownerId: 'christian' });
+  assert.deepEqual(d.fast, { name: 'Rempler', damage: 6, every: 2600, warn: 800, fx: 'wild-fast', prop: null, ownerId: 'christian' });
   assert.deepEqual(d.charged.map(c => [c.name, c.damage, c.warn, c.fx, c.prop, c.ownerId]), [
     ['Plus 70 Prozent', 28, 1200, 'wild', 'chart-up', 'christian'],
     ['Vice-President-Handschlag', 7, 1200, 'wild', 'handshake', 'christian'],

@@ -1,6 +1,9 @@
 import { migrate, emptySaveV3 } from './progress.js';
-export const KEY = 'ruether-go';
-const BACKUP = 'ruether-go-backup';
+// v11 Zwei-Fenster-Test (Spec Mehrspieler §8): ?slot=N (eine Ziffer) gibt dem Fenster einen eigenen Spielstand ruether-go-N
+const slot = globalThis.location ? new URLSearchParams(globalThis.location.search).get('slot') : null;
+const SUFFIX = /^\d$/.test(slot || '') ? `-${slot}` : '';
+export const KEY = `ruether-go${SUFFIX}`;
+const BACKUP = `ruether-go${SUFFIX}-backup`;
 
 export const emptySave = emptySaveV3;
 

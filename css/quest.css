@@ -243,6 +243,30 @@
   .q-all { width: 34px; font-size: 12px; } .q-ab { width: 44px; height: 44px; } .q-ab > img { width: 34px; height: 34px; }
 }
 
+/* ---------- v11: Quest-Rennen (Gegner-Chip in der Kopfleiste) und Koop (4 Einheiten, Etikett unter den Rüthern des Partners) ---------- */
+.q-rival { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.q-rival-tag { font: 800 11px/1 var(--font-body); color: var(--paper-2); letter-spacing: .06em; text-transform: uppercase; }
+.q-rival img { flex: none; width: 22px; height: 22px; background: var(--paper); border: 2px solid var(--r-normal); outline: 1px solid var(--ink); image-rendering: auto; }
+.q-rival-name { flex: 1; min-width: 0; font: 800 13px/1.2 var(--font-body); color: var(--paper); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.q-rival-n { flex: none; padding: 1px 6px; font: 700 15px/1.1 var(--font-pixel); font-variant-numeric: tabular-nums; color: var(--paper); background: var(--ink); border: 2px solid var(--paper-2); }
+.q-rival.done .q-rival-n { color: var(--ink); background: var(--gold); border-color: var(--ink); }
+.q-rival.lost .q-rival-n { font-size: 12px; color: #E0634C; }
+/* 4 Porträts + „Alle“ + 3 Fähigkeiten passen so auch auf 375 px in eine Reihe */
+.q-screen.coop .q-team { gap: 2px; }
+.q-screen.coop .q-por { width: 40px; }
+.q-screen.coop .q-por img, .q-screen.coop .q-hp { width: 30px; }
+.q-screen.coop .q-por img { height: 30px; }
+.q-screen.coop .q-all { width: 36px; }
+.q-screen.coop .q-ab { width: 44px; height: 44px; }
+.q-screen.coop .q-ab > img { width: 34px; height: 34px; }
+/* Name des Partners unter seinem Rüther (unter dem unteren Rand, das echte Gesicht und die BTC-Leiste bleiben frei; reicht bis in
+   die Lücke zur Knopfreihe, auch bei 50 px hohen Porträts auf 375×667) */
+.q-owner {
+  position: absolute; left: 50%; bottom: -9px; z-index: 1; translate: -50% 0; max-width: 46px; padding: 0 2px;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis; pointer-events: none;
+  font: 700 9px/10px var(--font-pixel); color: var(--paper); background: var(--ink); border: 1px solid var(--paper-2);
+}
+
 @keyframes q-blink { 50% { opacity: .35; } }
 @keyframes q-pop { 0% { scale: 1; } 40% { scale: 1.35; } 100% { scale: 1; } }
 @keyframes q-in { from { opacity: 0; translate: 0 8px; } }

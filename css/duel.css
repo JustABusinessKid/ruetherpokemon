@@ -1,0 +1,279 @@
+/* v11 Arena-Duell 3 gegen 3 (Spec §3.3), Markup aus js/duel-ui.js. Pixel-Kneipe wie css/battle.css (Holz, Papier, Pixel-Schrift),
+   Tokens, Balken, Buttons, .fx-*-Effekte und Pfad-Keyframes aus css/theme.css; Präfix d- für alles Eigene.
+   Mobil zuerst: passt ohne Scroll auf 390×844 und 375×667.
+   Echte Gesichter werden nie eingefärbt, ausgegraut oder verdeckt (Spec §0): K.o. steht als Etikett „pleite“ unter dem kleinen Gesicht,
+   die Warnung ist ein roter Rand ohne Fläche, Ausruf und Banner liegen über den Leisten, Treffer neben den Gesichtern,
+   Pause-/Warte-Karten über den Knöpfen.
+   Bühne (Größen-Container): Gegner rechts oben, ich links unten, je im Seltenheitsrahmen; die Anker --fx-* gelten für Gesichter und Effekte.
+   Ebenen der Bühne: .bg 0 · Gesichter 1 · Team-Reihen, Helfer 2 · .fx 3 · Combo, Hinweis 4. Screen: .d-flash 7 · .d-switch 8 · .d-wait 9
+   · .d-intro 10 · .d-overlay 11. */
+
+#screen-duel {
+  --d-outline: 2px 0 0 var(--ink), -2px 0 0 var(--ink), 0 2px 0 var(--ink), 0 -2px 0 var(--ink), 3px 3px 0 var(--ink);
+  position: fixed; inset: 0; overflow: hidden; gap: 8px; padding: 8px 10px;
+  padding-top: calc(8px + env(safe-area-inset-top)); padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  color: var(--ink);
+  background-color: var(--night); background-image: var(--dither-night); background-size: 8px 8px;
+}
+#screen-duel .r-normal { --rc: var(--r-normal); }
+#screen-duel .r-selten { --rc: var(--r-selten); }
+#screen-duel .r-episch { --rc: var(--r-episch); }
+#screen-duel .r-legendaer { --rc: var(--r-legendaer); }
+
+/* Warnung: Lädt der Gegner, blitzt mein Rand rot (nur Rand, keine Fläche über den Gesichtern) */
+#screen-duel .d-flash { position: absolute; inset: 0; z-index: 7; pointer-events: none; border: 6px solid transparent; }
+#screen-duel .d-flash.red { border-color: var(--red); animation: d-flash .2s steps(1) infinite; }
+@keyframes d-flash { 50% { border-color: transparent; } }
+
+/* ---------- Leisten ---------- */
+#screen-duel .d-top { position: relative; display: flex; align-items: stretch; gap: 8px; flex: none; }
+#screen-duel .d-quit { flex: none; width: 44px; height: 44px; padding: 0; font-size: 20px; }
+#screen-duel .d-bar {
+  position: relative; min-width: 0; padding: 5px 9px;
+  background-color: var(--paper); background-clip: padding-box; border: 3px solid var(--ink);
+  border-image: url(../art/frame-panel.png) 16 fill / 8px / 0 stretch; image-rendering: pixelated; box-shadow: var(--shadow);
+}
+#screen-duel .d-top .d-bar { flex: 1; }
+#screen-duel .d-bar.me { flex: none; }
+#screen-duel .d-bar.glow { animation: d-glow .9s steps(1); }
+@keyframes d-glow { 0%, 40%, 80% { outline: 3px solid var(--teal); } 20%, 60%, 100% { outline: 3px solid transparent; } }
+#screen-duel .d-name { display: flex; align-items: center; gap: 0; min-width: 0; font: 700 15px/1.15 var(--font-pixel); white-space: nowrap; overflow: hidden; }
+#screen-duel .d-name .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
+#screen-duel .d-name .lv { flex: none; white-space: pre; }
+#screen-duel .d-player { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; margin-right: 6px; padding: 0 4px; font: 800 11px/15px var(--font-body); color: var(--paper); background: var(--wood); border: 2px solid var(--ink); }
+#screen-duel .d-name .d-status { margin-left: auto; padding-left: 6px; }
+#screen-duel .d-bar .bar { margin: 3px 0; }
+#screen-duel .d-line { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 15px; font: 800 12px/1.25 var(--font-body); font-variant-numeric: tabular-nums; color: var(--ink-soft); white-space: nowrap; }
+#screen-duel .d-status { font: 800 11px/14px var(--font-body); color: var(--red); text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; }
+#screen-duel .d-mining { display: flex; align-items: center; gap: 4px; font: 800 12px/1 var(--font-body); color: var(--ink-soft); }
+#screen-duel .d-mining .bar { flex: 1; min-width: 0; margin: 0; }
+#screen-duel .d-mining b { min-width: 22px; text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
+#screen-duel .d-clock { flex: none; display: flex; flex-direction: column; align-items: stretch; gap: 6px; width: 56px; }
+#screen-duel .d-timer {
+  padding: 5px 4px; text-align: center; font: 700 24px/1 var(--font-pixel); font-variant-numeric: tabular-nums; color: var(--gold);
+  background: var(--ink); border: 2px solid var(--wood-2); box-shadow: inset 0 0 0 2px var(--green-2);
+}
+#screen-duel .d-timer.low { color: #E0634C; animation: d-timer .5s steps(1) infinite; }
+@keyframes d-timer { 50% { color: var(--paper); } }
+#screen-duel .d-pause { min-height: 32px; padding: 0; font-size: 14px; letter-spacing: 1px; }
+
+/* Ausruf des Gegners: Sprechblase über seiner Leiste (dort sind keine Gesichter), mit seinem echten Gesicht */
+#screen-duel .d-say {
+  position: absolute; left: 52px; right: 64px; top: 0; bottom: 0; z-index: 6; pointer-events: none;
+  display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 6px;
+  background: var(--paper); border: 3px solid var(--ink); box-shadow: 4px 4px 0 var(--ink);
+  animation: d-pop .3s steps(3);
+}
+#screen-duel .d-say-face { flex: none; width: 48px; height: 48px; image-rendering: pixelated; background: var(--paper-2); border: 3px solid var(--rc, var(--r-normal)); outline: 2px solid var(--ink); }
+#screen-duel .d-say-text { margin: 0; font: 700 clamp(14px, 4.4cqw, 17px)/1.15 var(--font-pixel); color: var(--red); overflow-wrap: anywhere; -webkit-hyphens: auto; hyphens: auto; }
+#screen-duel .d-say-hint { margin: 2px 0 0; font: 800 12px/1.2 var(--font-body); color: var(--ink); }
+@keyframes d-pop { 0% { scale: .6; opacity: 0; } 66% { scale: 1.04; opacity: 1; } 100% { scale: 1; } }
+/* Spezial-Banner (fx.js) kurz über der Leiste des Handelnden statt über der Bühne: Brett und Abdunkeln treffen kein Gesicht,
+   Timer, × und II bleiben frei (gegnerische Spezial: seine Leiste oben, eigene: meine unten) */
+#screen-duel .d-bar .fx-banner { z-index: 7; }
+#screen-duel .d-bar .fx-board { left: 0; right: 0; top: 0; bottom: 0; padding: 4px 10px; }
+#screen-duel .d-bar .fx-board .portrait { width: 48px; height: 48px; }
+#screen-duel .d-bar .fx-board-text b { font-size: 19px; }
+#screen-duel .d-bar .fx-board-text span { font-size: 12px; line-height: 1.2; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+
+/* ---------- Bühne ---------- */
+#screen-duel .d-stage {
+  flex: 1; min-height: 0; position: relative; overflow: hidden; container-type: size;
+  touch-action: none; cursor: pointer; user-select: none; -webkit-user-select: none;
+  background: var(--night); border: 3px solid var(--ink); box-shadow: var(--shadow);
+  --face: min(144px, 36cqw, 34cqh);
+  --fx-enemy-x: 70%; --fx-enemy-y: 28%; --fx-me-x: 30%; --fx-me-y: 66%;
+}
+#screen-duel .d-stage .bg {
+  position: absolute; inset: 0; z-index: 0; pointer-events: none; image-rendering: pixelated;
+  background: repeating-conic-gradient(rgba(27, 43, 75, .45) 0 25%, transparent 0 50%) 0 0 / 4px 4px, url(../art/bg-worringen.png) center / cover no-repeat, var(--night);
+}
+#screen-duel .d-fighter { position: absolute; z-index: 1; width: var(--face); height: var(--face); translate: -50% -50%; pointer-events: none; }
+#screen-duel .d-fighter.foe { left: var(--fx-enemy-x); top: var(--fx-enemy-y); }
+#screen-duel .d-fighter.me { left: var(--fx-me-x); top: var(--fx-me-y); }
+#screen-duel .d-face {
+  display: block; width: 100%; height: 100%; image-rendering: pixelated;
+  background: var(--paper-2); border: 5px solid var(--rc, var(--r-normal)); outline: 3px solid var(--ink); box-shadow: 6px 6px 0 2px rgba(30, 42, 34, .55);
+  animation: d-breathe 1.2s steps(1) infinite;
+}
+@keyframes d-breathe { 50% { translate: 0 -3px; } }
+#screen-duel .d-face.shake { animation: d-shake .3s steps(1); }
+@keyframes d-shake { 0% { translate: -6px 0; } 20% { translate: 6px -2px; } 40% { translate: -4px 2px; } 60% { translate: 4px 0; } 80% { translate: -2px 0; } 100% { translate: 0 0; } }
+#screen-duel .d-face.dodge-left { animation: d-dodge-l .45s steps(5); }
+#screen-duel .d-face.dodge-right { animation: d-dodge-r .45s steps(5); }
+@keyframes d-dodge-l { 40% { translate: -24px 0; rotate: -10deg; scale: .9; } }
+@keyframes d-dodge-r { 40% { translate: 24px 0; rotate: 10deg; scale: .9; } }
+#screen-duel .d-face.slide-in { animation: d-slide-in .5s steps(6); } /* hinter .shake: ein Treffer mittendrin bricht das Hereinrutschen nicht ab */
+@keyframes d-slide-in { from { translate: -48px 0; } }
+#screen-duel .d-fighter.foe .d-face.slide-in { animation-name: d-slide-in-r; }
+@keyframes d-slide-in-r { from { translate: 48px 0; } }
+
+/* Team-Reihen: 3 kleine echte Gesichter, aktiv mit Goldrand, K.o. als rotes Etikett „pleite“ darunter */
+#screen-duel .d-team { position: absolute; z-index: 2; display: flex; gap: 6px; pointer-events: none; }
+#screen-duel .d-stage .d-team.foe { left: 6px; top: 6px; }
+#screen-duel .d-stage .d-team.me { right: 6px; bottom: 26px; }
+#screen-duel .d-mini { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+#screen-duel .d-mini-face { display: block; width: 36px; height: 36px; image-rendering: pixelated; background: var(--paper-2); border: 3px solid var(--rc, var(--r-normal)); outline: 2px solid var(--ink); }
+#screen-duel .d-mini.active .d-mini-face { outline: 3px solid var(--gold); }
+#screen-duel .d-tag { padding: 0 3px; font: 800 10px/13px var(--font-body); color: var(--paper); background: var(--ink); white-space: nowrap; }
+#screen-duel .d-mini.ko .d-tag { background: var(--red); letter-spacing: .04em; text-transform: uppercase; }
+
+/* Familientreffen: die echten Gesichter von Christian und Micha rennen herein und hüpfen bei jedem Schlag.
+   Gegner: unter seiner Team-Reihe; ich: über meiner Team-Reihe */
+#screen-duel .d-helpers { position: absolute; z-index: 2; display: flex; gap: 6px; pointer-events: none; }
+#screen-duel .d-helpers.foe { left: 6px; top: 66px; }
+#screen-duel .d-helpers.me { right: 6px; bottom: 88px; }
+#screen-duel .d-helpers img {
+  width: 44px; height: 44px; image-rendering: pixelated;
+  background: var(--paper-2); border: 3px solid var(--paper); outline: 2px solid var(--ink); box-shadow: 3px 3px 0 2px var(--ink);
+  animation: d-run-in .6s steps(6) both; animation-delay: calc(var(--i, 0) * 150ms);
+}
+#screen-duel .d-helpers.foe img { animation-name: d-run-in-l; }
+@keyframes d-run-in { 0% { translate: 260px 0; } 50% { translate: 60px -10px; } 70% { translate: 30px 0; } }
+@keyframes d-run-in-l { 0% { translate: -260px 0; } 50% { translate: -60px -10px; } 70% { translate: -30px 0; } }
+#screen-duel .d-helpers.hop { animation: d-hop .3s steps(3); }
+@keyframes d-hop { 50% { translate: 0 -10px; } }
+
+#screen-duel .d-combo { position: absolute; left: 50%; top: 8px; z-index: 4; translate: -50% 0; pointer-events: none; font: 700 30px/1 var(--font-pixel); color: var(--gold); text-shadow: var(--d-outline); }
+#screen-duel .d-combo.bump { animation: d-bump .2s steps(2); }
+#screen-duel .d-combo.hot { animation: d-hot .3s steps(1) infinite; }
+@keyframes d-bump { 0% { scale: 1.6; } 100% { scale: 1; } }
+@keyframes d-hot { 50% { color: var(--paper); } }
+#screen-duel .d-hint {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; margin: 0; padding: 3px 6px; pointer-events: none;
+  text-align: center; font: 800 11px/1.2 var(--font-body); color: var(--paper); background: rgba(30, 42, 34, .8);
+}
+#screen-duel .d-stage.quake-m { animation: d-quake-m .5s steps(1); }
+#screen-duel .d-stage.quake-l { animation: d-quake-l .7s steps(1); }
+@keyframes d-quake-m { 0% { translate: -4px 2px; } 12% { translate: 4px -2px; } 25% { translate: -4px -2px; } 37% { translate: 4px 2px; } 50% { translate: -2px 2px; } 62% { translate: 2px -2px; } 75% { translate: -2px 0; } 87% { translate: 2px 0; } 100% { translate: 0 0; } }
+@keyframes d-quake-l { 0% { translate: -6px 4px; } 10% { translate: 6px -4px; } 20% { translate: -6px -2px; } 30% { translate: 6px 4px; } 40% { translate: -4px 2px; } 50% { translate: 4px -2px; } 60% { translate: -4px 0; } 70% { translate: 2px 2px; } 80% { translate: -2px 0; } 90% { translate: 2px 0; } 100% { translate: 0 0; } }
+
+/* Effekt-Ebene: Requisiten mit dem echten Gesicht des Angreifers als Reiter (arc-to-enemy / arc-to-me), Sheets, Zahlen */
+#screen-duel .fx { position: absolute; inset: 0; z-index: 3; overflow: hidden; pointer-events: none; }
+#screen-duel .fx .d-tap { position: absolute; width: 32px; height: 32px; margin: -16px 0 0 -16px; border: 3px solid var(--paper); box-shadow: 0 0 0 2px var(--ink), inset 0 0 0 2px var(--ink); animation: d-tap .3s steps(3) forwards; }
+@keyframes d-tap { from { scale: .5; } to { scale: 1.5; opacity: 0; } }
+
+/* ---------- Knöpfe ---------- */
+#screen-duel .d-specials { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: none; }
+#screen-duel .d-specials.shake-x { animation: d-shake-x .4s steps(1); }
+@keyframes d-shake-x { 0% { translate: -6px 0; } 25% { translate: 6px 0; } 50% { translate: -4px 0; } 75% { translate: 4px 0; } 100% { translate: 0 0; } }
+#screen-duel .d-specials button { position: relative; overflow: hidden; flex-direction: column; gap: 3px; min-height: 52px; padding: 5px 8px; font-size: 14px; line-height: 1.1; text-align: center; overflow-wrap: anywhere; }
+#screen-duel .d-specials button:disabled { opacity: 1; color: var(--ink-soft); background: var(--paper-2); box-shadow: var(--shadow-sm); }
+#screen-duel .d-specials button:disabled .ico { opacity: .6; }
+#screen-duel .d-specials button.ready { background: var(--amber); background-clip: padding-box; border-image: url(../art/frame-button.png) 16 fill / 8px / 0 stretch; image-rendering: pixelated; box-shadow: var(--shadow); animation: d-ready 1s steps(1) infinite; }
+@keyframes d-ready { 50% { filter: brightness(1.15); } }
+#screen-duel .d-specials .smeta { display: flex; align-items: center; gap: 3px; font: 800 12px/1 var(--font-body); font-variant-numeric: tabular-nums; color: var(--wood); }
+/* Eigene Ladung: Fortschritt in Stufen über den Knopf (--p 0–1 setzt duel-ui.js) */
+#screen-duel .d-specials .d-prog { display: none; }
+#screen-duel .d-specials button.charging { color: var(--ink); background: var(--paper); }
+#screen-duel .d-specials button.charging .d-prog {
+  display: block; position: absolute; left: 0; bottom: 0; height: 6px; width: calc(var(--p, 0) * 100%);
+  background: var(--red) repeating-linear-gradient(90deg, transparent 0 7px, rgba(30, 42, 34, .45) 7px 8px); transition: width .1s steps(2);
+}
+#screen-duel .d-specials .swap:nth-child(odd):last-child { grid-column: 1 / -1; min-height: 40px; }
+#screen-duel .d-switch {
+  position: absolute; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 8;
+  display: grid; gap: 6px; padding: 10px 12px;
+  background-color: var(--paper); background-clip: padding-box; border: 3px solid var(--ink);
+  border-image: url(../art/frame-panel.png) 16 fill / 8px / 0 stretch; image-rendering: pixelated; box-shadow: var(--shadow);
+}
+#screen-duel .d-switch button { justify-content: flex-start; gap: 10px; font-size: 14px; background: var(--paper-2); }
+#screen-duel .d-switch button > span:last-child { margin-left: auto; font: 800 12px/1 var(--font-body); color: var(--ink-soft); }
+#screen-duel .d-switch .d-mini-face { width: 32px; height: 32px; }
+
+/* Warte-/Pause-Karte über Leiste und Knöpfen (deckt kein Gesicht ab) */
+#screen-duel .d-wait {
+  position: absolute; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 9;
+  display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 14px 16px; text-align: center;
+  background-color: var(--paper); background-clip: padding-box; border: 3px solid var(--ink);
+  border-image: url(../art/frame-panel.png) 16 fill / 12px / 0 stretch; image-rendering: pixelated; box-shadow: var(--shadow);
+}
+#screen-duel .d-wait-text { margin: 0; font: 700 18px/1.25 var(--font-pixel); color: var(--ink); }
+#screen-duel .d-resume { min-width: 160px; min-height: 46px; font-size: 18px; }
+
+/* ---------- VS-Intro: beide Spieler mit echten Gesichtern und Teams, Countdown ---------- */
+#screen-duel .d-intro {
+  position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 24px 16px; color: var(--paper); image-rendering: pixelated;
+  background: repeating-conic-gradient(rgba(27, 43, 75, .88) 0 25%, rgba(27, 43, 75, .62) 0 50%) 0 0 / 4px 4px, url(../art/bg-worringen.png) center / cover no-repeat, var(--night);
+  animation: d-fade .3s steps(3);
+}
+@keyframes d-fade { from { opacity: 0; } }
+#screen-duel .d-intro-head {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 18px;
+  background-color: var(--wood); background-image: var(--grain); border: 3px solid var(--ink); box-shadow: inset 0 0 0 2px var(--wood-2), 4px 4px 0 var(--ink);
+  animation: d-drop .5s steps(5) both;
+}
+@keyframes d-drop { from { translate: 0 -60px; opacity: 0; } }
+#screen-duel .d-intro-head b { font: 700 24px/1.1 var(--font-pixel); text-shadow: 2px 2px 0 var(--wood-2); }
+#screen-duel .d-intro-head span { font: 700 14px/1.2 var(--font-pixel); letter-spacing: 1px; text-transform: uppercase; color: var(--gold); }
+#screen-duel .d-intro-row { display: grid; grid-template-columns: 1fr 64px 1fr; align-items: start; justify-items: center; width: 100%; max-width: 360px; }
+#screen-duel .d-intro-p { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; }
+#screen-duel .d-intro-p .d-face { width: 96px; height: 96px; animation: d-from-l .6s steps(6) both; }
+#screen-duel .d-intro-p.foe .d-face { animation-name: d-from-r; }
+@keyframes d-from-l { from { translate: -140px 0; opacity: 0; } }
+@keyframes d-from-r { from { translate: 140px 0; opacity: 0; } }
+#screen-duel .d-intro-p > b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 16px/1.2 var(--font-pixel); text-shadow: 2px 2px 0 var(--ink); }
+#screen-duel .d-intro-p .d-team { position: static; gap: 4px; }
+#screen-duel .d-intro-p .d-mini-face { width: 30px; height: 30px; }
+#screen-duel .d-vs { align-self: center; margin-top: -40px; font: 700 44px/1 var(--font-pixel); color: var(--gold); text-shadow: var(--d-outline), 6px 6px 0 var(--red); animation: d-vs .6s steps(4) .35s both; }
+@keyframes d-vs { 0% { scale: 3; opacity: 0; } 60% { scale: .85; opacity: 1; } 100% { scale: 1; opacity: 1; } }
+#screen-duel .d-intro-line { max-width: 320px; margin: 0; padding: 6px 12px; text-align: center; font: 800 14px/1.3 var(--font-body); color: var(--ink); background: var(--paper); border: 3px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); }
+#screen-duel .d-countdown { min-height: 72px; font: 700 60px/72px var(--font-pixel); color: var(--paper); text-shadow: var(--d-outline); }
+#screen-duel .d-countdown.pop { animation: d-count .45s steps(4); }
+@keyframes d-count { 0% { scale: 2.4; opacity: 0; } 50% { scale: .9; opacity: 1; } 100% { scale: 1; } }
+#screen-duel .d-countdown.go { font-size: 50px; color: var(--gold); }
+
+/* ---------- Ende: eigener Screen (deckend, nichts wird abgedunkelt) mit beiden echten Gesichtern ---------- */
+#screen-duel .d-overlay {
+  position: absolute; inset: 0; z-index: 11; display: flex; align-items: center; justify-content: center; padding: 16px;
+  background-color: var(--night); background-image: var(--dither-night); background-size: 8px 8px;
+  animation: d-fade .4s steps(4);
+}
+#screen-duel .d-card {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; max-width: 380px; padding: 24px 18px 20px; overflow: hidden;
+  text-align: center; color: var(--ink);
+  background-color: var(--paper); background-clip: padding-box; border: 3px solid var(--ink);
+  border-image: url(../art/frame-panel.png) 16 fill / 16px / 0 stretch; image-rendering: pixelated; box-shadow: var(--shadow);
+}
+#screen-duel .d-card .confetti { position: absolute; inset: 0 0 auto; height: 150px; z-index: 1; overflow: hidden; pointer-events: none; }
+#screen-duel .d-card > :not(.confetti) { position: relative; z-index: 2; }
+#screen-duel .d-end-faces { display: flex; justify-content: center; gap: 28px; }
+#screen-duel .d-end-p { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+#screen-duel .d-end-p .d-face { width: 92px; height: 92px; animation: none; }
+#screen-duel .d-end-p b { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 15px/1.2 var(--font-pixel); }
+#screen-duel .d-overlay.win .d-end-p.me .d-face { animation: d-trophy .7s steps(5) .2s both; }
+@keyframes d-trophy { 0% { scale: 0; rotate: -30deg; opacity: 0; } 60% { scale: 1.25; rotate: 6deg; opacity: 1; } 100% { scale: 1; rotate: 0deg; opacity: 1; } }
+#screen-duel .d-card .title { margin: 0; font: 700 30px/1.1 var(--font-pixel); }
+#screen-duel .d-card .sub { margin: 0; font-size: 15px; line-height: 1.35; color: var(--ink-soft); }
+#screen-duel .d-card .note { margin: 0; min-height: 18px; font: 700 15px/1.2 var(--font-pixel); color: var(--green); }
+#screen-duel .d-card .sats-gain {
+  display: flex; align-items: center; gap: 8px; margin: 2px 0 0; font: 700 34px/1 var(--font-pixel); font-variant-numeric: tabular-nums;
+  color: var(--gold); text-shadow: var(--d-outline); animation: d-sats .5s steps(4) .5s both;
+}
+#screen-duel .d-card .sats-gain::before { content: ''; flex: none; width: 30px; height: 30px; background: url(../art/icon-coin.png) center / contain no-repeat; image-rendering: pixelated; }
+@keyframes d-sats { 0% { scale: .3; opacity: 0; } 100% { scale: 1; opacity: 1; } }
+/* Niederlage: Papier mit Rotstempel; Abbruch: grauer Stempel ohne Wertung */
+#screen-duel .d-overlay.lose .title, #screen-duel .d-overlay.lost .title {
+  margin: 6px 0; padding: 4px 14px; font-size: 32px; letter-spacing: 3px; text-transform: uppercase; color: var(--red); border: 4px solid var(--red); rotate: -8deg;
+  animation: d-stamp .35s steps(3) .2s both;
+}
+#screen-duel .d-overlay.lost .title { color: var(--ink-soft); border-color: var(--ink-soft); font-size: 26px; }
+@keyframes d-stamp { from { scale: 2.2; opacity: 0; } }
+#screen-duel .d-done { min-width: 160px; min-height: 48px; margin-top: 6px; font-size: 18px; }
+
+/* Kleiner Bildschirm (375×667): Gesichter und Leisten etwas knapper */
+@media (max-height: 700px) {
+  #screen-duel { gap: 6px; padding-top: calc(6px + env(safe-area-inset-top)); padding-bottom: calc(6px + env(safe-area-inset-bottom)); }
+  #screen-duel .d-specials button { min-height: 46px; padding: 4px 6px; font-size: 13px; }
+  #screen-duel .d-specials .swap:nth-child(odd):last-child { min-height: 36px; }
+  #screen-duel .d-mini-face { width: 30px; height: 30px; }
+  #screen-duel .d-helpers img { width: 38px; height: 38px; }
+  #screen-duel .d-helpers.foe { top: 58px; }
+  #screen-duel .d-helpers.me { bottom: 78px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #screen-duel .d-face, #screen-duel .d-flash.red, #screen-duel .d-timer.low, #screen-duel .d-specials button.ready, #screen-duel .d-combo.hot,
+  #screen-duel .d-helpers img, #screen-duel .d-helpers.hop, #screen-duel .d-stage[class*="quake"], #screen-duel .d-say { animation: none !important; }
+}

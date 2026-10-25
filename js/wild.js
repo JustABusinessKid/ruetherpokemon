@@ -9,7 +9,7 @@ export function wildBossDef(def, inst) {
   return {
     id: def.id, name: def.name,
     btc: Math.round(btc * CONST.WILD_HP_MULT),
-    fast: { name: 'Rempler', damage: Math.round(CONST.WILD_FAST_DAMAGE * power), every: CONST.WILD_FAST_EVERY, warn: 600, fx: 'wild-fast', prop: null, ownerId },
+    fast: { name: 'Rempler', damage: Math.round(CONST.WILD_FAST_DAMAGE * power), every: CONST.WILD_FAST_EVERY, warn: 800, fx: 'wild-fast', prop: null, ownerId },
     charged: def.attacks.map(a => {
       const c = {
         name: a.name, warn: 1200, fx: 'wild', prop: a.prop, ownerId,
