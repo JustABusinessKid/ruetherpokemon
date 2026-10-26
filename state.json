@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1793033945,
+ "lastMsgTime": 1793036496,
  "players": {
   "legacy:Josef": {
    "nickname": "Josef",
@@ -45,7 +45,7 @@
   "C-w_CUaEP-FRT271jxj2J9Fpmi7nZRiJBkW7o1pXg3I": {
    "nickname": "Adolf",
    "avatar": "micha",
-   "sats": 10225,
+   "sats": 10275,
    "dex": 20,
    "trophies": 48,
    "mastered": 5,
@@ -56,7 +56,7 @@
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1792565161493
+   "t": 1793036496317
   },
   "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
    "nickname": "BTC",
