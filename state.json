@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1793026708,
+ "lastMsgTime": 1793033945,
  "players": {
   "legacy:Josef": {
    "nickname": "Josef",
@@ -61,18 +61,18 @@
   "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
    "nickname": "BTC",
    "avatar": "christian",
-   "sats": 61690,
+   "sats": 62620,
    "dex": 20,
-   "trophies": 63,
+   "trophies": 64,
    "mastered": 5,
    "level": 29,
-   "xp": 2960,
+   "xp": 3570,
    "leader": {
     "id": "christian",
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1793026706995
+   "t": 1793033944001
   },
   "-pWtFGooNqrAhm2bZJVG-34XXqMnpAewbhOBWZCkxAc": {
    "nickname": "Tester",
