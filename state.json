@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1793040948,
+ "lastMsgTime": 1793041618,
  "players": {
   "legacy:Josef": {
    "nickname": "Josef",
@@ -45,34 +45,34 @@
   "C-w_CUaEP-FRT271jxj2J9Fpmi7nZRiJBkW7o1pXg3I": {
    "nickname": "Adolf",
    "avatar": "micha",
-   "sats": 23955,
+   "sats": 10275,
    "dex": 20,
    "trophies": 48,
    "mastered": 5,
    "level": 28,
-   "xp": 3240,
+   "xp": 2140,
    "leader": {
     "id": "micha",
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1793038387665
+   "t": 1793041528600
   },
   "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
    "nickname": "BTC",
    "avatar": "christian",
-   "sats": 62650,
+   "sats": 62950,
    "dex": 20,
    "trophies": 64,
    "mastered": 5,
    "level": 29,
-   "xp": 3620,
+   "xp": 3740,
    "leader": {
     "id": "christian",
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1793040947528
+   "t": 1793041392173
   },
   "-pWtFGooNqrAhm2bZJVG-34XXqMnpAewbhOBWZCkxAc": {
    "nickname": "Tester",
@@ -172,6 +172,20 @@
   }
  },
  "events": [
+  {
+   "at": 1793041617655,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Christian erschaffen!",
+   "m": "Y5we1JUkmUKXP3B5"
+  },
+  {
+   "at": 1793041616243,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Christian erschaffen!",
+   "m": "qBKEb0XTs13ukpz7"
+  },
   {
    "at": 1792925517023,
    "nickname": "BTC",
@@ -507,20 +521,6 @@
    "kind": "fusion",
    "text": "hat per Fusion einen epischen Onkel Micha erschaffen!",
    "m": "fr3dhRBZSRW_PsJm"
-  },
-  {
-   "at": 1791660711335,
-   "nickname": "BTC",
-   "kind": "achievement",
-   "text": "hat die Haunebu erbeutet und fliegt 10 Minuten lang frei zu jeder Arena!",
-   "m": "1FVxEq94jCKb46DX"
-  },
-  {
-   "at": 1791660605031,
-   "nickname": "BTC",
-   "kind": "fusion",
-   "text": "hat per Fusion einen legendären Christian erschaffen!",
-   "m": "rH9eCaqss0v27uen"
   }
  ]
 }
