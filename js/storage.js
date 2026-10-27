@@ -39,3 +39,9 @@ export function clear(backup = false) {
     known = null;
   } catch { /* egal */ }
 }
+
+// v13.1: Sicherung (vom Zurücksetzen im Fehler-Splash) zurückholen, bis sie überschrieben wird
+export function hasBackup() { try { return !!localStorage.getItem(BACKUP); } catch { return false; } }
+export function restore() {
+  try { const b = localStorage.getItem(BACKUP); if (!b) return false; JSON.parse(b); localStorage.setItem(KEY, b); known = null; return true; } catch { return false; }
+}

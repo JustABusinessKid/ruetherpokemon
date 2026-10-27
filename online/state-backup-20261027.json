@@ -1,0 +1,526 @@
+{
+ "v": 1,
+ "lastMsgTime": 1793128306,
+ "players": {
+  "legacy:Josef": {
+   "nickname": "Josef",
+   "avatar": "hildegard",
+   "sats": 150,
+   "dex": 0,
+   "trophies": 0,
+   "mastered": 0,
+   "level": 1,
+   "xp": 0,
+   "leader": null,
+   "t": 1791483151773
+  },
+  "legacy:Heinrich": {
+   "nickname": "Heinrich",
+   "avatar": "christian",
+   "sats": 20260,
+   "dex": 6,
+   "trophies": 1,
+   "mastered": 0,
+   "level": 3,
+   "xp": 390,
+   "leader": {
+    "id": "hildegard",
+    "rarity": "normal",
+    "level": 2
+   },
+   "t": 1791485415682
+  },
+  "legacy:Büro": {
+   "nickname": "Büro",
+   "avatar": "christian",
+   "sats": 150,
+   "dex": 0,
+   "trophies": 0,
+   "mastered": 0,
+   "level": 1,
+   "xp": 0,
+   "leader": null,
+   "t": 1791555895947
+  },
+  "C-w_CUaEP-FRT271jxj2J9Fpmi7nZRiJBkW7o1pXg3I": {
+   "nickname": "Adolf",
+   "avatar": "micha",
+   "sats": 3551,
+   "dex": 20,
+   "trophies": 49,
+   "mastered": 5,
+   "level": 28,
+   "xp": 3980,
+   "leader": {
+    "id": "micha",
+    "rarity": "legendaer",
+    "level": 20
+   },
+   "t": 1793127793526
+  },
+  "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
+   "nickname": "BTC",
+   "avatar": "christian",
+   "sats": 69811,
+   "dex": 20,
+   "trophies": 64,
+   "mastered": 5,
+   "level": 30,
+   "xp": 240,
+   "leader": {
+    "id": "christian",
+    "rarity": "legendaer",
+    "level": 20
+   },
+   "t": 1793109273179
+  },
+  "-pWtFGooNqrAhm2bZJVG-34XXqMnpAewbhOBWZCkxAc": {
+   "nickname": "Tester",
+   "avatar": "christian",
+   "sats": 20050,
+   "dex": 0,
+   "trophies": 0,
+   "mastered": 0,
+   "level": 5,
+   "xp": 0,
+   "leader": {
+    "id": "christian",
+    "rarity": "legendaer",
+    "level": 20
+   },
+   "t": 1792231940791
+  },
+  "mXmOzZWJHUV4Y4lmdBoCRKAn2u2qsCswMSKw6Q-rqPQ": {
+   "nickname": "Test",
+   "avatar": "christian",
+   "sats": 9810,
+   "dex": 2,
+   "trophies": 0,
+   "mastered": 0,
+   "level": 2,
+   "xp": 90,
+   "leader": {
+    "id": "christian",
+    "rarity": "normal",
+    "level": 2
+   },
+   "t": 1792233268007
+  },
+  "gTapMs5sRCFzTzUaLJ6L6QzjA7LunVNTJzWB4HZ8Kqs": {
+   "nickname": "4t",
+   "avatar": "christian",
+   "sats": 150,
+   "dex": 0,
+   "trophies": 0,
+   "mastered": 0,
+   "level": 1,
+   "xp": 0,
+   "leader": null,
+   "t": 1792247567561
+  }
+ },
+ "arenas": {
+  "pcsale": {
+   "ownerId": "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k",
+   "leader": {
+    "id": "christian",
+    "rarity": "legendaer",
+    "level": 20
+   },
+   "level": 5,
+   "since": 1792171946454
+  },
+  "huettenberg": {
+   "ownerId": "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k",
+   "leader": {
+    "id": "christian",
+    "rarity": "legendaer",
+    "level": 20
+   },
+   "level": 5,
+   "since": 1792176783639
+  },
+  "worringen": {
+   "ownerId": "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k",
+   "leader": {
+    "id": "hildegard",
+    "rarity": "legendaer",
+    "level": 20
+   },
+   "level": 5,
+   "since": 1791637824114
+  },
+  "keller": {
+   "ownerId": "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k",
+   "leader": {
+    "id": "christian",
+    "rarity": "legendaer",
+    "level": 20
+   },
+   "level": 5,
+   "since": 1791657331979
+  },
+  "neuschwabenland": {
+   "ownerId": "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k",
+   "leader": {
+    "id": "christian",
+    "rarity": "legendaer",
+    "level": 20
+   },
+   "level": 5,
+   "since": 1791657429214
+  }
+ },
+ "events": [
+  {
+   "at": 1793127390963,
+   "nickname": "Adolf",
+   "kind": "quest",
+   "text": "hat die Haunebu-Quest „Rabino Empire HQ“ geschafft!",
+   "m": "9GspjtyLQJWu01so"
+  },
+  {
+   "at": 1793041617655,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Christian erschaffen!",
+   "m": "Y5we1JUkmUKXP3B5"
+  },
+  {
+   "at": 1793041616243,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Christian erschaffen!",
+   "m": "qBKEb0XTs13ukpz7"
+  },
+  {
+   "at": 1792925517023,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Christian erschaffen!",
+   "m": "A9dRBr0hedOdvA5I"
+  },
+  {
+   "at": 1792609539651,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Viktor erschaffen!",
+   "m": "b-2Zuk7bzMqENdIW"
+  },
+  {
+   "at": 1792513048798,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Viktor erschaffen!",
+   "m": "q-NkaeSwlSJG3cNc"
+  },
+  {
+   "at": 1792513047454,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Viktor erschaffen!",
+   "m": "r83Xnll5816kS_5T"
+  },
+  {
+   "at": 1792513042005,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Christian erschaffen!",
+   "m": "mpYLQz_lcoj1xV5G"
+  },
+  {
+   "at": 1792513040587,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Christian erschaffen!",
+   "m": "EtXGiMUSpsQ63Yq5"
+  },
+  {
+   "at": 1792310931360,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Viktor erschaffen!",
+   "m": "el2kAv_PnjO6flND"
+  },
+  {
+   "at": 1792235481474,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Onkel Micha erschaffen!",
+   "m": "diCMQaNOu-Zg3RC-"
+  },
+  {
+   "at": 1792228544439,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Ramona Rüther erschaffen!",
+   "m": "sdLbBQ3RGOzsapkv"
+  },
+  {
+   "at": 1792176783639,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat Hüttenbergstraße erobert (Lv. 5) und Adolf rausgeworfen.",
+   "m": "jJydjfRxHutwlJQE"
+  },
+  {
+   "at": 1792176783620,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat Hüttenbergstraße gemeistert!",
+   "m": "18zNDhztWOq8WNaP"
+  },
+  {
+   "at": 1792171982490,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Hildegard erschaffen!",
+   "m": "_gUKz6He8fHTEvJe"
+  },
+  {
+   "at": 1792171977601,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Christian erschaffen!",
+   "m": "AC-xiPFd7Z1SfZnz"
+  },
+  {
+   "at": 1792171946454,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat PC Sale erobert (Lv. 5).",
+   "m": "3pUul-MVLE2A6oKL"
+  },
+  {
+   "at": 1792171946430,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat PC Sale gemeistert!",
+   "m": "rPxYbT3rDmQ5co5U"
+  },
+  {
+   "at": 1792151716743,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Viktor erschaffen!",
+   "m": "f22xyCpArYC-2TWH"
+  },
+  {
+   "at": 1792151715058,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Viktor erschaffen!",
+   "m": "nZkSdMBLCli1wsAT"
+  },
+  {
+   "at": 1792151708858,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Christian erschaffen!",
+   "m": "1Jsf-Y-wd9WU5yLz"
+  },
+  {
+   "at": 1792151702936,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Christian erschaffen!",
+   "m": "_zj0ZbMZLT1tmsCE"
+  },
+  {
+   "at": 1791921155932,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Christian erschaffen!",
+   "m": "4REwQ7aaYLaA7yGQ"
+  },
+  {
+   "at": 1791742671286,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Viktor erschaffen!",
+   "m": "7Ug_7uGSks4-3ZsG"
+  },
+  {
+   "at": 1791742669637,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Viktor erschaffen!",
+   "m": "SZTyKMgc-rGRokQK"
+  },
+  {
+   "at": 1791742569196,
+   "nickname": "Adolf",
+   "kind": "arena",
+   "text": "hat Hüttenbergstraße erobert (Lv. 5) und BTC rausgeworfen.",
+   "m": "YgcdCo-Myk_lh7Jz"
+  },
+  {
+   "at": 1791742569179,
+   "nickname": "Adolf",
+   "kind": "achievement",
+   "text": "hat Hüttenbergstraße gemeistert!",
+   "m": "8bCM3ZTQRMnp45K7"
+  },
+  {
+   "at": 1791742487951,
+   "nickname": "Adolf",
+   "kind": "quest",
+   "text": "hat die Haunebu-Quest „Feuer im Bruch“ geschafft!",
+   "m": "yMkDcDw-BZR6DGNr"
+  },
+  {
+   "at": 1791742135650,
+   "nickname": "BTC",
+   "kind": "quest",
+   "text": "hat die Haunebu-Quest „Nie wieder duschen“ geschafft!",
+   "m": "bG1FxrtN5EGvVQuL"
+  },
+  {
+   "at": 1791742070645,
+   "nickname": "Adolf",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Viktor erschaffen!",
+   "m": "mAhawTJlD7MmJCAE"
+  },
+  {
+   "at": 1791742068493,
+   "nickname": "Adolf",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Viktor erschaffen!",
+   "m": "OnZuuwRdUL5jgl2p"
+  },
+  {
+   "at": 1791742047663,
+   "nickname": "Adolf",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Christian erschaffen!",
+   "m": "zLZ2EnPtxQ4xS2pn"
+  },
+  {
+   "at": 1791742045286,
+   "nickname": "Adolf",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Christian erschaffen!",
+   "m": "lKei0Gz238Xr05RU"
+  },
+  {
+   "at": 1791741700103,
+   "nickname": "Adolf",
+   "kind": "quest",
+   "text": "hat die Haunebu-Quest „Nie wieder duschen“ geschafft!",
+   "m": "W5MvyJUkwehRJYHh"
+  },
+  {
+   "at": 1791714157997,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Ramona Rüther erschaffen!",
+   "m": "u5xzaf7Tr7Un-ycf"
+  },
+  {
+   "at": 1791714156691,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Ramona Rüther erschaffen!",
+   "m": "Igqu7P0JseZYYqXd"
+  },
+  {
+   "at": 1791714151479,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Viktor erschaffen!",
+   "m": "RwfkxzypHf26sims"
+  },
+  {
+   "at": 1791714150266,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Viktor erschaffen!",
+   "m": "rvQNPp4W03SBDEmt"
+  },
+  {
+   "at": 1791714148453,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Viktor erschaffen!",
+   "m": "nIWmtXOJWgp98wQM"
+  },
+  {
+   "at": 1791714139224,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Hildegard erschaffen!",
+   "m": "wJguKE5ZZcVz7hTg"
+  },
+  {
+   "at": 1791714128021,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Christian erschaffen!",
+   "m": "MCxDcKsar0yJ0iw2"
+  },
+  {
+   "at": 1791714124354,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Christian erschaffen!",
+   "m": "X4wVsF-JFwjk-_Ex"
+  },
+  {
+   "at": 1791713981824,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat die Haunebu erbeutet und fliegt 10 Minuten lang frei zu jeder Arena!",
+   "m": "togSS5KCw8znmJuF"
+  },
+  {
+   "at": 1791706216154,
+   "nickname": "BTC",
+   "kind": "arena",
+   "text": "hat Hüttenbergstraße erobert (Lv. 5) und Adolf rausgeworfen.",
+   "m": "FAYyWpVf4cWiT8Z1"
+  },
+  {
+   "at": 1791706216138,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat Hüttenbergstraße gemeistert!",
+   "m": "smY6eTwFicvn8wns"
+  },
+  {
+   "at": 1791662336901,
+   "nickname": "Adolf",
+   "kind": "catch",
+   "text": "hat einen legendären Viktor gefangen!",
+   "m": "uF82CQSUUHM4l2ii"
+  },
+  {
+   "at": 1791662297848,
+   "nickname": "BTC",
+   "kind": "catch",
+   "text": "hat einen legendären Christian gefangen!",
+   "m": "LI5qNCgWIxAaKVvU"
+  },
+  {
+   "at": 1791662211407,
+   "nickname": "Adolf",
+   "kind": "catch",
+   "text": "hat einen legendären Viktor gefangen!",
+   "m": "iRVhQL_k8kMWswP0"
+  },
+  {
+   "at": 1791662174744,
+   "nickname": "Adolf",
+   "kind": "catch",
+   "text": "hat einen legendären Christian gefangen!",
+   "m": "zGION2U-1L4wlogA"
+  },
+  {
+   "at": 1791661399500,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat die Haunebu erbeutet und fliegt 10 Minuten lang frei zu jeder Arena!",
+   "m": "aYsSFnhYP15-3S2S"
+  }
+ ]
+}

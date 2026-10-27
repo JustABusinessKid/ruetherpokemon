@@ -740,7 +740,7 @@ export function createLeaderboardScreen({ el }) {
 }
 
 // ---------- Profil ----------
-export function createProfileScreen({ el, onRename, onAvatar, onSettings, onShare, onExport, onImport, onReset, onShop, onTogether }) {
+export function createProfileScreen({ el, onRename, onAvatar, onSettings, onShare, onExport, onImport, onReset, onRestore, hasBackup, onShop, onTogether }) {
   const $ = s => el.querySelector(s);
   const pick = $('.profile-avatar-pick');
   let save = null;
@@ -759,6 +759,10 @@ export function createProfileScreen({ el, onRename, onAvatar, onSettings, onShar
   $('.import').addEventListener('click', async () => {
     const v = await askText({ title: 'Spielstand einfügen', html: '<p class="sub">Hier den kopierten Spielstand einfügen. Der aktuelle wird ersetzt.</p><textarea class="import" rows="5" placeholder="{ … }"></textarea>', cls: 'import', ok: 'Übernehmen' });
     if (v) onImport(v);
+  });
+  $('.restore').addEventListener('click', async () => { // v13.1: Sicherung vom Zurücksetzen zurückholen
+    const i = await popup({ title: 'Sicherung zurückholen?', html: '<p>Der gesicherte Spielstand von vor dem Zurücksetzen ersetzt den aktuellen.</p>', buttons: [{ label: 'Abbrechen' }, { label: 'Zurückholen', primary: true }] });
+    if (i === 1) onRestore?.();
   });
   $('.reset').addEventListener('click', async () => {
     const i = await popup({ title: 'Spielstand löschen?', html: '<p>Alle Rüthers, Sats, Erfolge und dein Profil sind dann weg. Das lässt sich nicht rückgängig machen.</p>', buttons: [{ label: 'Abbrechen', primary: true }, { label: 'Löschen', danger: true }] });
@@ -803,7 +807,7 @@ export function createProfileScreen({ el, onRename, onAvatar, onSettings, onShar
     $('.set-flight').checked = !!save.settings?.flight;
     pick.innerHTML = avatarGrid(p.avatar);
   }
-  return { show(s, { onlineId = '', available = false, nameTaken = false } = {}) { save = s; render(onlineId, available, nameTaken); } };
+  return { show(s, { onlineId = '', available = false, nameTaken = false } = {}) { save = s; render(onlineId, available, nameTaken); $('.restore').classList.toggle('hidden', !hasBackup?.()); } };
 }
 
 // ---------- Dosenbier-Stop ----------

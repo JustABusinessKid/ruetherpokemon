@@ -37,12 +37,14 @@ import { nextWindow, openWindow, adState, adRefund, sellBook, hms, AD_NOTE_MS } 
 
 const $ = s => document.querySelector(s);
 // Fehler beim Start: Hinweis im Splash und ein Ausweg, falls es am Spielstand liegt (sonst hängt jeder Start; eine Kopie bleibt)
-window.addEventListener('error', () => {
+window.addEventListener('error', e => {
   const p = document.querySelector('#splash p');
   if (!p) return;
-  p.textContent = 'Fehler beim Laden. Bitte Seite neu laden.';
+  // v13.1: den echten Fehler zeigen (Datei:Zeile), damit er sich finden lässt; Zurücksetzen hebt den Stand als Sicherung auf
+  const where = e.filename ? ` (${e.filename.split('/').pop()}:${e.lineno})` : '';
+  p.textContent = `Fehler beim Laden: ${e.message || 'unbekannt'}${where}. Bitte Seite neu laden.`;
   const b = Object.assign(document.createElement('button'), { textContent: 'Spielstand zurücksetzen' });
-  b.addEventListener('click', () => { if (confirm('Hilft Neuladen nicht, liegt es meist am Spielstand. Löschen und neu anfangen?')) { storage.clear(true); location.reload(); } });
+  b.addEventListener('click', () => { if (confirm('Hilft Neuladen nicht, liegt es meist am Spielstand. Löschen und neu anfangen? (Eine Sicherung bleibt, Zurückholen geht im Profil.)')) { storage.clear(true); location.reload(); } });
   p.after(b);
 }, { once: true });
 const fmt = n => n.toLocaleString('de-DE');
@@ -512,6 +514,8 @@ const profile = createProfileScreen({
     save.profile.nickname = n; persist(); online.syncNow({ force: true }); showProfile(); // Umbenennen sofort, ohne 5-Minuten-Sperre
   },
   onAvatar(id) { if (save.profile && RUETHER_BY_ID[id]) { save.profile.avatar = id; persist(); } },
+  hasBackup: () => storage.hasBackup(),
+  onRestore() { if (storage.restore()) location.reload(); else toast('Keine Sicherung da.'); }, // v13.1
   onSettings({ sound, haptics, flight }) {
     const was = !!save.settings.flight;
     save.settings = { ...save.settings, sound: !!sound, haptics: !!haptics, flight: !!flight };
