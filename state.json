@@ -2,46 +2,6 @@
  "v": 1,
  "lastMsgTime": 1793131297,
  "players": {
-  "legacy:Josef": {
-   "nickname": "Josef",
-   "avatar": "hildegard",
-   "sats": 150,
-   "dex": 0,
-   "trophies": 0,
-   "mastered": 0,
-   "level": 1,
-   "xp": 0,
-   "leader": null,
-   "t": 1791483151773
-  },
-  "legacy:Heinrich": {
-   "nickname": "Heinrich",
-   "avatar": "christian",
-   "sats": 20260,
-   "dex": 6,
-   "trophies": 1,
-   "mastered": 0,
-   "level": 3,
-   "xp": 390,
-   "leader": {
-    "id": "hildegard",
-    "rarity": "normal",
-    "level": 2
-   },
-   "t": 1791485415682
-  },
-  "legacy:Büro": {
-   "nickname": "Büro",
-   "avatar": "christian",
-   "sats": 150,
-   "dex": 0,
-   "trophies": 0,
-   "mastered": 0,
-   "level": 1,
-   "xp": 0,
-   "leader": null,
-   "t": 1791555895947
-  },
   "C-w_CUaEP-FRT271jxj2J9Fpmi7nZRiJBkW7o1pXg3I": {
    "nickname": "Adolf",
    "avatar": "micha",
@@ -73,50 +33,6 @@
     "level": 20
    },
    "t": 1793131295812
-  },
-  "-pWtFGooNqrAhm2bZJVG-34XXqMnpAewbhOBWZCkxAc": {
-   "nickname": "Tester",
-   "avatar": "christian",
-   "sats": 20050,
-   "dex": 0,
-   "trophies": 0,
-   "mastered": 0,
-   "level": 5,
-   "xp": 0,
-   "leader": {
-    "id": "christian",
-    "rarity": "legendaer",
-    "level": 20
-   },
-   "t": 1792231940791
-  },
-  "mXmOzZWJHUV4Y4lmdBoCRKAn2u2qsCswMSKw6Q-rqPQ": {
-   "nickname": "Test",
-   "avatar": "christian",
-   "sats": 9810,
-   "dex": 2,
-   "trophies": 0,
-   "mastered": 0,
-   "level": 2,
-   "xp": 90,
-   "leader": {
-    "id": "christian",
-    "rarity": "normal",
-    "level": 2
-   },
-   "t": 1792233268007
-  },
-  "gTapMs5sRCFzTzUaLJ6L6QzjA7LunVNTJzWB4HZ8Kqs": {
-   "nickname": "4t",
-   "avatar": "christian",
-   "sats": 150,
-   "dex": 0,
-   "trophies": 0,
-   "mastered": 0,
-   "level": 1,
-   "xp": 0,
-   "leader": null,
-   "t": 1792247567561
   }
  },
  "arenas": {
