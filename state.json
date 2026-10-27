@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1793130473,
+ "lastMsgTime": 1793130776,
  "players": {
   "legacy:Josef": {
    "nickname": "Josef",
@@ -61,18 +61,18 @@
   "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
    "nickname": "BTC",
    "avatar": "christian",
-   "sats": 69811,
+   "sats": 62861,
    "dex": 20,
-   "trophies": 64,
+   "trophies": 65,
    "mastered": 5,
    "level": 30,
-   "xp": 240,
+   "xp": 1040,
    "leader": {
     "id": "christian",
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1793130472019
+   "t": 1793130775320
   },
   "-pWtFGooNqrAhm2bZJVG-34XXqMnpAewbhOBWZCkxAc": {
    "nickname": "Tester",
@@ -172,6 +172,13 @@
   }
  },
  "events": [
+  {
+   "at": 1793130741035,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat die Haunebu erbeutet und fliegt 10 Minuten lang frei zu jeder Arena!",
+   "m": "B3POMX8wqfnfB0co"
+  },
   {
    "at": 1793127390963,
    "nickname": "Adolf",
@@ -514,13 +521,6 @@
    "kind": "catch",
    "text": "hat einen legendären Christian gefangen!",
    "m": "zGION2U-1L4wlogA"
-  },
-  {
-   "at": 1791661399500,
-   "nickname": "BTC",
-   "kind": "achievement",
-   "text": "hat die Haunebu erbeutet und fliegt 10 Minuten lang frei zu jeder Arena!",
-   "m": "aYsSFnhYP15-3S2S"
   }
  ]
 }
