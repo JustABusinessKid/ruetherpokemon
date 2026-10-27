@@ -2,7 +2,7 @@ import { CONST, RUETHER_BY_ID, RARITY_BY_ID, RARITIES } from './data.js';
 import { fighterStats, loadoutFor } from './progress.js';
 import { MISSIONS, MISSION_BY_ID, pickSetup } from './quest/missions.js';
 import { raceWinner } from './quest/race.js';
-import { createLink } from './net/link.js';
+import { createLink, PROTO } from './net/link.js';
 import { VERSION } from './screens.js';
 import { esc, ico, popup, toast } from './ui.js';
 
@@ -21,25 +21,33 @@ const MODES = [
   { id: 'coop', icon: 'quest', name: 'Koop-Quest', text: 'Zusammen rein, zusammen raus. Jeder steuert bis zu 2 Rüther.' },
   { id: 'race', icon: 'lightning', name: 'Quest-Rennen', text: 'Dieselbe Mission, dieselbe Karte. Wer mehr schafft, kriegt den Bonus.' },
 ];
-const NOTHING_MS = 30_000; // so lange sucht der Gast, bevor der Hinweis kommt (die Suche läuft weiter)
+const NOTHING_MS = 20_000; // so lange suchen bzw. warten beide, bevor der Hinweis kommt (es läuft weiter)
+const APK = 'https://github.com/JustABusinessKid/ruetherpokemon/releases/latest/download/RuetherGO.apk';
+// Im Browser (auch als Web-App vom Startbildschirm, auch auf dem iPhone) finden sich zwei Handys nie: 'local' ist ein
+// BroadcastChannel, nur Fenster im selben Browser. Den Testmodus gibt es nur mit ?slot=N (README „Im Browser testen“).
+export const appOnly = (kind, search = '') => kind !== 'nearby' && !new URLSearchParams(search).has('slot');
 const RESULTS = new Set(['success', 'fail', 'abort']);
 const HINT = {
-  nearby: 'Bluetooth und Standort einschalten, das geht auch im Flugmodus. Zum Beitreten braucht Android den Standort.',
+  nearby: 'Bluetooth einschalten, das geht auch im Flugmodus (bis Android 12 auch den Standort). App offen lassen, bis ihr verbunden seid.',
   local: 'Testmodus: das Spiel in einem zweiten Fenster öffnen (?slot=2).',
 };
 const ERR = {
-  permission: 'Ohne ‚Geräte in der Nähe‘ und genauen Standort geht es nicht. In den Android-Einstellungen bei Rüther GO erlauben.',
-  location: 'Standort einschalten (geht auch im Flugmodus). Ohne findet Android das andere Handy nicht.',
+  permission: 'Rüther GO darf ‚Geräte in der Nähe‘ nicht nutzen (bis Android 12: den genauen Standort). In den Einstellungen bei Berechtigungen erlauben, beim Standort ‚Genau‘.',
+  location: 'Standort einschalten (geht auch im Flugmodus). Bis Android 12 findet Android das andere Handy sonst nicht.',
   bluetooth: 'Bluetooth einschalten (geht auch im Flugmodus).',
-  unavailable: 'Auf diesem Handy fehlen die Google-Play-Dienste.',
-  busy: 'Die Verbindung ist noch beschäftigt. Kurz warten und nochmal tippen.',
+  unavailable: 'Auf diesem Handy fehlen die Google-Play-Dienste (z. B. bei Huawei). Ohne sie geht Zusammen spielen nicht.',
+  gmsupdate: 'Die Google-Play-Dienste sind veraltet oder ausgeschaltet. Android zeigt gleich, wie es geht (Aktualisieren braucht Internet). Danach nochmal tippen.',
+  busy: 'Gerade ist die Verbindung belegt (Android fragt noch nach einer Berechtigung, oder z. B. Quick Share läuft). Kurz warten und nochmal tippen.',
 };
+const FIX = { permission: 'app', location: 'location', bluetooth: 'bluetooth' }; // Fehler → Android-Einstellungen (Knopf im Popup)
 
 const sprite = id => `sprites/${RUETHER_BY_ID[id] ? id : 'unknown'}.png`;
 const clip = (s, n = 24) => (typeof s === 'string' ? s.trim().slice(0, n) : '');
 const nat = v => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.round(v)) : 0);
 const rank = id => RARITIES.findIndex(r => r.id === id);
-const missionsFor = mode => (mode === 'coop' ? MISSIONS.filter(m => !m.solo) : mode === 'race' ? MISSIONS : []);
+// v12: Missionen mit needsItem (Rabino Empire HQ) nur, wenn der Host das Buch hat; der Gast folgt der Wahl des Hosts
+const hasItem = (save, m) => !m.needsItem || save.items?.[m.needsItem] >= 1;
+const missionsFor = (save, mode) => (mode === 'coop' ? MISSIONS.filter(m => !m.solo && hasItem(save, m)) : mode === 'race' ? MISSIONS.filter(m => hasItem(save, m)) : []);
 const ruether = id => RUETHER_BY_ID[id]?.name || id;
 // Solo-Missionen (wie soloInst in app.js): das stärkste Exemplar dieses Rüthers
 const soloInst = (save, id) => save.box.filter(i => i.id === id).sort((a, b) => fighterStats(RUETHER_BY_ID[b.id], b).btc - fighterStats(RUETHER_BY_ID[a.id], a).btc)[0] || null;
@@ -91,6 +99,11 @@ const HTML = `
       <div class="mp-hero-faces"><span class="frame r-normal"><img class="mp-me-face" alt=""></span><b>+</b><span class="frame r-normal"><img src="sprites/unknown.png" alt=""></span></div>
       <p>Zwei Handys, kein Internet: Ihr verbindet euch direkt und spielt ein Duell, eine Koop-Quest oder ein Quest-Rennen.</p>
     </div>
+    <div class="mp-app panel">
+      <p><b>Geht nur in der Android-App.</b> Im Browser, als Web-App und auf dem iPhone finden sich zwei Handys nicht. Ihr braucht beide die App.</p>
+      <button class="mp-apk primary">App herunterladen</button>
+      <p class="sub">Datei öffnen und installieren, dann die App starten (nicht das Web-App-Symbol). Dein Spielstand kommt mit: hier im Profil ‚Spielstand kopieren‘, in der App ‚Spielstand einfügen‘. Auf dem iPhone geht es leider nicht.</p>
+    </div>
     <button class="mp-host primary">Spiel eröffnen</button>
     <button class="mp-join">Beitreten</button>
     <p class="hint mp-how"></p>
@@ -121,7 +134,7 @@ export function createLobby({ el, getSave, persist, onExit, onStart, onRace, onR
   const $ = s => el.querySelector(s);
   const lag = Math.max(0, Math.min(2000, Number(new URLSearchParams(location.search).get('lag')) || 0)); // Playtest ?lag=150
   let link = null, isOpen = false, starting = false, closing = false, lostBanner = false;
-  let searchAt = 0, nothingTimer = 0, foundName = '';
+  let searchAt = 0, nothingTimer = 0, foundName = '', saidConnect = false, showing = null; // showing: Code des offenen Fehler-Popups
   let mode = 'duel', missionId = null;
   // mine.chosen: eigene Wahl (uids), mine.picks: was gerade gilt (Solo-Mission: das stärkste Exemplar)
   const mine = { chosen: [], picks: [], ready: false, missing: null };
@@ -142,7 +155,8 @@ export function createLobby({ el, getSave, persist, onExit, onStart, onRace, onR
     link.on('connected', onConnected);
     link.on('lost', onLost);
     link.on('disconnected', onGone);
-    link.on('error', e => { if (!starting) showError(e?.code, inRoom() || !!game); }); // beim Wiederverbinden/im Spiel nur ein Toast
+    // beim Wiederverbinden/im Spiel nur ein Toast, ebenso unbekannte Codes beim Warten (der Start meldet sich über go)
+    link.on('error', e => { if (!starting) showError(e?.code, inRoom() || !!game || !ERR[e?.code]); });
     link.on('message', onMessage);
     return link;
   }
@@ -152,25 +166,47 @@ export function createLobby({ el, getSave, persist, onExit, onStart, onRace, onR
     const save = getSave();
     if (!save.profile || starting || inRoom()) return;
     if (link.kind === 'nearby' && !save.seen?.nearby) { // vor der ersten Android-Abfrage
-      await popup({ title: 'Geräte in der Nähe', icon: 'profile', html: '<p>Android fragt gleich nach ‚Geräte in der Nähe‘. Damit findet ihr euch ohne Internet.</p>', buttons: [{ label: 'Weiter', primary: true }] });
+      await popup({ title: 'Geräte in der Nähe', icon: 'profile', html: '<p>Android fragt gleich nach ‚Geräte in der Nähe‘ (bis Android 12 nach dem Standort, dort bitte ‚Genau‘). Bitte erlauben, damit findet ihr euch ohne Internet.</p>', buttons: [{ label: 'Weiter', primary: true }] });
       save.seen = { ...save.seen, nearby: true };
       persist();
     }
-    starting = true; foundName = ''; searchAt = performance.now();
+    starting = true; foundName = ''; saidConnect = false; searchAt = performance.now();
     render();
-    try { await (asHost ? link.host(save.profile.nickname) : link.join(save.profile.nickname)); } catch (e) { starting = false; showError(e?.code); }
+    try { await (asHost ? link.host(save.profile.nickname) : link.join(save.profile.nickname)); } catch (e) { starting = false; return showError(e?.code); }
     starting = false;
-    clearTimeout(nothingTimer);
-    if (!asHost) nothingTimer = setTimeout(render, NOTHING_MS + 50);
+    armHints();
     render();
   }
+  // Hinweise nach NOTHING_MS (nichts gefunden) und 2 × NOTHING_MS (gefunden, Verbinden hängt); auch wenn der Partner geht und
+  // der Gastgeber wieder wartet, sonst stünde „Noch nichts gefunden“ sofort da
+  function armHints() {
+    searchAt = performance.now(); foundName = '';
+    clearTimeout(nothingTimer);
+    nothingTimer = setTimeout(() => { render(); nothingTimer = setTimeout(render, NOTHING_MS); }, NOTHING_MS + 50);
+  }
+  // Fehler sagen, was zu tun ist; lässt er sich in den Android-Einstellungen beheben, mit Knopf dorthin
   function showError(code, quiet = false) {
-    const text = ERR[code];
-    if (text && quiet) toast(text);
-    else if (text) popup({ title: 'Das klappt so nicht', html: `<p>${esc(text)}</p>` });
-    else if (code === 'connect') toast('Verbinden hat nicht geklappt, ich versuche es weiter.');
-    else toast(`Verbindung: ${clip(String(code || 'Fehler'), 60)}`);
+    const text = ERR[code] || `Verbinden klappt gerade nicht (${clip(String(code || 'Fehler'), 40)}). Bluetooth aus und wieder an, dann nochmal.`;
+    const to = link?.kind === 'nearby' && FIX[code];
+    if (code === 'connect') { // kommt bei jedem gescheiterten Versuch: je Suche nur einmal sagen
+      if (!saidConnect) toast('Verbinden hat nicht geklappt, ich versuche es weiter. Beide die App offen lassen.');
+      saidConnect = true;
+    } else if (quiet) toast(ERR[code] || `Verbindung: ${clip(String(code || 'Fehler'), 60)}`);
+    else if (showing !== code) {
+      showing = code;
+      popup({ title: 'Das klappt so nicht', html: `<p>${esc(text)}</p>`, buttons: to ? [{ label: 'Später' }, { label: 'Einstellungen öffnen', primary: true }] : undefined })
+        .then(i => { showing = null; if (to && i === 1) link.openSettings(to); });
+    }
     render();
+  }
+  // Anderes PROTO: sagen, wer aktualisieren muss (theirs = PROTO des Partners); die APK gibt es nur mit Internet
+  function versionPopup(theirs) {
+    const newer = theirs > PROTO;
+    popup({
+      title: 'Andere Version',
+      html: `<p>${newer ? 'Dein Mitspieler hat eine neuere App. Lad dir die neue herunter' : 'Dein Mitspieler hat eine ältere App und braucht die neue'} (geht nur mit Internet, also vor dem Flug).</p>`,
+      buttons: newer ? [{ label: 'Später' }, { label: 'App herunterladen', primary: true }] : undefined,
+    }).then(i => { if (newer && i === 1) location.href = APK; });
   }
   async function closeLink() {
     clearTimeout(nothingTimer);
@@ -188,7 +224,7 @@ export function createLobby({ el, getSave, persist, onExit, onStart, onRace, onR
 
   // ---------- Link-Ereignisse ----------
   function onConnected(e) {
-    lostBanner = false;
+    lostBanner = false; saidConnect = false;
     if (!e?.again || !them) { them = fresh(); mine.ready = false; }
     sendState(); // §6: nach dem Wiederverbinden alles neu (me, mode, pick)
     if (race) {
@@ -203,17 +239,18 @@ export function createLobby({ el, getSave, persist, onExit, onStart, onRace, onR
     if (race) { race.rival.lost = true; emitRace(); }
     render();
   }
-  function onGone({ reason } = {}) {
+  function onGone({ reason, theirs } = {}) {
     lostBanner = false;
     const n = partnerName(), left = them?.left, had = !!them;
     them = null; mine.ready = false;
     if (race && !race.done) { race.lost = true; race.rival.lost = true; settleRace(); }
     if (!closing && had) {
-      if (reason === 'version') popup({ title: 'Andere Version', html: '<p>Unterschiedliche Spielversionen. Beide die neueste App installieren.</p>' });
+      if (reason === 'version') versionPopup(theirs);
       else if (reason === 'left' || left) toast(`${n} hat die Lobby verlassen.`);
       else if (reason === 'timeout') toast(`Verbindung zu ${n} weg.`);
       else toast(`${n} ist raus (App neu gestartet?).`);
-    } else if (!closing && reason === 'version') popup({ title: 'Andere Version', html: '<p>Unterschiedliche Spielversionen. Beide die neueste App installieren.</p>' });
+    } else if (!closing && reason === 'version') versionPopup(theirs);
+    if (!closing) armHints();
     render();
   }
   function sendState() {
@@ -258,7 +295,7 @@ export function createLobby({ el, getSave, persist, onExit, onStart, onRace, onR
   // Modus/Mission setzen (Host: eigene Wahl, Gast: mode-Nachricht). Jede Änderung setzt „Bereit“ zurück.
   function setMode(md, mid) {
     if (!LIMIT[md]) return false;
-    const list = missionsFor(md);
+    const list = missionsFor(getSave(), md);
     mode = md;
     missionId = md === 'duel' ? null : (list.find(x => x.id === mid) || list[0]).id;
     mine.ready = false;
@@ -355,9 +392,10 @@ export function createLobby({ el, getSave, persist, onExit, onStart, onRace, onR
     if (step === 'wait') {
       const joining = st === 'joining' || (!host && starting);
       $('.mp-wait-title').textContent = starting ? 'Einen Moment …' : joining ? (foundName ? `Gefunden: ${foundName}. Verbinde …` : 'Suche Spiel …') : 'Warte auf Mitspieler …';
-      $('.mp-wait-sub').textContent = joining && !foundName && performance.now() - searchAt > NOTHING_MS
-        ? 'Nichts gefunden. Hat dein Gegenüber auf ‚Spiel eröffnen‘ getippt? Bluetooth an?'
-        : joining ? 'Dein Gegenüber tippt auf ‚Spiel eröffnen‘.' : `Dein Gegenüber tippt auf ‚Beitreten‘. ${HINT[link.kind]}`;
+      const t = performance.now() - searchAt, slow = !starting && t > NOTHING_MS && (!foundName || t > 2 * NOTHING_MS);
+      $('.mp-wait-sub').textContent = !slow ? `Dein Gegenüber tippt auf ‚${joining ? 'Spiel eröffnen' : 'Beitreten'}‘. ${HINT[link.kind]}`
+        : foundName ? 'Verbinden dauert zu lange. Beide auf ‚Abbrechen‘ tippen, Bluetooth aus und wieder an, dann neu verbinden.'
+        : `Noch nichts gefunden. Hat dein Mitspieler die neue App (${VERSION}) offen und auf ‚${joining ? 'Spiel eröffnen' : 'Beitreten'}‘ getippt? Im Browser geht es nicht. Bluetooth an?`;
     }
     if (step !== 'room') return;
     const p = save.profile || {}, info = them?.info, n = partnerName();
@@ -373,7 +411,7 @@ export function createLobby({ el, getSave, persist, onExit, onStart, onRace, onR
     const tag = host && !game ? 'button' : 'div';
     setHtml($('.mp-modes'), MODES.map(x => `<${tag} class="mp-mode${x.id === mode ? ' on' : ''}" data-mode="${x.id}"${tag === 'button' ? ` aria-pressed="${x.id === mode}"` : ''}>${ico(x.icon)}<span><b>${esc(x.name)}</b><span class="sub">${esc(x.text)}</span></span></${tag}>`).join('')
       + (host ? '' : `<p class="hint">${esc(n)} wählt den Modus.</p>`));
-    const list = missionsFor(mode);
+    const list = missionsFor(getSave(), mode);
     $('.mp-mission-box').classList.toggle('hidden', !list.length);
     setHtml($('.mp-missions'), list.map(m => `<${tag} class="mp-mission${m.id === missionId ? ' on' : ''}" data-id="${m.id}"><b>${esc(m.name)}</b><span class="sub">${esc(m.place)} · ${esc(m.objective.label)}${m.solo ? ` · Solo: ${esc(ruether(m.solo))}` : ''}</span></${tag}>`).join(''));
     // Eigenes Team: echte Gesichter mit Seltenheitsrahmen und Level, Reihenfolge als Etikett darunter (nichts liegt auf dem Gesicht)
@@ -419,6 +457,7 @@ export function createLobby({ el, getSave, persist, onExit, onStart, onRace, onR
       }
       return exit();
     }
+    if (t.classList.contains('mp-apk')) { location.href = APK; return; }
     if (t.classList.contains('mp-host')) return go(true);
     if (t.classList.contains('mp-join')) return go(false);
     if (t.classList.contains('mp-cancel')) { await closeLink(); return render(); }
@@ -437,6 +476,8 @@ export function createLobby({ el, getSave, persist, onExit, onStart, onRace, onR
   return {
     open() {
       ensureLink();
+      el.classList.toggle('mp-web', appOnly(link.kind, location.search)); // Browser: statt der Knöpfe der Weg zur App
+      $('.mp-apk').classList.toggle('hidden', /iPhone|iPad|iPod/.test(globalThis.navigator?.userAgent || '')); // iPhone: keine APK anbieten
       isOpen = true;
       link.keepAwake(true);
       if (!inRoom()) { them = null; game = null; mine.ready = false; mine.chosen = getSave().team.slice(0, LIMIT[mode]); refreshPicks(); }

@@ -62,7 +62,7 @@ test('Laden/Import: kaputte Felder werden bereinigt statt die App lahmzulegen', 
   assert.equal(s.stats.catches, 0);
   s.stats.arenaWins += 1;
   assert.equal(s.stats.arenaWins, 3, 'Zahl, kein String-Anhängen');
-  assert.deepEqual(s.items, { lockmodul: 0, supercoin: 0 });
+  assert.deepEqual(s.items, { lockmodul: 0, supercoin: 0, investmentcode: 0 }); // v12: + Investment-Code
   assert.deepEqual(s.quests.list, [{ id: 'q', progress: 0 }]);
   assert.equal(s.profile, null);
   // Doppelte uid: Verkaufen nimmt nur noch ein Exemplar mit

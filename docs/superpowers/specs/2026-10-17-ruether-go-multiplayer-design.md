@@ -33,21 +33,23 @@ public class MainActivity extends BridgeActivity {
 - Endpunktname = Spitzname des Spielers (`name`).
 - **Rollen:**
   - `host({ name })`: `stopAll()`, dann `startAdvertising(name, SERVICE_ID, lifecycle, AdvertisingOptions(P2P_POINT_TO_POINT))`.
-  - `join({ name, peer? })`: `stopAll()`, dann `startDiscovery(SERVICE_ID, discovery, DiscoveryOptions(P2P_POINT_TO_POINT))`. Jedes `onEndpointFound(id, info)` meldet `peerFound`. Der **erste** gefundene Endpunkt (mit `peer`: nur der mit `info.getEndpointName().equals(peer)`) bekommt sofort `requestConnection(name, id, lifecycle)`. Schlägt das fehl, bis zu 3× nach 1,5 s neu versuchen, dann `error` und weiter suchen: nach 1,5 s `stopDiscovery()` + `startDiscovery()`, denn Nearby meldet einen weiter sichtbaren Gastgeber sonst nie wieder.
-  - Vor `startDiscovery` prüft `join`, ob der Standort eingeschaltet ist (`LocationManagerCompat.isLocationEnabled`), sonst `reject('location')`.
+  - `join({ name, peer? })`: `stopAll()`, dann `startDiscovery(SERVICE_ID, discovery, DiscoveryOptions(P2P_POINT_TO_POINT))`. Jedes `onEndpointFound(id, info)` meldet `peerFound`. Der **erste** gefundene Endpunkt (mit `peer`: nur der mit `info.getEndpointName().equals(peer)`) bekommt `stopDiscovery()` und sofort `requestConnection(name, id, lifecycle)` (Suchen stört den Verbindungsaufbau, so auch Googles Beispiel WalkieTalkie). Schlägt das fehl, bis zu 3× nach 1,5 s neu versuchen, dann `error` und weiter suchen: nach 1,5 s `stopDiscovery()` + `startDiscovery()`, denn Nearby meldet einen weiter sichtbaren Gastgeber sonst nie wieder.
+  - Bis Android 12 (SDK < 33) prüft `join` vor `startDiscovery`, ob der Standort eingeschaltet ist (`LocationManagerCompat.isLocationEnabled`), sonst `reject('location')`.
 - **Auto-Accept mit Bestätigungscode:** `onConnectionInitiated(id, info)` merkt `code = info.getAuthenticationDigits()` (falls das nicht kompiliert: `getAuthenticationToken()`) und `info.getEndpointName()`, ruft sofort `acceptConnection(id, payloadCallback)`. Beide Seiten zeigen den Code, keine Rückfrage.
-- `onConnectionResult(id, res)`: OK → `stopAdvertising()`, `stopDiscovery()`, Endpunkt merken, Event `connected { id, name, code }`. Sonst `error { code: 'connect' }`; beim Beitreten weiter suchen (Suche neu starten wie oben).
+- `onConnectionResult(id, res)`: OK → `stopAdvertising()`, `stopDiscovery()`, Endpunkt merken, Event `connected { id, name, code }`. Sonst, nur auf der Seite, die angefragt hat: `error { code: 'connect' }` und weiter suchen (Suche neu starten wie oben). Auch nach den 3 gescheiterten `requestConnection` heißt der Code `connect` (`STATUS_RADIO_ERROR` heißt dort „Funkverbindung gescheitert“, nicht „Bluetooth aus“).
 - `onDisconnected(id)` → Endpunkt vergessen, Event `disconnected { id }`.
 - **Payload BYTES mit JSON-Text (UTF-8):**
   - `send({ data })`: ohne Verbindung `reject('notconnected')`. Über `ConnectionsClient.MAX_BYTES_DATA_SIZE` (32 KB) `reject('toobig')`. Sonst `sendPayload(endpoint, Payload.fromBytes(data.getBytes(UTF_8)))`, `resolve()`.
   - `onPayloadReceived`: nur `Payload.Type.BYTES` → Event `message { id, data: new String(bytes, UTF_8) }`.
 - `close()`: `stopAdvertising`, `stopDiscovery`, `stopAllEndpoints`, `resolve()`. Dasselbe in `handleOnDestroy()`.
 - `keepAwake({ on })`: auf dem UI-Thread `FLAG_KEEP_SCREEN_ON` setzen bzw. löschen. Damit sperrt sich das Handy während einer Runde nicht von selbst.
+- `openSettings({ to })`: `app` → App-Info (Berechtigungen), `location` → Standort, `bluetooth` → Bluetooth; sonst `reject('nosettings')`. Die Lobby bietet das im Fehler-Popup als „Einstellungen öffnen“ an.
 - **Fehlercodes** (als `call.reject(code)` und im Event `error { code, message }`):
   - `'permission'`: Berechtigung fehlt oder abgelehnt, auch Nearby `MISSING_PERMISSION_*`.
-  - `'bluetooth'`: `STATUS_BLUETOOTH_ERROR`.
+  - `'bluetooth'`: `STATUS_RADIO_ERROR` (= `STATUS_BLUETOOTH_ERROR`) beim Werben oder Suchen. Ausgeschaltetes Bluetooth prüft das Plugin nicht selbst: Nearby schaltet es auf API 36 selbst ein (gemessen, auch im Flugmodus).
   - `'location'`: Standort ist aus (`MISSING_SETTING_LOCATION_MUST_BE_ON` bzw. die Prüfung in `join`).
   - `'unavailable'`: keine Google-Play-Dienste (`GoogleApiAvailability`).
+  - `'gmsupdate'`: Play-Dienste veraltet oder abgeschaltet (`isUserResolvableError`); dazu zeigt `makeGooglePlayServicesAvailable` Googles eigenen Dialog.
   - `'busy'`: läuft schon.
   - `'toobig'`, `'notconnected'`.
   - sonst die Status-Nachricht.
@@ -58,10 +60,10 @@ public class MainActivity extends BridgeActivity {
 ```xml
 <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
 <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
-<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+<uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
 <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
 <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-<uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
+<uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" android:usesPermissionFlags="neverForLocation" />
 <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
 <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
@@ -85,9 +87,12 @@ Benötigte Aliase je Android-Version:
 |---|---|---|
 | 8–11 | < 31 | `location` |
 | 12 | 31–32 | `bluetooth`, `location` |
-| 13–15 | ≥ 33 | `bluetooth`, `wifi`, `location` |
+| 13–16 | ≥ 33 | `bluetooth`, `wifi` |
 
-`location` auf allen Versionen: Nearby bricht `startDiscovery` auch auf Android 13+ ohne genauen Standort ab (gemessen auf API 36: `8034`/`8036 MISSING_PERMISSION_ACCESS_*_LOCATION`).
+Ab Android 13 ohne Standort, weil `BLUETOOTH_SCAN` und `NEARBY_WIFI_DEVICES` `neverForLocation` tragen (wie Googles Beispiel WalkieTalkie). Gemessen auf
+API 36 mit zwei Emulatoren: Standort-Berechtigung entzogen und Standort aus auf beiden, Werben, Suchen und Verbinden klappen. Ohne
+`neverForLocation` brach `startDiscovery` dort mit `8034`/`8036 MISSING_PERMISSION_ACCESS_*_LOCATION` ab. Bis Android 12 braucht Nearby den
+genauen Standort (Strategy-Referenz: FINE zwischen Q und S).
 
 Fehlt einer, ruft das Plugin `requestPermissionForAliases(aliases, call, "permsDone")` auf. `@PermissionCallback permsDone(call)` macht dann mit `call.getMethodName()` weiter oder antwortet mit `reject('permission')`.
 

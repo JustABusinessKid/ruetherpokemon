@@ -75,7 +75,13 @@ const arcHit = ms => Math.round(ms * 0.86); // Wurfbahnen (path-arc-to-me) schla
 const LINE_MIN = 8000, LINE_SPREAD = 4000; // Gegner-Sprüche alle 8–12 s Spielzeit
 const SAY_MS = 3000; // so lange steht ein Spruch in der Gegner-Blase
 // Betäubung des eigenen Rüthers je Gegner-Attacke (fx) als Text; alles andere zeigt den Firmware-Balken der PS3
-const STUN_TEXT = { wild: 'sprachlos', fan: 'benebelt', ray: 'im Strahl', causality: 'aus der Zeit gefallen' };
+const STUN_TEXT = { wild: 'sprachlos', fan: 'benebelt', ray: 'im Strahl', causality: 'aus der Zeit gefallen', phone: 'am Telefon' };
+// Moshe Hillel (v12, Anzeige): Anruf aus Zypern = Betäubung „am Telefon" (auch in meiner Leiste statt „betäubt"), Blase von seiner
+// Seite; Telegram-VIP-Gruppe = sechs Karten am linken Bühnenrand, eine je Sekunde mit dem Gift (6 s). Der Witz geht auf den Shop (§0)
+const PHONE_LINE = 'Herzlichen Glückwunsch, Sie wurden ausgewählt!';
+const TG_LINES = ['Rabino VIP: Willkommen!', 'Thomas: Danke Moshe!!!', 'Admin: Nur heute 40 %', 'Kevin: Lambo bestellt', 'Admin: Wer ist noch dabei?', 'Moshe: Schreib CODE'];
+const TG_MS = 6000;
+const PHONE_MS = 1400; // bt-ring in css/battle.css: klingelt, bei 65 % wird abgehoben (= Einschlag)
 const BUNKER_MS = 1500; // = bt-bunker in css/battle.css
 const KRUPP_MS = 1500; // Krupp-Rede kommt alle 2,3 s (Wut 1,8 s): Pult, Wutblase und Sprechblase sind nach ~1,6 s weg
 const WOLF_MS = 1600; // Wolfsschanzen-Beschwörung: Banner + Freeze, Goebbels und Himmler rennen derweil über dem Dimmer herein
@@ -98,6 +104,7 @@ const BOSS_HIT = {
   krupp: 450, wolfsschanze: 0, ray: slow(500), bunker: Math.round(BUNKER_MS * 0.75),
   tachyon: 2 * ECHO_GAP + Math.round(ECHO_DASH_MS * 0.85), thalving: Math.round(slow(900) * 0.72), causality: Math.round(slow(900) * 0.6),
   timeloop: REWIND_MS - 300, 'wild-fast': 220,
+  books: arcHit(slow(550)), code: arcHit(slow(900)), phone: Math.round(PHONE_MS * 0.65), telegram: arcHit(slow(800)),
   wild: atk => (atk.prop === 'family' ? 760 : atk.damage > 0 ? arcHit(slow(800)) : 0),
 };
 export const bossHitMs = atk => { const h = BOSS_HIT[atk.fx]; return (typeof h === 'function' ? h(atk) : h) || 0; };
@@ -152,8 +159,17 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
   const dodgeLabel = dodgeBtn.querySelector('.dl'), dodgeFill = dodgeBtn.querySelector('.dbar i');
   stage.append(flash);
   $('.stage-hint').textContent = 'Tippen: Angriff · Wischen: Ausweichen'; // kürzer, links neben dem Knopf
+  // v12: Chip „Immobilien: −X Sats" unter dem Timer (Investment-Code, zweizeilig, damit die Leiste nicht breiter wird) und die Zeile
+  // zur Rückzahlung bzw. zum Verlust im Overlay; verbucht wird in app.js (satsLost-Events, AD_RENDITE)
+  const timerCol = Object.assign(document.createElement('div'), { className: 'timer-col' });
+  timerEl.replaceWith(timerCol);
+  const satsChip = Object.assign(document.createElement('div'), { className: 'sats-chip hidden' });
+  timerCol.append(timerEl, satsChip);
+  const satsNote = Object.assign(document.createElement('p'), { className: 'sats-note hidden' });
+  overlay.querySelector('.overlay-buttons').before(satsNote);
 
   let state = null, raf = 0, countRaf = 0, lastTs = 0, running = false, ended = false;
+  let shownLost = 0, meStun = 'betäubt'; // Chip zählt erst beim Einschlag; meine Leiste zeigt „am Telefon" statt „betäubt" (Anruf aus Zypern)
   const ptrs = new Map(); // pointerId -> { x, y, swiped }: jeder Finger für sich (zweiter Daumen tippt, ohne den Wisch zu löschen)
   let input = freshInput(), dodgeDir = 'left', koPending = false, batchDelay = 0, lockText = '', dodgeNote = null, dodgeFloat = null; // dodgeNote: { cls, label, until }
   // Boss-Angriff der laufenden Warnung: { w, hit, launched, impactAt, parts, timers }. Startet so, dass er bei w.firesAt einschlägt
@@ -286,6 +302,26 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
       const a = (i / 10) * 2 * Math.PI + 0.3;
       return `<i style="--dx:${Math.round(Math.cos(a) * 110)}px;--dy:${Math.round(Math.sin(a) * 90)}px"></i>`;
     }).join('');
+  }
+  // Investment-Code (v12): Chip unter dem Timer zählt beim Einschlag hoch, die Immobilie schwebt zweizeilig mittig bei mir
+  // (--fx-info-me-y: weicht Christian und Micha aus, z 6 unter Reitern und echten Gesichtern)
+  function setChip() {
+    satsChip.innerHTML = `<span>Immobilien: </span><span>−${fmt(shownLost)} Sats</span>`;
+    satsChip.classList.toggle('hidden', !shownLost);
+    anim(satsChip, 'bump', 200);
+  }
+  function immoText({ amount, note }) {
+    const d = node('immo', 2000);
+    if (amount > 0) d.append(Object.assign(document.createElement('b'), { textContent: `−${fmt(amount)} Sats` }));
+    d.append(Object.assign(document.createElement('span'), { textContent: note }));
+  }
+  // Telegram-VIP-Gruppe: Karten stapeln sich links, eine je Sekunde (= Gift-Tick), nach TG_MS alle weg
+  function telegramCards() {
+    const box = node('tg', TG_MS + 400);
+    TG_LINES.forEach((l, i) => later(() => {
+      const [who, msg] = l.split(': ');
+      box.insertAdjacentHTML('beforeend', `<div class="tg-card"><b>${who}:</b> ${msg}</div>`); // feste Texte (TG_LINES)
+    }, i * 1000));
   }
   // Combo: schnelle Treffer mit < COMBO_WINDOW Abstand (Spielzeit), Anzeige ab ×2, ab ×10 „hot"
   function comboHit() {
@@ -448,6 +484,26 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
       }, slow(300));
     },
     bunker() { anim(enemySprite, 'hide', BUNKER_MS); sheet('smoke', 'enemy', { size: 176 }); }, // Heilung, wenn er wieder auftaucht
+    // Moshe Hillel (v12, Anzeige): Buch und Kaufvertrag fliegen im Bogen auf mich (wie die Blu-ray); der Vertrag bekommt beim Treffer
+    // den Stempel „VERKAUFT" (Sats und Immobilie kommen mit dem satsLost-Event), beim Ausweichen „Nicht unterschrieben.". Das Handy
+    // klingelt und wackelt neben mir, Moshes Blase oben rechts (unten rechts steht der Ausweich-Knopf); die Karten der
+    // Telegram-Gruppe kommen mit dem Gift (poisoned-Event)
+    books(atk) { // dazu ein Verkaufsspruch (fast.flavour) in der Gegner-Blase, sobald sie frei ist; der Ausruf der nächsten Lade-Attacke ersetzt ihn
+      toMe('book', slow(550), 112);
+      const lines = [].concat(atk.flavour || []);
+      if (lines.length && !said) talk(lines[Math.floor(Math.random() * lines.length)]);
+    },
+    code() {
+      toMe('contract', slow(900), 144);
+      later(() => { // ausgewichen: löst „Ausgewichen!" ab (gleiche Stelle), der Knopf bestätigt weiter
+        if (shot?.w.dodged) { dodgeFloat?.stop(); dodgeFloat = text('Nicht unterschrieben.', 'me', 'info', true); } else node('stamp', 900).textContent = 'VERKAUFT';
+      }, BOSS_HIT.code);
+    },
+    phone() {
+      prop('phone', 'ring-at-me', { ms: PHONE_MS, size: 112 });
+      prop('speech', 'bubble-at-me', { ms: PHONE_MS + 400, delay: 250, size: 160, html: bubbleText(PHONE_LINE) }).el.classList.add('phone-speech');
+    },
+    telegram() { toMe('phone', slow(800), 112); },
     // Tachionenbitcoin (v8, Neuschwabenland). Überlicht-Hash: 3 Pixel-Echos rasen gestaffelt auf mich (das Vor-Echo kam mit der Warnung)
     tachyon() {
       anim(enemySprite, 'blink', 240);
@@ -600,13 +656,19 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
         }, batchDelay);
         break;
       }
-      case 'poisoned': later(() => sheet('smoke', at, { size: 128 }), batchDelay); break;
+      case 'poisoned': later(() => { sheet('smoke', at, { size: 128 }); if (at === 'me' && bossFx === 'telegram') telegramCards(); }, batchDelay); break;
       case 'poison': num(`-${e.damage}`, at); break;
+      case 'satsLost': { // Investment-Code hat getroffen (nach enemyAttack im selben Schritt): beim Einschlag Chip und Immobilie
+        const lost = state.satsLost;
+        later(() => { shownLost = lost; setChip(); immoText(e); }, batchDelay);
+        break;
+      }
       case 'stun': {
         const t = STUN_TEXT[bossFx]; // z. B. Viktors Argumentationslogik: sprachlos, keine PS3-Firmware
         if (at === 'enemy') later(() => { for (let i = 0; i < 3; i++) later(() => num('Z', 'enemy', 'info', 1400), i * 450); }, batchDelay);
         else if (t) { // kein „betäubt" darüber; geht er am Treffer K.o., steht dort nur „… ist pleite!"
           stunTextAt = performance.now() + batchDelay;
+          meStun = bossFx === 'phone' ? t : 'betäubt';
           if (bossHit?.btc > 0) later(() => text(t, 'me', 'info', true), batchDelay);
         }
         else later(() => prop('firmware', 'bar-on-me', { ms: e.ms, size: 144, html: '<span class="fw-label">Firmware-Update…</span>' }), batchDelay);
@@ -630,6 +692,7 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
         anim(enemySprite, 'rage-shake', 1000);
         floatText(fx, 'WUT!', { ...TXT.enemy, kind: 'big wut', ms: 1200 }); // .wut liegt über den Tipp-Zahlen
         sfx.play('rage'); haptic([30, 30, 30, 30, 80]);
+        talk(pickLine(state.enemy.id, 'rage')); // v12: Moshe „Das Angebot ist gleich vorbei!"; Bosse ohne rage-Zeilen schweigen
         break;
       case 'faint': // KO erst, wenn der auslösende Boss-Angriff eingeschlagen ist. Doppel-K.o. (der nächste geht pleite, bevor er
         // hereingerutscht ist): Leiste und Knöpfe bleiben beim zuletzt gezeigten, bis einer hereinrutscht, der noch steht
@@ -731,7 +794,7 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
     const fill = p.querySelector('.hp .fill');
     setWidth(fill, pct);
     fill.classList.toggle('low', pct <= 25);
-    const st = [f.status.poison && 'Gift', f.status.stunUntil > t && 'betäubt', f.status.weakenedUntil > t && 'geschwächt'].filter(Boolean).join(' · ');
+    const st = [f.status.poison && 'Gift', f.status.stunUntil > t && (p === mePanel ? meStun : 'betäubt'), f.status.weakenedUntil > t && 'geschwächt'].filter(Boolean).join(' · ');
     setText(p.querySelector('.status'), st);
   }
   function render() {
@@ -959,9 +1022,11 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
       const line = pickLine(w.id, won ? 'caught' : 'flee');
       setText(overlay.querySelector('.arena-note'), !line ? '' : isNarration(line, w.name) ? line : `„${line}“`); // Erzähltext ohne Anführungszeichen
     } else {
+      // v12: Anzeige-Arena (arena.virtual): niemand wird stationiert, stattdessen Moshes Abgang
+      const line = ctx.arena?.virtual && won ? pickLine(boss.id, 'defeat') : '';
       setText(overlay.querySelector('.title'), won ? 'Arena erobert!' : 'Verloren');
       setText(overlay.querySelector('.sub'), won
-        ? `${boss.name} ist pleite. Die Arena gehört jetzt ${state.team[0].name}.`
+        ? `${boss.name} ist pleite. ${ctx.arena?.virtual ? (line ? `„${line}“` : '') : `Die Arena gehört jetzt ${state.team[0].name}.`}`
         : state.reason === 'timeout' ? 'Die Zeit ist um.' : 'Alle Rüthers sind pleite.');
       setText(overlay.querySelector('.arena-note'), !won ? ''
         : ctx.masteredAfter ? 'Arena gemeistert!' : `Arena Lv. ${(ctx.arenaLevel || 1) + 1} freigeschaltet`);
@@ -976,9 +1041,13 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
     setText(gain, '+0 Sats');
     gain.classList.toggle('hidden', !won);
     if (won) later(() => countUp(gain, ctx.reward || 0), 800); // erst wenn .sats-gain eingeblendet ist (bt-sats-in startet nach .8s)
+    // v12: Moshes Investment-Code hat Sats genommen: Sieg zahlt sie plus AD_RENDITE zurück, sonst sind sie weg (app.js verbucht)
+    const lost = state.satsLost || 0, refund = lost + Math.floor(lost * CONST.AD_RENDITE);
+    setText(satsNote, !lost ? '' : won ? `Immobilien verkauft: +${fmt(refund)} Sats (${Math.round(CONST.AD_RENDITE * 100)} % Rendite)` : `In Immobilien verloren: ${fmt(lost)} Sats. Rückgabe ausgeschlossen.`);
+    satsNote.classList.toggle('hidden', !lost);
     overlay.classList.remove('hidden');
   }
-  const result = (won, retry, reason) => ({ won, retry, reason, activeIndex: state.active });
+  const result = (won, retry, reason) => ({ won, retry, reason, activeIndex: state.active, satsLost: state.satsLost || 0 }); // satsLost (v12): app.js zahlt zurück bzw. behält den Verlust
   function end(retry) {
     if (ended || !state?.over) return;
     ended = true;
@@ -1014,6 +1083,7 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
     enemySprite.className = 'enemy-sprite sprite'; meSprite.className = 'sprite';
     specials.classList.remove('shake-x'); enemyPanel.classList.remove('glow'); mePanel.classList.remove('glow', 'glitch'); mining.classList.remove('glow');
     dodgeBtn.className = 'dodge-btn'; dodgeLabel.textContent = 'Ausweichen'; dodgeFill.style.width = '0%'; dodgeNote = null; lockText = ''; dodgeFloat = null;
+    shownLost = 0; meStun = 'betäubt'; satsChip.className = 'sats-chip hidden'; satsNote.classList.add('hidden');
     resetCombo(); stunTextAt = -Infinity;
     pauseUntil = 0; heldBtc = null; shownMe = null; meHoldUntil = 0; nextLineAt = Infinity; sayTimer = 0; bossFx = ''; bossHit = null;
     sw.classList.add('hidden'); overlay.classList.add('hidden'); intro.classList.add('hidden'); hideSay();
@@ -1021,11 +1091,12 @@ export function createBattleScreen({ el, onEnd, onResult, onEvent }) {
     ptrs.clear(); input = freshInput(); bossShot = null; shot = null;
   }
 
-  function start({ team, enemy, rng = Math.random, mode = 'arena', arena = null, arenaLevel = 1, reward = 0, masteredAfter = false, wild = null, shownLine = '', canRetry = null }) {
+  // sats (v12): aktueller Kontostand, Moshes Investment-Code nimmt davon (satsLost-Events an onEvent, Zeile im Overlay)
+  function start({ team, enemy, rng = Math.random, mode = 'arena', arena = null, arenaLevel = 1, reward = 0, masteredAfter = false, wild = null, shownLine = '', canRetry = null, sats = 0 }) {
     stop();
     const isWild = mode === 'wild';
     // Kampfdauer: Wildkampf 60 s, sonst die des Bosses (makeBoss übernimmt def.duration), ohne eigene die Engine-Vorgabe
-    state = createBattle({ team, enemy, rng, duration: isWild ? CONST.WILD_DURATION : enemy.duration || undefined });
+    state = createBattle({ team, enemy, rng, duration: isWild ? CONST.WILD_DURATION : enemy.duration || undefined, sats });
     const w = isWild ? { id: enemy.id, rarity: enemy.rarity || 'normal', name: enemy.name, ...wild } : null;
     ctx = { mode, arena, arenaLevel, reward, masteredAfter, wild: w, shownLine, canRetry };
     ended = false; koPending = false; batchDelay = 0;

@@ -1,4 +1,4 @@
-import { CONST, RUETHERS, RUETHER_BY_ID, BOSSES, ARENAS, ARENA_BY_ID, RARITY_BY_ID, pickLine } from './data.js';
+import { CONST, RUETHERS, RUETHER_BY_ID, BOSSES, ARENAS, ARENA_BY_ID, AD_ARENA, RARITY_BY_ID, pickLine } from './data.js';
 import * as storage from './storage.js';
 import { createLocator, distance, offsetPoint, geoHint } from './geo.js';
 import { updateSpawns, lureWave, lureTrim } from './spawn.js';
@@ -33,6 +33,7 @@ import { createLobby } from './lobby.js';
 import { createDuelScreen } from './duel-ui.js';
 import { duelReward, duelFighters } from './duel.js';
 import { RACE } from './quest/race.js';
+import { nextWindow, openWindow, adState, adRefund, sellBook, hms, AD_NOTE_MS } from './ad.js';
 
 const $ = s => document.querySelector(s);
 // Fehler beim Start: Hinweis im Splash und ein Ausweg, falls es am Spielstand liegt (sonst hängt jeder Start; eine Kopie bleibt)
@@ -59,7 +60,7 @@ function show(id) {
   current = id;
   setScreen(id);
   backEntry(id !== 'screen-map');
-  if (id === 'screen-map') { map.invalidate(); if (save.profile) online.fetchState(); dailyCheck(); }
+  if (id === 'screen-map') { map.invalidate(); if (save.profile) online.fetchState(); dailyCheck(); adTick(); } // v12: Anzeige sofort, nicht erst mit dem nächsten Sekundentick
   if (id === 'screen-collection') { teamInstances(); collection.show(save); }
   if (id === 'screen-quests') questsScreen.show(save, today);
   if (id === 'screen-leaderboard') { leaderboard.show({ save, state: online.lastState, available: online.available }); online.fetchState().then(() => { if (current === 'screen-leaderboard') leaderboard.show({ save, state: online.lastState, available: online.available }); }); }
@@ -105,7 +106,7 @@ function onBackKey() {
   const btn = el.querySelector(current === 'screen-quest' ? '.q-quit' : current === 'screen-questresult' ? '.qr-done' : '.back');
   if (btn) btn.click(); else show('screen-map');
 }
-document.querySelectorAll('.sats-chip').forEach(b => b.addEventListener('click', () => show('screen-shop')));
+document.querySelectorAll('.topbar .sats-chip').forEach(b => b.addEventListener('click', () => show('screen-shop'))); // v12: der Kampf hat einen eigenen .sats-chip
 
 // ---------- Banner / HUD / Persist ----------
 // Ein Banner für Speichern, Online-Name und Ortung (in dieser Rangfolge), jede Art räumt nur ihren eigenen Text weg
@@ -159,7 +160,7 @@ window.addEventListener('storage', e => { if (e.key === storage.KEY || e.key ===
 window.addEventListener('pageshow', e => { if (e.persisted) syncStored(); }); // aus dem Back-Forward-Cache: Events verpasst
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncStored(); });
 function updateHud() {
-  document.querySelectorAll('.sats-chip').forEach(b => { b.lastChild.textContent = fmt(save.sats); }); // Münz-Icon steht im HTML davor
+  document.querySelectorAll('.topbar .sats-chip').forEach(b => { b.lastChild.textContent = fmt(save.sats); }); // Münz-Icon steht im HTML davor
   $('#hud-dex').textContent = `Dex ${dexCount(save)}/${DEX_TOTAL}`;
   const mastered = ARENAS.filter(a => save.arenaMastered[a.id]).length;
   $('#badge').classList.toggle('hidden', !(save.victoryShown || mastered === ARENAS.length));
@@ -191,6 +192,7 @@ function updateBanners() {
   fb.querySelector('img').src = `sprites/${f}.png`;
   fb.querySelector('span').textContent = `Heute: ${RUETHER_BY_ID[f].name} taucht deutlich häufiger auf`;
   beamTick();
+  adTick();
 }
 
 // XP, Erfolge, Quests nach jedem Ereignis. Level-up-Popups warten, bis Fangsequenz bzw. Kampf vorbei sind.
@@ -243,7 +245,7 @@ const online = createOnline({
     return {
       token: save.profile.token, nickname: save.profile.nickname, avatar: save.profile.avatar,
       sats: save.sats, dex: dexCount(save), trophies: save.stats.arenaWins,
-      mastered: Object.keys(save.arenaMastered).length, level: save.trainerLevel, xp: save.xp, leader: leaderInfo(),
+      mastered: ARENAS.filter(a => save.arenaMastered[a.id]).length, level: save.trainerLevel, xp: save.xp, leader: leaderInfo(), // v12: ohne Anzeige-Arena
     };
   },
   onState(st) {
@@ -465,8 +467,19 @@ const shop = createShopScreen({
     if (id === 'haunebu-extend') return extendFlight(); // Fenster inzwischen zu: Hinweis, keine Beschwörung
     if (id === 'haunebu') return buyHaunebu();
     const res = buyItem(save, id, Date.now());
-    if (res.ok) { sfx.play('coin'); persist(); toast(id === 'lockmodul' ? `Lockmodul aktiv! Jede Minute ${CONST.LURE_WAVE} neue Rüther direkt bei dir.` : 'Super-Münze gekauft', { icon: id === 'lockmodul' ? 'beer' : 'coin' }); if (id === 'lockmodul') refreshSpawns(true); }
-    else toast('Nicht genug Sats.');
+    if (res.ok) {
+      sfx.play('coin');
+      toast(id === 'lockmodul' ? `Lockmodul aktiv! Jede Minute ${CONST.LURE_WAVE} neue Rüther direkt bei dir.` : id === 'investmentcode' ? 'Danke für Ihren Einkauf. Versand aus Zypern.' : 'Super-Münze gekauft',
+        { icon: id === 'lockmodul' ? 'beer' : id === 'investmentcode' ? 'quest' : 'coin' });
+      afterChange(); // v12: Erfolg „Reingefallen"
+      if (id === 'lockmodul') refreshSpawns(true);
+    } else toast(res.reason === 'besitz' ? 'Du hast das Buch schon.' : 'Nicht genug Sats.');
+    return res;
+  },
+  onSell(id) { // v12 §3: das Buch zurück für 10 Sats; die Mission „Rabino Empire HQ" ist dann wieder gesperrt (needsItem)
+    if (id !== 'investmentcode') return { ok: false };
+    const res = sellBook(save);
+    if (res.ok) { sfx.play('coin'); toast(`Verkauft: +${fmt(res.sats)} Sats. Gebraucht, ohne Lesespuren.`, { kind: 'sats' }); afterChange(); }
     return res;
   },
   onBack() { show(prevScreen === 'screen-shop' ? 'screen-map' : prevScreen); },
@@ -571,15 +584,19 @@ function teamFighters() {
   const insts = teamInstances();
   return { uids: insts.map(i => i.uid), team: insts.map(inst => makeFighter(RUETHER_BY_ID[inst.id], inst)) };
 }
+// v12: Moshes Anzeige (AD_ARENA, virtual) läuft über dieselbe Maschine; sats = Kontostand für seinen Investment-Code (Engine-Event satsLost)
 function startBattle(a) {
   const { uids, team } = teamFighters();
-  fight = { arena: a, uids };
+  fight = { arena: a, uids, satsLost: 0 };
   const level = save.arenaLevels[a.id] || 1;
   const enemy = makeBoss(BOSSES[a.boss], level);
   if (debugWeakBoss) enemy.btc = 20;
   show('screen-battle');
-  battleScreen.start({ team, enemy, rng: Math.random, mode: 'arena', arena: a, arenaLevel: level, reward: arenaReward(level), masteredAfter: level >= CONST.ARENA_LEVELS, canRetry: () => !beamOver() });
+  battleScreen.start({ team, enemy, rng: Math.random, mode: 'arena', arena: a, arenaLevel: level, reward: arenaReward(level), masteredAfter: level >= CONST.ARENA_LEVELS, canRetry: () => canRefight(a), sats: save.sats });
 }
+// „Nochmal": echte Arenen, solange das Haunebu-Fenster nicht zu ist; die Anzeige, solange ihr Fenster offen ist (Spec v12 §1)
+const canRefight = a => (a.virtual ? adOpen() : !beamOver());
+
 // Wildkampf (Spec §2): Sieg fängt, Niederlage/Zeit lässt ihn abhauen, Aufgeben behält den Spawn
 // Was bookWild am Ende wirklich gutschreibt: Siegbonus + Fang-Sats (+ Happy Hour) + Dex-Bonus
 function wildReward(id, rarity) {
@@ -611,8 +628,9 @@ function bookWild({ spawn, uids }, { won, reason, activeIndex = 0 }) {
   afterChange();
   return { ups, msg };
 }
-function bookArena(arena, uids, won) {
-  if (!won) { afterChange(); return {}; }
+function bookArena(arena, uids, won, lost = 0) {
+  const msg = arena.virtual ? bookMoshe(won, lost) : '';
+  if (!won) { afterChange(); return { msg }; }
   const wasUnlocked = questsUnlocked(save), first = !save.arenaMastered[arena.id];
   const w = arenaWin(save, arena.id, save.team[0]);
   gainXp(CONST.XP_ARENA * w.level);
@@ -621,10 +639,21 @@ function bookArena(arena, uids, won) {
   // claimArena pollt selbst und sendet nur, wenn sich Besitzer oder Stufe dort ändern (lastState ist nach dem Kampf veraltet);
   // „gemeistert" nur beim ersten Mal: Farmen einer gehaltenen Arena flutete sonst Feed und ntfy-Tageslimit
   const leader = leaderInfo();
-  online.syncNow().then(() => online.claimArena(arena.id, w.level, leader)).then(() => updateHud());
+  if (!arena.virtual) online.syncNow().then(() => online.claimArena(arena.id, w.level, leader)).then(() => updateHud()); // v12: die Anzeige hat keinen Besitzer, keinen Marker
   if (w.mastered && first) online.postEvent('achievement', `hat ${arena.name} gemeistert!`);
   afterChange();
-  return { ups, unlocked: !wasUnlocked && questsUnlocked(save) };
+  return { ups, msg, unlocked: !wasUnlocked && questsUnlocked(save) };
+}
+// v12 §2: Sieg über Moshe zahlt die in Immobilien verlorenen Sats plus AD_RENDITE zurück, sonst sind sie weg; ohne Verlust keine
+// Zeile. stats.moshe zählt für den Erfolg „Nicht reingefallen" (quests.js). Die Zeile zeigt das Kampf-Overlay (battle-ui.js) selbst;
+// hier kommt sie nur beim Aufgeben als Toast (kein Overlay)
+function bookMoshe(won, lost) {
+  let line = '';
+  if (won) {
+    save.stats.moshe = (save.stats.moshe || 0) + 1;
+    if (lost) { const refund = adRefund(lost); save.sats += refund; line = `Immobilien verkauft: +${fmt(refund)} Sats (${Math.round(CONST.AD_RENDITE * 100)} % Rendite)`; }
+  } else if (lost) line = `In Immobilien verloren: ${fmt(lost)} Sats. Rückgabe ausgeschlossen.`;
+  return line;
 }
 const arenaScreen = createArenaScreen({ el: $('#screen-arena'), bosses: BOSSES, onBack() { show('screen-map'); }, onFight: startBattle, onBeam: beamTo });
 // Statistik und Tagesquests aus Kampf und Duell (special, gelungenes dodge, combo); gespeichert wird mit dem Ergebnis
@@ -632,6 +661,8 @@ function fightEvent(e) {
   if (e.type === 'special') { save.stats.specials = (save.stats.specials || 0) + 1; trackQuest(save, 'special'); }
   if (e.type === 'dodge') { save.stats.dodges = (save.stats.dodges || 0) + 1; trackQuest(save, 'dodge'); }
   if (e.type === 'combo') { if (e.value > (save.stats.maxCombo || 0)) save.stats.maxCombo = e.value; if (e.value >= 8) trackQuest(save, 'combo8'); }
+  // v12 §2: Moshes Investment-Code nimmt echte Sats, sofort vom Konto (HUD); die Rückzahlung kommt mit dem Sieg (bookMoshe)
+  if (e.type === 'satsLost' && fight && e.amount > 0) { fight.satsLost = (fight.satsLost || 0) + e.amount; save.sats = Math.max(0, save.sats - e.amount); persist(); }
 }
 const battleScreen = createBattleScreen({
   el: $('#screen-battle'),
@@ -640,7 +671,7 @@ const battleScreen = createBattleScreen({
   onResult(res) {
     const f = fight;
     if (!f || f.booked) return;
-    f.booked = f.spawn ? bookWild(f, res) : f.haunebu ? bookHaunebu(res.won) : bookArena(f.arena, f.uids, res.won);
+    f.booked = f.spawn ? bookWild(f, res) : f.haunebu ? bookHaunebu(res.won) : bookArena(f.arena, f.uids, res.won, f.satsLost || 0);
   },
   onEnd(res) {
     const f = fight, b = f.booked || {};
@@ -648,7 +679,8 @@ const battleScreen = createBattleScreen({
     if (f.spawn) { if (b.msg) toast(b.msg, { kind: 'sats' }); levelUpToast(b.ups || []); }
     else if (f.haunebu) { if (res.won) toast(`Haunebu erbeutet: +${fmt(CONST.HAUNEBU_WIN_SATS)} Sats. ${CONST.HAUNEBU_USE_MS / 60000} Minuten freie Flüge, Knopf unten rechts auf der Karte.`, { icon: 'haunebu', kind: 'sats' }); }
     else {
-      if (res.retry && !beamOver()) return startBattle(f.arena);
+      if (res.retry && canRefight(f.arena)) return startBattle(f.arena);
+      if (b.msg && res.reason === 'quit') toast(b.msg, { kind: 'sats' }); // v12: Aufgeben hat kein Overlay, die Immobilien-Zeile stünde sonst nirgends
       levelUpToast(b.ups || []);
       if (b.unlocked) toast('Haunebu-Quests freigeschaltet! Schau in den Quests-Tab.', { icon: 'haunebu', kind: 'achievement' });
       if (res.won && ARENAS.every(a => save.arenaMastered[a.id]) && !save.victoryShown) { save.victoryShown = true; persist(); show('screen-victory'); return showLevelUps(); }
@@ -838,6 +870,44 @@ $('#beam-chip').addEventListener('click', async () => {
   if (i === 2) returnHome();
 });
 
+// ---------- v12: Moshes Anzeige (Spec v12 §1, js/ad.js) ----------
+// Jede Sekunde mit updateBanners: Fenster weiterschalten (speichern, wenn ein neues Objekt kommt), dann zeichnen. Das erste Fenster
+// startet erst beim Kartenbesuch. Die Karte liegt nur auf der Karte und nie über Kampf, Fang, Quest oder Flug (busy, wie der
+// Tagescheck), der Countdown läuft trotzdem. adCollapsed = „Kein Interesse": Badge statt Karte, pro Fenster (nicht gespeichert);
+// Verlängerung und „LEIDER VERGRIFFEN" klappen wieder auf.
+const adEl = $('#ad'), adBadge = $('.ad-badge');
+let adCollapsed = false;
+const adOpen = () => ['open', 'extended'].includes(adState(save.ad, Date.now()).phase);
+function adTick() {
+  const now = Date.now(), onMap = !!save.profile && current === 'screen-map' && !busy();
+  if (save.ad || onMap) {
+    const ad = nextWindow(save.ad, now);
+    if (ad !== save.ad) { if (!ad.next) adCollapsed = false; save.ad = ad; persist(); } // persist zeichnet über updateHud gleich mit
+  }
+  const st = adState(save.ad, now), phase = st.phase;
+  const card = onMap && (phase === 'gone' || (phase !== 'closed' && !adCollapsed));
+  adEl.classList.toggle('hidden', !card);
+  adBadge.classList.toggle('hidden', !(onMap && !card && phase !== 'closed'));
+  if (!onMap || phase === 'closed') return;
+  const note = phase === 'extended' && st.remaining > CONST.AD_EXTEND_MS - AD_NOTE_MS;
+  adEl.classList.toggle('extended', note);
+  adEl.classList.toggle('gone', phase === 'gone');
+  adEl.querySelector('.ad-timer').textContent = phase === 'gone' ? 'LEIDER VERGRIFFEN' : note ? 'VERLÄNGERT! NUR FÜR DICH.' : `ANGEBOT ENDET IN ${hms(st.remaining)}`;
+  adEl.querySelector('.ad-tags').classList.toggle('hidden', phase === 'gone' || note);
+  adEl.querySelectorAll('.ad-actions button').forEach(b => { b.disabled = phase === 'gone'; });
+  adBadge.textContent = `ANGEBOT ${hms(st.remaining).slice(3)}`;
+}
+adEl.querySelector('.ad-no').addEventListener('click', () => { sfx.play('click'); adCollapsed = true; adTick(); });
+adBadge.addEventListener('click', () => { sfx.play('click'); adCollapsed = false; adTick(); });
+// „Jetzt sichern": Kampf gegen Moshe über die Arena-Maschine (Level, Belohnung, „Nochmal" wie jede Arena; kein Marker, kein Besitzer)
+adEl.querySelector('.ad-buy').addEventListener('click', () => {
+  if (!adOpen() || busy()) return;
+  if (!teamInstances().length) return toast('Stell erst ein Team auf. Moshe verkauft nur an Kunden mit Bonität.');
+  sfx.play('click');
+  adCollapsed = true; // nach dem Kampf nur das Badge; „Nochmal" läuft über das Overlay
+  startBattle(AD_ARENA);
+});
+
 // ---------- v8/v9: Haunebu-Quests (Spec v8 §5.1, v9 §1–§4) ----------
 // Tab → Mission → Team-Wahl (solo: entfällt) → „Abflug" (playBeam) → Quest-Screen → Ergebnis → Rückflug.
 // v9: Die Quest verbraucht die Haunebu nicht. Ein laufender Arena-Flug bleibt in save.beam stehen (BEAM_WAIT hält den
@@ -859,6 +929,7 @@ const soloInst = id => save.box.filter(i => i.id === id).sort((a, b) => fighterS
 async function openQuest(id) {
   const m = MISSION_BY_ID[id];
   if (!m || !questsUnlocked(save)) return;
+  if (m.needsItem && !(save.items[m.needsItem] >= 1)) return toast('Die Adresse steht im Impressum des Investment-Codes (Shop).', { icon: 'lock' }); // v12 §4
   if (!haunebuActive(save, Date.now())) {
     const i = await popup({ title: 'Kapere zuerst die Haunebu', html: '<p>Ohne Flugscheibe kommt ihr nicht hin. Beschwöre sie im Shop und besiege Hitler, dann habt ihr 10 Minuten.</p>', buttons: [{ label: 'Später' }, { label: 'Zum Shop', primary: true }] });
     if (i === 1) show('screen-shop');
@@ -899,7 +970,7 @@ function endQuest(summary) {
   const run = questRun;
   if (!run || run.ended) return;
   run.ended = true;
-  const reward = questResult(save, run.mission.id, summary.result, summary.score, summary.alarmFree, { kieser: summary.kieser, fine: summary.fine });
+  const reward = questResult(save, run.mission.id, summary.result, summary.score, summary.alarmFree, { kieser: summary.kieser, videos: summary.videos, fine: summary.fine });
   if (reward) gainXp(reward.xp);
   if (reward?.firstDone) online.postEvent('quest', `hat die Haunebu-Quest „${run.mission.name}“ geschafft!`);
   afterChange();
@@ -981,7 +1052,7 @@ function endTogetherQuest(summary) {
   const t = together;
   if (t.booked) return;
   t.booked = true;
-  const reward = questResult(save, t.mission.id, summary.result, summary.score, summary.alarmFree, { kieser: summary.kieser, fine: summary.fine });
+  const reward = questResult(save, t.mission.id, summary.result, summary.score, summary.alarmFree, { kieser: summary.kieser, videos: summary.videos, fine: summary.fine });
   if (reward) gainXp(reward.xp);
   afterChange();
   const race = t.mode === 'race' ? { rival: { ...t.partner, done: 0, total: 0 }, mine: { score: summary.score } } : null;
@@ -1049,6 +1120,7 @@ debug.querySelectorAll('[data-beam]').forEach(b => b.addEventListener('click', (
 }));
 $('#dbg-gps').addEventListener('click', () => { stopBeam(); gpsBack(); toast('GPS wieder an'); });
 $('#dbg-haunebu').addEventListener('click', () => { save.haunebuUntil = Date.now() + CONST.HAUNEBU_USE_MS; afterChange(); toast('Haunebu für 10 Minuten'); });
+$('#dbg-ad').addEventListener('click', () => { save.ad = openWindow(Date.now()); adCollapsed = false; persist(); toast('Anzeige jetzt'); });
 $('#dbg-master').addEventListener('click', () => {
   for (const a of ARENAS) { save.arenaMastered[a.id] = true; save.arenaLevels[a.id] = CONST.ARENA_LEVELS; }
   afterChange(); toast('Alle Arenen gemeistert');
@@ -1072,6 +1144,7 @@ function dbgQuest(id, kieser = false) {
 }
 $('#dbg-quest').addEventListener('click', () => dbgQuest(dbgMission.value));
 $('#dbg-bernd').addEventListener('click', () => dbgQuest('camping', true));
+$('#dbg-moshe')?.addEventListener('click', () => dbgQuest('rabino', true)); // v12: Rabino starten, Moshe erwischt sofort (Videoszene)
 // v10: alle Quest-Fähigkeiten gratis auf Stufe 3, die erste Pool-Fähigkeit ausgerüstet
 $('#dbg-abilities').addEventListener('click', () => {
   for (const rid of Object.keys(FIXED)) save.questAbilities[rid] = { levels: Object.fromEntries([...FIXED[rid], ...POOLS[rid]].map(aid => [aid, 3])), slot: POOLS[rid][0] };
@@ -1091,11 +1164,11 @@ $('#dbg-close').addEventListener('click', () => debug.classList.add('hidden'));
 // ---------- v11: Was ist neu / App-Update ----------
 // Einmal pro Version „Was ist neu“ (Web und App). Die App (APK) fragt dazu version.json im Repo ab und bietet eine
 // neuere APK zum Herunterladen an (der Link geht über Capacitor in den Browser, der lädt die Datei).
-const VERSION = 11;
+const VERSION = 12;
 const NEWS = [
-  'Zusammen spielen ohne Netz (nur in der App): Arena-Duell 3 gegen 3, Koop-Quest und Quest-Rennen über Bluetooth und WLAN-Direct. Profil → Zusammen spielen.',
-  'Abwehr im Kampf neu: Ausweichen zählt sofort beim Wischen (jede Richtung) oder per Ausweichen-Knopf. Kurz vor dem Einschlag gibt es „Perfekt!“: kein Schaden und Bonus-Mining.',
-  'Der Ausweichen-Knopf zeigt mit einem Zeitbalken, wann es einschlägt, und sagt dir, ob du zu früh oder zu spät warst. Auch beim Tachionenbitcoin.',
+  'Moshe Hillel: Alle paar Stunden findet dich seine Anzeige. „Jetzt sichern“ heißt kämpfen, sein Investment-Code nimmt dir echte Sats, Ausweichen rettet sie.',
+  'Im Shop gibt es den Investment-Code, 100 Seiten inklusive. Im Impressum steht, wo die neue Mission „Rabino Empire HQ“ spielt.',
+  'Zusammen spielen ohne Netz läuft jetzt (nur in der Android-App, Download unter Profil → Zusammen spielen; beide Handys brauchen die neue Version). Dosenbier-Stops gibt es auch ohne Netz, Stefans Kieser-Szene ist länger.',
 ];
 const VERSION_URL = 'https://raw.githubusercontent.com/JustABusinessKid/ruetherpokemon/main/version.json';
 const newsHtml = list => `<ul class="news">${list.map(n => `<li>${esc(n)}</li>`).join('')}</ul>`;

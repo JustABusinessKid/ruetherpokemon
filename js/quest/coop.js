@@ -51,7 +51,7 @@ export function cleanSummary(s) {
   return {
     result: RESULTS.has(o.result) ? o.result : 'abort', reason: typeof o.reason === 'string' ? o.reason.slice(0, 20) : null,
     score: nat(o.score), objective: { done: nat(ob.done), total: nat(ob.total), min: nat(ob.min) }, timeMs: nat(o.timeMs),
-    alarmFree: o.alarmFree === true, delivered: nat(o.delivered), leftBehind: nat(o.leftBehind), kieser: nat(o.kieser), fine: nat(o.fine),
+    alarmFree: o.alarmFree === true, delivered: nat(o.delivered), leftBehind: nat(o.leftBehind), kieser: nat(o.kieser), videos: nat(o.videos), fine: nat(o.fine),
     text: typeof o.text === 'string' ? o.text.slice(0, 300) : '', setup: o.setup ?? null, team: Array.isArray(o.team) ? o.team : [],
   };
 }

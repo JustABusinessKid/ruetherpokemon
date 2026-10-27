@@ -71,7 +71,7 @@ export function arenaWin(save, arenaId, leaderUid) {
   const sats = arenaReward(level);
   save.sats += sats;
   save.stats.arenaWins += 1;
-  save.arenaOwners[arenaId] = leaderUid;
+  if (!ARENA_BY_ID[arenaId]?.virtual) save.arenaOwners[arenaId] = leaderUid; // v12: in Moshes Anzeige wird niemand stationiert (Spec v12 §1)
   if (level >= CONST.ARENA_LEVELS) save.arenaMastered[arenaId] = true;
   else save.arenaLevels[arenaId] = level + 1;
   return { sats, level, newLevel: save.arenaLevels[arenaId] || level, mastered: !!save.arenaMastered[arenaId] };
@@ -83,6 +83,7 @@ export function buyItem(save, itemId, now = 0) {
   const item = SHOP.find(i => i.id === itemId);
   if (!item) return { ok: false, reason: 'unbekannt' };
   if (itemId === 'haunebu') return summonHaunebu(save, now);
+  if (itemId === 'investmentcode' && save.items.investmentcode) return { ok: false, reason: 'besitz' }; // v12 §3: einmalig
   if (save.sats < item.cost) return { ok: false, reason: 'sats' };
   save.sats -= item.cost;
   if (itemId === 'lockmodul') save.lureUntil = Math.max(now, save.lureUntil || 0) + CONST.LURE_MS;
@@ -138,9 +139,10 @@ export function endBeam(save) { save.beam = null; }
 // ---------- v8/v9: Haunebu-Quests (Spec v8 §5.1, §5.6; v9 §7) ----------
 export const questsUnlocked = save => ARENAS.every(a => save.arenaMastered[a.id]);
 // Sats je Mission: coin × score (abgelieferte Münzen) + base − kieser × Kieser-Trainings, mindestens min;
-// bei Erfolg + done (Abschluss) + clean (ohne Alarm)
+// bei Erfolg + done (Abschluss) + clean (ohne Alarm); davon − video × Moshes Videos, nie unter 0
 export const QUEST_SATS = {
   tachionenraub: { coin: 300, base: 0, done: 1000 },
+  rabino: { coin: 500, base: 0, done: 2000, video: 1000 },                  // v12 §4: je Sack 500, ab 3 Säcken +2000, jedes Video −1000
   hangar: { coin: 0, base: 2500, done: 0 },
   ps3: { coin: 0, base: 2500, done: 0 },
   keller: { coin: 0, base: 2000, done: 0, clean: 1000 },
@@ -152,6 +154,7 @@ const nat = n => (Number.isFinite(+n) ? Math.max(0, Math.floor(+n)) : 0);
 // result 'success' | 'fail' | 'abort' (Aufgeben zählt wie Misserfolg: 10 % der Sats und XP, kein Abschluss). Trostgeld und
 // Trost-XP nur mit Fortschritt (score > 0): seit die Quest die Haunebu nicht verbraucht, wäre „Los!“ + Aufgeben sonst gratis Geld.
 // extra.kieser: Kieser-Trainings dieser Runde, extra.fine: Strafe (Ranger hat erwischt; dann kein Trostgeld), nie unter 0 Sats.
+// extra.videos: Moshes Videos dieser Runde (v12 §4), jedes kostet r.video von der Gesamtsumme, nie unter 0.
 // Sats werden gutgeschrieben, XP gibt der Aufrufer per gainXp weiter (wie arenaWin). null bei unbekannter Mission.
 // Rückgabe fine = tatsächlich abgezogene Strafe. questLog[id] = { best, done, wins, kieser, fines, clean }.
 export function questResult(save, missionId, result, score = 0, alarmFree = false, extra = {}) {
@@ -159,9 +162,10 @@ export function questResult(save, missionId, result, score = 0, alarmFree = fals
   if (!r) return null;
   const ok = result === 'success';
   score = nat(score);
-  const kieser = nat(extra?.kieser), fineDue = nat(extra?.fine);
+  const kieser = nat(extra?.kieser), videos = nat(extra?.videos), fineDue = nat(extra?.fine);
   const full = Math.max(r.min || 0, r.coin * score + r.base - (r.kieser || 0) * kieser);
-  const sats = ok ? full + r.done + (alarmFree ? r.clean || 0 : 0) : fineDue || !score ? 0 : Math.round(full * QUEST_FAIL);
+  const gross = ok ? full + r.done + (alarmFree ? r.clean || 0 : 0) : fineDue || !score ? 0 : Math.round(full * QUEST_FAIL);
+  const sats = Math.max(0, gross - (r.video || 0) * videos);
   const xp = ok ? CONST.QUEST_XP : score ? Math.round(CONST.QUEST_XP * QUEST_FAIL) : 0;
   save.questLog = save.questLog || {};
   const prev = save.questLog[missionId] || { best: 0, done: false };
@@ -348,8 +352,9 @@ export function levelUpUids(save, uids, n = CONST.WIN_LEVEL_UP) {
 export function emptySaveV3() {
   return {
     version: 3, box: [], team: [], sats: 0, dex: {}, arenaLevels: {}, arenaMastered: {}, arenaOwners: {},
-    items: { lockmodul: 0, supercoin: 0 }, lureUntil: 0, victoryShown: false, haunebuUntil: 0, summonPending: 0, beam: null, questLog: {}, questAbilities: cleanQuestAbilities(),
-    stats: { catches: 0, arenaWins: 0, stops: 0, fusions: 0, specials: 0, dodges: 0, maxCombo: 0, superHits: 0, haunebuWins: 0, haunebuSummons: 0 },
+    items: { lockmodul: 0, supercoin: 0, investmentcode: 0 }, lureUntil: 0, victoryShown: false, haunebuUntil: 0, summonPending: 0, beam: null, questLog: {}, questAbilities: cleanQuestAbilities(),
+    ad: null, // v12: Moshes Anzeige { until, next, extended } (js/ad.js); null = erstes Fenster beim nächsten Kartenbesuch
+    stats: { catches: 0, arenaWins: 0, stops: 0, fusions: 0, specials: 0, dodges: 0, maxCombo: 0, superHits: 0, haunebuWins: 0, haunebuSummons: 0, moshe: 0 },
     nextUid: 1,
     profile: null, xp: 0, trainerLevel: 1,
     quests: { date: '', list: [] }, streak: { count: 0, lastDay: '' }, achievements: {}, stopCooldowns: {},
@@ -362,7 +367,7 @@ export const emptySaveV2 = emptySaveV3; // Kompatibilität für ältere Importe
 const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
 const obj = v => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
 const nums = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, nat(v)]));
-// nur bekannte Arenen; f(v) == null wirft den Eintrag raus
+// nur bekannte Arenen (ARENA_BY_ID, also auch die Anzeige-Arena); f(v) == null wirft den Eintrag raus
 const perArena = (o, f) => Object.fromEntries(Object.entries(obj(o)).filter(([id]) => own(ARENA_BY_ID, id)).map(([id, v]) => [id, f(v)]).filter(([, v]) => v != null));
 // Exemplare: bekannter Rüther, gültige Seltenheit, Level 1..LEVEL_MAX; fehlende oder doppelte uid bekommt eine neue
 // (doppelte würde sell/feed beide Exemplare entfernen lassen). nextUid liegt danach über allen rN der alten Liste, auch der
@@ -410,6 +415,7 @@ function upgradeToV3({ flugscheibe, ...s }) {
     questLog: obj(s.questLog),
     beam: s.beam && typeof s.beam.arenaId === 'string' && typeof s.beam.until === 'number' ? s.beam : null,
     questAbilities: cleanQuestAbilities(s.questAbilities),
+    ad: s.ad && Number.isFinite(s.ad.until) ? { until: nat(s.ad.until), next: nat(s.ad.next), extended: !!s.ad.extended } : null,
   };
 }
 export function migrate(d) {

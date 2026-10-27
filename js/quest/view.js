@@ -48,6 +48,9 @@ const mmss = ms => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math
 const GOAL_ART = { steal: 'art/q-coin.png', sabotage: 'art/q-saucer.png', fetch: 'art/q-ps3.png', unplug: 'art/q-plug.png', valve: 'art/q-valve.png', ignite: 'art/q-tree.png' };
 const FACE_LEFT = new Set(['dackel']); // Sprite schaut nach links: Spiegeln umgekehrt
 const KIESER_LINES = [['bernd', 'Erst Kieser, dann Kaffee!'], ['viktor', 'Ich wollte doch nur nicht duschen …'], ['bernd', 'Danach bin ich so breit, ich pass durch keine Tür mehr!']];
+// v12 §4: Untertitel der Videoszene (Fallback zu mission.texts.video): [0] immer zuerst, danach reihum einer aus dem Rest
+const VIDEO_LINES = ['Diese 3 Trcks verschweigen dir die Banken', 'Ich habe mit 3.000 Euro angefangen. Heute besitze ich 14 Wohnungen in Marxloh.', 'Schreib CODE in die Kommentare.'];
+const TYPE_MS = 45; // Untertitel tippen sich ein, absichtlich nicht im Takt des Munds (CSS)
 const MINI_W = 40; // Minikarte ab mehr als 40 Kacheln Breite
 const fmt = n => (Number(n) || 0).toLocaleString('de-DE'); // landet in innerHTML: nie fremder Text (Koop-Events)
 const isObj = x => !!x && typeof x === 'object' && !Array.isArray(x);
@@ -76,7 +79,7 @@ const TUT = [
   { at: 'powers', text: 'Unten stehen seine 3 Fähigkeiten. Doppeltipp auf einen Rüther öffnet das Kreismenü.' },
 ];
 const ART = [
-  'art/q-coin.png', 'art/q-vault.png', 'art/q-saucer.png', 'art/q-ps3.png', 'art/q-plug.png', 'art/q-valve.png', 'art/q-tree.png', 'art/q-pad.png', 'art/fx-haunebu.png', 'art/fx-tractor-beam.png',
+  'art/q-coin.png', 'art/q-sack.png', 'art/q-vault.png', 'art/q-saucer.png', 'art/q-ps3.png', 'art/q-plug.png', 'art/q-valve.png', 'art/q-tree.png', 'art/q-pad.png', 'art/fx-haunebu.png', 'art/fx-tractor-beam.png',
   ...new Set(Object.values(ENEMY_TYPES).map(t => `art/${t.sprite}.png`)), ...Object.values(ABILITIES).map(a => a.icon), ...Object.values(THROWN),
   fxArt('chart-up'), fxArt('wallet'), fxArt('bags'), 'art/q-sign.png', 'art/q-kids.png', 'art/q-box.png', face('christian'), face('micha'), face('hildegard'),
 ];
@@ -191,7 +194,8 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
       fx.parts.push({ x: x * TILE, y: y * TILE, vx: (side ? side * Math.abs(cx) : cx) * v, vy: Math.sin(a) * v - up, grav, kind, src, size, color: colors[k % colors.length], ms: ms * (0.7 + Math.random() * 0.5), born: now() });
     }
   }
-  const coinsFly = (x0, y0, x1, y1, n, ms = 450) => { for (let k = 0; k < n; k++) throwArc('art/q-coin.png', x0, y0, x1, y1, ms, { size: 12, spin: 0, h: 18, delay: k * 90 }); };
+  const lootArt = () => `art/${st.mission.loot || 'q-coin'}.png`; // v12: Rabino trägt Säcke statt Münzen
+  const coinsFly = (x0, y0, x1, y1, n, ms = 450, src = lootArt()) => { for (let k = 0; k < n; k++) throwArc(src, x0, y0, x1, y1, ms, { size: 12, spin: 0, h: 18, delay: k * 90 }); };
   function msg(t, ms = 2200) {
     if (!t) return;
     msgEl.textContent = t;
@@ -507,8 +511,10 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
   }
   // HUD-Hinweis aus den Fänger-Typen der Karte: Kieser-Zähler mit aktuellem Belohnungsstand bzw. die Strafe fürs Erwischtwerden
   const kieserReward = n => { const r = QUEST_SATS[st.missionId]; return r?.kieser ? Math.max(r.min || 0, r.base - r.kieser * n) : null; };
+  const videoCost = () => QUEST_SATS[st.missionId]?.video || 0;
   function noteText() {
     if (catcher.kieser) { const r = kieserReward(st.kieser); return `Kieser: ${st.kieser}${r == null ? '' : ` · ${fmt(r)}`}`; }
+    if (catcher.video) return `Videos: ${st.videos}${st.videos && videoCost() ? ` · −${fmt(st.videos * videoCost())}` : ''}`;
     return catcher.fine ? `Erwischt = −${fmt(catcher.fine)}` : '';
   }
   function hud() {
@@ -794,11 +800,12 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
           sfx.play('rage');
           break;
         case 'kieser': kieserScene(e); break;
+        case 'video': videoScene(e); break;
         case 'resumed': {
           const u = st.units[e.unit];
           prev = new WeakMap(); // harter Schnitt: Rüther und Stefan springen, nicht gleiten
           if (isMine(e.unit)) { cam = { x: u.x * TILE, y: u.y * TILE }; select([e.unit]); }
-          msg(`Kieser-Training #${st.kieser} überstanden. Zurück an der Haunebu, alles ist ruhig.`, 3000);
+          msg(e.reason === 'video' ? `Video Nr. ${st.videos} überstanden. Zurück an der Haunebu, Moshe dreht weiter.` : `Kieser-Training #${st.kieser} überstanden. Zurück an der Haunebu, alles ist ruhig.`, 3000);
           break;
         }
         case 'caught': caught = e; haptic([120, 60, 120]); break;
@@ -953,7 +960,7 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
         sfx.play('tap');
         break;
       case 'credits':
-        coinsFly(x, y - 0.3, e.tx, e.ty - 0.3, 5, 380);
+        coinsFly(x, y - 0.3, e.tx, e.ty - 0.3, 5, 380, 'art/q-coin.png');
         pop(fxArt('bags'), e.tx, e.ty - 0.8, { size: 26, ms: 1000, delay: 380 });
         if (e.spy) text({ e: e.enemy }, 'Spitzel!', LILAC, 15, 1600);
         say({ u: e.unit }, 'Unlimited Credits. Kauf dir was Schönes.', 2200);
@@ -998,7 +1005,7 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
     if (!ending?.ready || ended) return;
     ended = true;
     let r = {
-      ...ending.summary, text: ending.text, setup: st.setup, kieser: st.kieser, fine: st.fine,
+      ...ending.summary, text: ending.text, setup: st.setup, kieser: st.kieser, videos: st.videos, fine: st.fine,
       team: st.units.map(u => ({ id: u.id, name: u.name, rarity: u.rarity, level: u.level, hp: u.hp, maxHp: u.maxHp, down: u.down })),
     };
     if (remote()) r = cleanSummary(r); // Koop-Gast: Zahlen und Ergebnis kommen vom Host (Spec §0), der Ergebnis-Screen setzt sie in HTML
@@ -1038,6 +1045,34 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
       // und deren Ende (resume bzw. Abspann) bliebe sonst nie aus, die Quest stünde still
       later(() => { send({ type: 'resume' }); later(() => { if (cut === mine) closeCut(); }, 300); }, 240);
     });
+  }
+
+  // v12 §4: Moshes neues Video (7 s): Handy-Rahmen über bg-video, Hände in zwei Frames, Mund in anderem Takt als die Untertitel,
+  // einmal sechs Finger (CSS), Untertitel tippen sich ein, Stempel „Video Nr. N“ / „−1.000 Sats“, der erwischte Rüther guckt klein am Rand zu
+  function videoScene(e) {
+    closeMenu(); endAim(); closeMini();
+    const u = st.units[e.unit], n = e.count, cost = videoCost();
+    const lines = st.mission.texts?.video?.length > 1 ? st.mission.texts.video : VIDEO_LINES, pool = lines.slice(1);
+    const subs = [lines[0], pool[(n - 1) % pool.length]];
+    sfx.play('rage'); haptic([60, 40, 60]);
+    playCut('video', `<div class="q-cut-scene"><div class="q-cut-phone"></div><i class="q-cut-hand l"></i><i class="q-cut-hand r"></i><i class="q-cut-hand six"></i><i class="q-cut-mouth"></i><p class="q-cut-sub"></p>`
+      + `<div class="q-cut-viewer">${frameFace(u, 'viewer')}<i class="q-cut-viewphone"></i></div></div>`
+      + `<div class="q-cut-stamp"><b>Video Nr. ${n}</b>${cost ? `<span>−${fmt(cost)} Sats</span>` : ''}</div><span class="q-cut-skip">Tippen zum Überspringen</span>`, 7000, () => {
+      const mine = cut;
+      cutEl.classList.add('black');
+      if (remote()) return; // Koop-Gast: wie bei Kieser schließt der nächste unpausierte Zustand die Szene
+      later(() => { send({ type: 'resume' }); later(() => { if (cut === mine) closeCut(); }, 300); }, 240);
+    });
+    const sub = cutEl.querySelector('.q-cut-sub'), mine = cut;
+    let k = 0, i = 0;
+    const typeNext = () => {
+      if (cut !== mine || cut.closing) return;
+      const t = subs[k];
+      setText(sub, t.slice(0, ++i));
+      if (i < t.length) later(typeNext, TYPE_MS);
+      else if (++k < subs.length) { i = 0; later(typeNext, 600); }
+    };
+    later(typeNext, 400);
   }
 
   // Ranger zückt den Block, das Team schaut betreten, Stempel mit der Strafe; danach Abspann (onEnd)
@@ -1194,7 +1229,7 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
       if (o.kind === 'vault') {
         shadow(x, y + 13, 26);
         sprite(o.coins > 0 ? img('art/q-vault.png') : variant('art/q-vault.png', 'grey'), x, y - 1, 30);
-        for (let k = 0; k < Math.min(o.coins, 5); k++) sprite(img('art/q-coin.png'), x + 11, y + 10 - k * 3, 10);
+        for (let k = 0; k < Math.min(o.coins, 5); k++) sprite(img(lootArt()), x + 11, y + 10 - k * 3, 10);
         if (o.coins > 0 && (rt / 1500 + o.id * 0.37) % 1 < 0.12) bitmap(g, 'spark', x + 7, y - 11, 1, PAPER);
       } else if (o.kind === 'sabotage') {
         shadow(x, y + 12, 26);
@@ -1527,9 +1562,11 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
       const head = y - s / 2 - 6 - lift;
       const bounce = 1 + 0.5 * Math.max(0, 1 - age(popAt.get(e) ?? -1e9) / 250); // ? und ! hüpfen beim Wechsel
       if (e.melee) { const k = Math.floor(rt / 140) % 2; bitmap(g, 'spark', x + Math.cos(p.dir) * 17, y - 4 + Math.sin(p.dir) * 10, 1.2, k ? RED : GOLD); }
-      if (e.state === 'coffee') { // Bulletproof Coffee: Becher an den Mund, Dampf, *schlürf*
-        mug(g, x + (left ? -10 : 10), y - 9, rt);
-        if ((rt / 1600 + e.i * 0.3) % 1 < 0.55) label(x, head - 4, '*schlürf*', PAPER, 12);
+      if (e.state === 'coffee') { // Bulletproof Coffee: Becher an den Mund, Dampf, *schlürf*; Moshe: Handy vor dem Gesicht, *dreht Video*
+        const video = ENEMY_TYPES[e.type].catches === 'video';
+        if (video) { phone(g, x + (left ? -7 : 7), y - 8, Math.floor(rt / 500) % 2 === 0, rt); if (Math.floor(rt / 400) % 2) bitmap(g, 'star', x + (left ? -14 : 14), y - 16, 0.8, RED); }
+        else mug(g, x + (left ? -10 : 10), y - 9, rt);
+        if ((rt / 1600 + e.i * 0.3) % 1 < 0.55) label(x, head - 4, video ? '*dreht Video*' : '*schlürf*', PAPER, 12);
       }
       if (e.state === 'distracted' && e.reason === 'fire' && e.target) { // Ranger: hin zum Feuer, dort mit der Feuerpatsche draufhauen
         if (!e.path.length) {
@@ -1681,7 +1718,7 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
         for (let k2 = 0; k2 < 3; k2++) { const a = rt / 300 + k2 * 2.09; bitmap(g, 'star', x + Math.cos(a) * 12, y - 18 + Math.sin(a) * 3, 0.8, GOLD); }
       }
       if (u.busy) bar(x, top - 8, 34, u.busy.t / u.busy.ms, u.busy.kind === 'revive' ? TEAL : GOLD, 5); // Klau-/Sabotage-Fortschritt
-      for (let k = 0; k < u.carry; k++) sprite(img('art/q-coin.png'), x - 6 + k * 12, top - 6 - (u.busy ? 10 : 0) - Math.abs(Math.sin(rt / 180 + k * 1.3)) * 4, 12);
+      for (let k = 0; k < u.carry; k++) sprite(img(lootArt()), x - 6 + k * 12, top - 6 - (u.busy ? 10 : 0) - Math.abs(Math.sin(rt / 180 + k * 1.3)) * 4, 12);
       if (u.item) { g.fillStyle = INK; g.fillRect(x - 11, top - 23, 22, 20); g.fillStyle = '#E8D7A8'; g.fillRect(x - 10, top - 22, 20, 18); sprite(img('art/q-ps3.png'), x, top - 13 - Math.abs(Math.sin(rt / 220)) * 2, 18); }
     }
   }
@@ -1961,7 +1998,7 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
       paused = !!m.p;
       if (Array.isArray(m.ev)) handle(m.ev.filter(isObj));
     } catch (e) { console.warn('Koop: Schnappschuss kaputt', e); }
-    if (cut?.kind === 'kieser' && !st.paused) closeCut();
+    if ((cut?.kind === 'kieser' || cut?.kind === 'video') && !st.paused) closeCut();
     if (briefingOpen() && !ending) { if (!paused) cardEl.classList.add('hidden'); else if (performance.now() - coop.qrAt > 1000) sendQr(); }
   }
   function partnerAway(on) {
@@ -2010,10 +2047,10 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
     abs = st.units.map(u => abilitiesFor(u));
     th = THEMES[st.theme] || THEMES.neuschwabenland;
     el.dataset.theme = st.theme;
-    goalIco.src = GOAL_ART[st.objective.type] || GOAL_ART.steal;
+    goalIco.src = st.objective.type === 'steal' ? lootArt() : GOAL_ART[st.objective.type] || GOAL_ART.steal;
     setText(goalLabel, st.objective.label);
     const types = [...new Set([...st.enemies.map(e => e.type), st.mission.reinforce])].map(t => ENEMY_TYPES[t]).filter(Boolean);
-    catcher = { kieser: types.some(T => T.catches === 'kieser'), fine: Math.max(0, ...types.map(T => T.fine || 0)) };
+    catcher = { kieser: types.some(T => T.catches === 'kieser'), video: types.some(T => T.catches === 'video'), fine: Math.max(0, ...types.map(T => T.fine || 0)) };
     timeEl.classList.toggle('calm', st.timeLimit == null);
     noteEl.classList.toggle('warn', !!catcher.fine);
     mapBtn.classList.toggle('hidden', st.w <= MINI_W);
@@ -2024,7 +2061,7 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
     cam = { x: me.x * TILE, y: me.y * TILE };
     resize();
     // Cutscene-Kulissen laden nebenbei (groß, erst später gebraucht)
-    for (const src of [...(catcher.kieser ? ['art/bg-kieser.png', 'art/boss-bernd.png'] : []), ...(catcher.fine ? ['art/bg-ranger.png'] : [])]) loadImg(src);
+    for (const src of [...(catcher.kieser ? ['art/bg-kieser.png', 'art/boss-bernd.png'] : []), ...(catcher.video ? ['art/bg-video.png'] : []), ...(catcher.fine ? ['art/bg-ranger.png'] : [])]) loadImg(src);
     await Promise.all([...ART, ...st.units.map(u => face(u.id))].map(loadImg));
     if (run !== seq) return; // inzwischen gestoppt oder neu gestartet
     mapCv = paintMap(st, th);

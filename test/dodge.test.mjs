@@ -240,8 +240,10 @@ test('Simulation: menschliches Timing weicht zuverlässig aus, Dauerwischen nich
   assert.ok(good >= 0.8, `Reaktion 250–450 ms: ${good}`);
   assert.ok(slow >= 0.8, `Reaktion 350–550 ms: ${slow}`);
   assert.ok(spam <= 0.4, `Dauerwischen alle 200 ms: ${spam}`);
-  // Wischen im Takt trifft nur zufällig (wie vor v11.1: 0 / 0,32 / 0,47); die Schonung einzelner Fehlversuche ändert daran nichts
-  for (const p of [700, 1000, 1300]) { const r = rate({ spam: p }); assert.ok(r <= 0.5, `Wischen im Takt alle ${p} ms: ${r}`); }
+  // Wischen im Takt trifft nur zufällig (wie vor v11.1: 0 / 0,32 / 0,47); die Schonung einzelner Fehlversuche ändert daran nichts.
+  // v12: Moshe (fast every 2300 wie Hitler, aber ohne Heil- oder Beschwörungs-Attacke) liegt bei 1300 ms allein bei 0,91 und hebt
+  // den Schnitt auf 0,51; mit every 2400 wären es 0,46. Die Daten stehen in Spec v12 §2 fest, darum hier 0,55 statt 0,5.
+  for (const p of [700, 1000, 1300]) { const r = rate({ spam: p }); assert.ok(r <= 0.55, `Wischen im Takt alle ${p} ms: ${r}`); }
 });
 
 test('Abstand: jede Warnung frühestens ATTACK_GAP nach dem letzten Einschlag und immer in voller Länge', () => {

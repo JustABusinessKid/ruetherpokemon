@@ -169,8 +169,8 @@ test('Koop-Gast: Schnappschuss ändert nie, wer eine Einheit ist; Zusammenfassun
   assert.deepEqual([u0.x, u0.y], [snap.units[0].x, snap.units[0].y]); // Bewegung kommt weiter an
 
   const c = cleanSummary({ result: '<img>', reason: 'caught', score: '5<b>', objective: { done: '<img src=x onerror=1>', total: 3.6, min: -2 }, timeMs: 'x',
-    alarmFree: 'ja', kieser: '1<i>', fine: 50, text: 7, team: [{ id: 'micha' }], setup: { layoutId: 'a' }, evil: '<script>' });
+    alarmFree: 'ja', kieser: '1<i>', videos: 2, fine: 50, text: 7, team: [{ id: 'micha' }], setup: { layoutId: 'a' }, evil: '<script>' });
   assert.deepEqual(c, { result: 'abort', reason: 'caught', score: 0, objective: { done: 0, total: 4, min: 0 }, timeMs: 0, alarmFree: false,
-    delivered: 0, leftBehind: 0, kieser: 0, fine: 50, text: '', setup: { layoutId: 'a' }, team: [{ id: 'micha' }] });
+    delivered: 0, leftBehind: 0, kieser: 0, videos: 2, fine: 50, text: '', setup: { layoutId: 'a' }, team: [{ id: 'micha' }] });
   assert.equal(cleanSummary(null).result, 'abort');
 });

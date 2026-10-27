@@ -2,10 +2,13 @@ package de.ruether.go;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.Intent;
 import android.location.LocationManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.Settings;
 import android.view.WindowManager;
 import androidx.annotation.NonNull;
 import androidx.core.location.LocationManagerCompat;
@@ -73,6 +76,7 @@ public class NearbyLinkPlugin extends Plugin {
     private String endpoint; // verbundener Endpunkt
     private String pending; // Endpunkt, mit dem gerade verbunden wird
     private boolean asking; // Berechtigungsdialog ist offen
+    private boolean locationAsked; // Android 13+: Standort schon einmal nachgefragt (nur ein Versuch je App-Lauf)
     private boolean joining; // sucht gerade (Beitreten): nach einem gescheiterten Verbinden die Suche neu anstoßen
     private int round; // zählt stopAll(): alte Wiederholungen laufen ins Leere
 
@@ -136,6 +140,25 @@ public class NearbyLinkPlugin extends Plugin {
         });
     }
 
+    /** Einstellungen öffnen, damit ein Fehler behoben werden kann: to = app (Berechtigungen) | location | bluetooth. */
+    @PluginMethod
+    public void openSettings(PluginCall call) {
+        String to = call.getString("to", "app");
+        main.post(() -> {
+            Intent i = "location".equals(to)
+                ? new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+                : "bluetooth".equals(to)
+                    ? new Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
+                    : new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", getContext().getPackageName(), null));
+            try {
+                getActivity().startActivity(i);
+                call.resolve();
+            } catch (Exception e) {
+                fail(call, "nosettings");
+            }
+        });
+    }
+
     @Override
     protected void handleOnDestroy() {
         stopAll();
@@ -143,10 +166,17 @@ public class NearbyLinkPlugin extends Plugin {
 
     // ---------- Vorbedingungen ----------
 
-    /** Play-Dienste da und alle Berechtigungen erteilt? Sonst ablehnen bzw. erst nachfragen. */
+    /**
+     * Play-Dienste da und alle Berechtigungen erteilt? Sonst ablehnen bzw. erst nachfragen.
+     * Veraltete oder abgeschaltete Play-Dienste: Googles eigener Dialog (Aktualisieren/Aktivieren) und Code gmsupdate.
+     */
     private boolean ready(PluginCall call) {
-        if (GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(getContext()) != ConnectionResult.SUCCESS) {
-            fail(call, "unavailable");
+        GoogleApiAvailability api = GoogleApiAvailability.getInstance();
+        int gms = api.isGooglePlayServicesAvailable(getContext());
+        if (gms != ConnectionResult.SUCCESS) {
+            boolean fixable = api.isUserResolvableError(gms) && getActivity() != null;
+            if (fixable) api.makeGooglePlayServicesAvailable(getActivity());
+            fail(call, fixable ? "gmsupdate" : "unavailable");
             return false;
         }
         if (client == null) client = Nearby.getConnectionsClient(getContext());
@@ -170,13 +200,14 @@ public class NearbyLinkPlugin extends Plugin {
     }
 
     /**
-     * Benötigte Aliase je Android-Version (Spec-Tabelle), davon die noch fehlenden. Standort (genau) auf allen Versionen:
-     * Nearby bricht startDiscovery auch auf Android 13+ ohne ACCESS_FINE_LOCATION ab (MISSING_PERMISSION_ACCESS_*_LOCATION).
+     * Benötigte Aliase je Android-Version, davon die noch fehlenden. Ab Android 13 ohne Standort: BLUETOOTH_SCAN und
+     * NEARBY_WIFI_DEVICES tragen im Manifest neverForLocation (wie Googles Beispiel WalkieTalkie); bis Android 12 braucht
+     * Nearby den genauen Standort (Strategy-Referenz: FINE zwischen Q und S).
      */
     private String[] missingAliases() {
         int sdk = Build.VERSION.SDK_INT;
         String[] need = sdk >= 33
-            ? new String[] { "bluetooth", "wifi", "location" }
+            ? new String[] { "bluetooth", "wifi" }
             : sdk >= 31 ? new String[] { "bluetooth", "location" } : new String[] { "location" };
         List<String> missing = new ArrayList<>();
         for (String a : need) if (getPermissionState(a) != PermissionState.GRANTED) missing.add(a);
@@ -194,16 +225,29 @@ public class NearbyLinkPlugin extends Plugin {
             .addOnSuccessListener(v -> call.resolve())
             .addOnFailureListener(e -> {
                 if (status(e) == ConnectionsStatusCodes.STATUS_ALREADY_ADVERTISING) call.resolve();
-                else fail(call, codeOf(e));
+                else if (!locationFallback(e, call)) fail(call, codeOf(e));
             });
+    }
+
+    /**
+     * Android 13+: Verlangt Nearby trotz neverForLocation doch den Standort (ältere Play-Dienste melden
+     * MISSING_PERMISSION_ACCESS_*_LOCATION), wird er einmal nachgefragt; permsDone startet dann neu. true = übernommen.
+     */
+    private boolean locationFallback(Exception e, PluginCall call) {
+        if (Build.VERSION.SDK_INT < 33 || asking || locationAsked || !message(e).startsWith("MISSING_PERMISSION_ACCESS")) return false;
+        if (getPermissionState("location") == PermissionState.GRANTED) return false;
+        asking = true;
+        locationAsked = true;
+        requestPermissionForAliases(new String[] { "location" }, call, "permsDone");
+        return true;
     }
 
     private void startJoin(PluginCall call) {
         myName = call.getString("name", myName);
         String peer = call.getString("peer");
         stopAll();
-        // Suchen braucht den eingeschalteten Standort (Nearby meldet sonst nur MISSING_PERMISSION_ACCESS_COARSE_LOCATION)
-        if (!locationOn()) {
+        // Bis Android 12 braucht Suchen den eingeschalteten Standort (Nearby meldet sonst nur MISSING_PERMISSION_ACCESS_COARSE_LOCATION)
+        if (Build.VERSION.SDK_INT < 33 && !locationOn()) {
             fail(call, "location");
             return;
         }
@@ -214,7 +258,7 @@ public class NearbyLinkPlugin extends Plugin {
             .addOnSuccessListener(v -> call.resolve())
             .addOnFailureListener(e -> {
                 if (status(e) == ConnectionsStatusCodes.STATUS_ALREADY_DISCOVERING) call.resolve();
-                else fail(call, codeOf(e));
+                else if (!locationFallback(e, call)) fail(call, codeOf(e));
             });
     }
 
@@ -281,7 +325,8 @@ public class NearbyLinkPlugin extends Plugin {
                     );
                 } else {
                     pending = null;
-                    emitError(codeOf(e), message(e));
+                    // immer connect: STATUS_RADIO_ERROR heißt hier „Funkverbindung gescheitert“, nicht „Bluetooth aus“
+                    emitError("connect", message(e));
                     rediscover(); // weiter suchen, derselbe Gastgeber wird neu gemeldet
                 }
             });
@@ -297,7 +342,12 @@ public class NearbyLinkPlugin extends Plugin {
             ev.put("id", id);
             ev.put("name", name);
             notifyListeners("peerFound", ev);
-            if (endpoint == null && pending == null && (wantPeer == null || wantPeer.equals(name))) connect(id, 0);
+            if (endpoint == null && pending == null && (wantPeer == null || wantPeer.equals(name))) {
+                // Suchen ist schwere Funkarbeit und stört den Verbindungsaufbau (Nearby-Doku, Beispiel WalkieTalkie);
+                // scheitert das Verbinden, startet rediscover() die Suche neu
+                client.stopDiscovery();
+                connect(id, 0);
+            }
         }
 
         @Override
@@ -339,8 +389,9 @@ public class NearbyLinkPlugin extends Plugin {
                 if (mine) pending = null;
                 names.remove(id);
                 codes.remove(id);
+                if (!mine) return; // nur wer angefragt hat, meldet und sucht weiter (der Gastgeber wirbt ohnehin weiter)
                 emitError("connect", ConnectionsStatusCodes.getStatusCodeString(res.getStatus().getStatusCode()));
-                if (mine) rediscover(); // beim Beitreten: weiter suchen
+                rediscover();
             }
         }
 

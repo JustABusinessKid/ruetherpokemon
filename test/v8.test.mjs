@@ -183,7 +183,7 @@ test('v8: questResult Sabotage, PS3, Keller (+1000 ohne Alarm), Misserfolg 10 %'
   assert.equal(questResult(s, 'mond', 'success', 9), null);
   assert.equal(s.questLog.mond, undefined);
   assert.equal(questResult(emptySaveV3(), 'ps3', 'fail', -3).best, 0);
-  assert.deepEqual(Object.keys(QUEST_SATS).sort(), ['bruch', 'camping', 'hangar', 'keller', 'ps3', 'tachionenraub']); // v9: + Camping, Bruch
+  assert.deepEqual(Object.keys(QUEST_SATS).sort(), ['bruch', 'camping', 'hangar', 'keller', 'ps3', 'rabino', 'tachionenraub']); // v9: + Camping, Bruch; v12: + Rabino
 });
 
 test('v8: Erfolge haunebu, tachionen, quest1, quest_all', () => {
@@ -203,6 +203,8 @@ test('v8: Erfolge haunebu, tachionen, quest1, quest_all', () => {
   assert.deepEqual(checkAchievements(s), [], 'v9: quest_all braucht auch Camping und Bruch');
   questResult(s, 'camping', 'success', 3);
   questResult(s, 'bruch', 'success', 3);
+  assert.deepEqual(checkAchievements(s), [], 'v12: quest_all braucht auch Rabino Empire HQ');
+  questResult(s, 'rabino', 'success', 3);
   assert.deepEqual(checkAchievements(s).map(a => a.id), ['quest_all']);
   // gemeisterte Arena zählt weiter (Level bleibt 5)
   const m = emptySaveV3();

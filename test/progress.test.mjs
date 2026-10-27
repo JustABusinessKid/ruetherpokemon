@@ -123,7 +123,7 @@ test('migrate: v1 → v3', () => {
   const v2 = migrate({ version: 2, box: [], team: [], sats: 5 });
   assert.equal(v2.version, 3);
   assert.equal(v2.sats, 5);
-  assert.deepEqual(v2.items, { lockmodul: 0, supercoin: 0 });
+  assert.deepEqual(v2.items, { lockmodul: 0, supercoin: 0, investmentcode: 0 }); // v12: + Investment-Code
   assert.equal(v2.profile, null);
   assert.equal(v2.settings.sound, true);
 });

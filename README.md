@@ -49,8 +49,13 @@ beim Start keinen fremden Server außer den OpenStreetMap-Kacheln.
 Zwei Handys, kein WLAN, keine mobilen Daten (z. B. im Flugzeug): Die Android-App verbindet sich direkt über Google Nearby
 Connections (Bluetooth, BLE, WLAN-Direct). Ablauf:
 
-1. Beide: Bluetooth einschalten. Das geht auch im Flugmodus (Flugmodus an, dann Bluetooth wieder an). Ältere Handys (Android 8 bis 11) brauchen zusätzlich Standort an.
-2. Beide: Profil → „Zusammen spielen“. Einer tippt „Spiel eröffnen“, der andere „Beitreten“. Beim ersten Mal fragt Android nach „Geräte in der Nähe“: erlauben.
+0. Beide brauchen die Android-App ab v11 (vor dem Flug laden, die APK gibt es nur mit Internet) und öffnen die App, nicht das
+   Web-App-Symbol. Im Browser, als Web-App und auf dem iPhone geht Zusammen spielen nicht; die Lobby zeigt dort den Download.
+1. Beide: Bluetooth einschalten. Das geht auch im Flugmodus (Flugmodus an, dann Bluetooth wieder an). Bis Android 12 muss
+   zusätzlich der Standort an sein.
+2. Beide: Profil → „Zusammen spielen“. Einer tippt „Spiel eröffnen“, der andere „Beitreten“. Beim ersten Mal fragt Android nach
+   „Geräte in der Nähe“ (bis Android 12 nach dem Standort, dort „Genau“): erlauben. Abgelehnt? Das Popup hat einen Knopf
+   „Einstellungen öffnen“. Bis ihr verbunden seid, beide die App offen lassen.
 3. Verbunden: Beide sehen sich mit Gesicht und Trainer-Level und einen 4-stelligen Code, der bei beiden gleich sein muss.
 4. Wer eröffnet hat, wählt den Modus (und bei Quests die Mission). Jeder wählt sein Team aus der eigenen Sammlung, beide tippen „Bereit“, dann „Start“. Danach geht es zurück in die Lobby, „Nochmal“ heißt einfach wieder Bereit und Start.
 

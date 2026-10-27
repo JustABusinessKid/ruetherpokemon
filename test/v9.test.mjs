@@ -267,11 +267,11 @@ test('v9: questResult: extra fehlt, null oder Unsinn; alte v8-Einträge zählen 
   s.questLog.keller = { best: 1, done: true }; // v8-Stand
   questResult(s, 'keller', 'success', 1, true);
   assert.deepEqual(s.questLog.keller, { best: 1, done: true, wins: 2, kieser: 0, fines: 0, clean: true });
-  assert.deepEqual(Object.keys(QUEST_SATS).sort(), ['bruch', 'camping', 'hangar', 'keller', 'ps3', 'tachionenraub']);
+  assert.deepEqual(Object.keys(QUEST_SATS).sort(), ['bruch', 'camping', 'hangar', 'keller', 'ps3', 'rabino', 'tachionenraub']); // v12: + Rabino
 });
 
 // ---------- §7 Erfolge ----------
-test('v9: Erfolge kieser3, bruch_clean, quest_all mit allen 6 Missionen', () => {
+test('v9: Erfolge kieser3, bruch_clean, quest_all mit allen Missionen (v12: 7)', () => {
   const s = emptySaveV3();
   const ids = () => checkAchievements(s).map(a => a.id);
   questResult(s, 'camping', 'fail', 1, false, { kieser: 2 });
@@ -286,5 +286,7 @@ test('v9: Erfolge kieser3, bruch_clean, quest_all mit allen 6 Missionen', () => 
   questResult(s, 'bruch', 'success', 3, true);
   assert.deepEqual(ids(), ['bruch_clean']);
   questResult(s, 'keller', 'success', 1);
+  assert.deepEqual(ids(), [], 'v12: Rabino Empire HQ fehlt noch');
+  questResult(s, 'rabino', 'success', 3);
   assert.deepEqual(ids(), ['quest_all']);
 });

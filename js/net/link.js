@@ -9,6 +9,10 @@ export const TIMING = { PING_MS: 2000, TIMEOUT_MS: 6000, RECONNECT_MS: 60_000, A
 // Im Zustand 'lost': so lange nach dem Timeout bzw. nach einem fehlgeschlagenen Neustart startet die Hülle den Transport neu
 // (überschreibbar per timing.RETRY_MS)
 const RETRY_MS = 3000;
+// nearby: nach einem reinen Herzschlag-Timeout bleibt die Funkverbindung so lange stehen (timing.SILENT_MS). Nearby hält sie
+// selbst mit Keep-alive (alle 5 s, im GMS-Prozess) und meldet echte Abrisse als disconnected; still ist sie oft nur, weil das
+// JS des Partners kurz steht (Bildschirm aus, Hintergrund) oder Nearby gerade auf WLAN umschaltet.
+const SILENT_MS = 30_000;
 const PART = 8000;      // Zeichen je Teil: auch als UTF-8 mit JSON-Escapes unter den 32 KB von Nearby
 const MAX_PARTS = 1000; // größer wird keine Nachricht (8 Mio. Zeichen)
 const NAME_MAX = 40;
@@ -56,6 +60,7 @@ function nearbyTransport(plugin, cb) {
       return role === 'host' ? plugin.host({ name }) : plugin.join(peer ? { name, peer } : { name });
     },
     send(data) { quiet(plugin?.send({ data })); }, // toobig/notconnected: verworfen, den Rest merkt der Herzschlag
+    openSettings(to) { quiet(plugin?.openSettings?.({ to })); },
     stop() {
       for (const s of subs || []) quiet(Promise.resolve(s).then(h => h?.remove?.())); // Capacitor 6: Promise<Handle>
       subs = null; cur = null;
@@ -109,6 +114,7 @@ function localTransport({ channel, lag, advMs }, cb) {
       }
     },
     send(data) { if (other) post({ k: 'msg', to: other, data }); },
+    openSettings() {},
     stop() {
       if (other) post({ k: 'bye', to: other });
       stopAdv(); other = null; role = null;
@@ -120,7 +126,7 @@ function localTransport({ channel, lag, advMs }, cb) {
 }
 
 export function createLink({ kind = pickKind(), plugin, channel = 'ruether-go-link', lag = 0, timing } = {}) {
-  const T = { RETRY_MS, ...TIMING, ...timing };
+  const T = { RETRY_MS, SILENT_MS, ...TIMING, ...timing };
   const step = Math.max(5, Math.min(T.PING_MS, T.TIMEOUT_MS) / 4);
   const hears = new Map(), parts = new Map();
   let myName = '', sid = rid(), peerSid = null, gen = 0;
@@ -138,6 +144,7 @@ export function createLink({ kind = pickKind(), plugin, channel = 'ruether-go-li
     join: name => begin('guest', name),
     send, on, close,
     keepAwake: on => tr.keepAwake(!!on),
+    openSettings: to => tr.openSettings(to), // nearby: app | location | bluetooth (Android-Einstellungen)
   };
 
   function emit(type, d) {
@@ -219,19 +226,20 @@ export function createLink({ kind = pickKind(), plugin, channel = 'ruether-go-li
   }
   function lose(reason) {
     lostAt = now(); lostErr = null;
-    retryAt = reason === 'timeout' ? lostAt + T.RETRY_MS : Infinity; // nativ weg: onDown startet sofort neu
+    retryAt = reason !== 'timeout' ? Infinity : lostAt + (kind === 'nearby' ? T.SILENT_MS : T.RETRY_MS); // nativ weg: onDown startet sofort neu
     setState('lost');
     emit('lost', { reason });
   }
-  // Endgültig vorbei (bye, RECONNECT_MS abgelaufen, falsche Version): Gastgeber wirbt weiter an, Gast hört auf
-  function finish(reason) {
+  // Endgültig vorbei (bye, RECONNECT_MS abgelaufen, falsche Version): Gastgeber wirbt weiter an, Gast hört auf.
+  // Bei 'version' steht im Event auch theirs (PROTO des Partners), damit die App sagen kann, wer aktualisieren muss.
+  function finish(reason, theirs) {
     reset();
     if (link.role === 'host' && reason !== 'version') { setState('hosting'); launch().catch(() => {}); }
     else { tr.stop(); setState('idle'); }
-    emit('disconnected', { reason });
+    emit('disconnected', reason === 'version' ? { reason, theirs: Number.isFinite(theirs) ? theirs : 0 } : { reason });
   }
   function hello(m) {
-    if (m.v !== PROTO) return finish('version');
+    if (m.v !== PROTO) return finish('version', m.v);
     if (typeof m.sid !== 'string' || !m.sid || (linked && m.sid === peerSid)) return; // kaputt oder doppelt
     const again = m.sid === peerSid;
     if (peerSid && !again) { // Partner-App neu gestartet: die alte Runde ist vorbei
@@ -284,8 +292,9 @@ export function createLink({ kind = pickKind(), plugin, channel = 'ruether-go-li
     if (starting || (code === failCode && now() - failAt < 2000)) return;
     emit('error', { code, message: typeof message === 'string' ? message : code });
   }
-  // Funkstille (timeout): der Transport pingt weiter, das nächste Lebenszeichen heißt „wieder da“. Bleibt es RETRY_MS still,
-  // startet die Hülle den Transport neu (§1.2 'lost'); ebenso RETRY_MS nach einem fehlgeschlagenen Neustart, bis RECONNECT_MS um ist.
+  // Funkstille (timeout): der Transport pingt weiter, das nächste Lebenszeichen heißt „wieder da“. Bleibt es RETRY_MS (nearby:
+  // SILENT_MS) still, startet die Hülle den Transport neu (§1.2 'lost'); ebenso RETRY_MS nach einem fehlgeschlagenen Neustart,
+  // bis RECONNECT_MS um ist.
   function tick() {
     const t = now();
     if (linked && t - lastTx >= T.PING_MS) raw(PING);

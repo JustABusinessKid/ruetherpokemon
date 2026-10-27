@@ -7,7 +7,7 @@ import { ABILITIES, FIXED, params } from './abilities.js';
 export { ABILITIES, POOLS, FIXED, params } from './abilities.js';
 
 // Gegner-Typen (Spec §5.3, v9 §2.1). sight/angle: Kegel in Kacheln/Grad, speed Kacheln/s, dps Nahkampf pro s.
-// coffee: Kaffeepause (Kegel aus) und danach koffeiniert; catches: 'kieser' (Pause + Cutscene) | 'caught' (sofort Ende mit fine);
+// coffee: Kaffeepause bzw. Videodreh (Kegel aus) und danach koffeiniert; catches: 'kieser' | 'video' (Pause + Cutscene) | 'caught' (sofort Ende mit fine);
 // bark: Sichtung macht Geräusch; whistle: Alarm-Schritt; fire: bemerkt brennende Bäume und läuft löschen.
 export const ENEMY_TYPES = {
   pinguin: {
@@ -56,6 +56,20 @@ export const ENEMY_TYPES = {
     name: 'Ranger vom Bruch', sight: 8, angle: 50, speed: 2.3, hp: 80, dps: 6, catches: 'caught', fine: 10_000, fire: true, sprite: 'q-ranger',
     lines: { sus: ['Moment, das ist kein Reiher ...', 'Hier ist Betreten verboten.'], alert: ['Halt! Naturschutzgebiet!', 'Personalien, aber zackig!'], caught: ['Das wird teuer!'], fire: ['FEUER! Wo ist die Feuerpatsche?', 'Es brennt im Bruch!'], calm: ['War wohl ein Wildschwein.', 'Ich zähl weiter Kraniche.'], wake: ['Wo ist mein Fernglas?'] },
   },
+  // v12 §4: Rabino Empire. Berater mit Headset (normale Wache, kündbar); Moshe wie Stefan: catches 'video' (Pause, Videoszene, resume,
+  // eigener Zähler st.videos), coffee = Videodreh (Kegel aus, danach schneller und weiter sehend), eigene Sprüche und Beschriftungen
+  berater: {
+    name: 'Berater', sight: 6, angle: 70, speed: 2.4, hp: 60, dps: 5, sprite: 'q-berater',
+    lines: { sus: ['Haben Sie kurz Zeit?', 'Ihr Berater ist gleich bei Ihnen.', 'Das Angebot gilt nur heute.'], alert: ['Ein Interessent!', 'Das Angebot gilt nur heute!'], calm: ['Kein Interesse. Schade.', 'Der ruft bestimmt zurück.'], wake: ['Wo ist mein Headset?'] },
+  },
+  moshe: {
+    name: 'Moshe Hillel', sight: 6, angle: 70, speed: 2.2, hp: 150, dps: 5, sprite: 'q-moshe', catches: 'video',
+    coffee: { every: [20_000, 30_000], ms: 5000, boost: 10_000, speed: 1.5, sight: 1.3, angle: 1.2 },
+    lines: { sus: ['Haben Sie schon bestellt?', 'Moment, Sie kommen mir bekannt vor.'], alert: ['Sie haben bestellt. Jetzt gucken Sie.', 'Mein neues Video! Nur für Sie!'], coffee: ['Hallo Freunde, heute zeige ich euch …', 'Drei Tricks, die keiner kennt …'], buzz: ['Video ist online! Weiter geht’s!', '1.000 Aufrufe! Jetzt bin ich wach!'], calm: ['Wahrscheinlich ein Kunde.', 'Zurück zum Dreh.'], wake: ['Wo ist mein Handy?'],
+      crash: ['Rot? Mein Depot ist aus Videos.', 'Egal. Ich dreh ein Video darüber.'], panik: ['Angebot! Nur noch heute!'], insider: ['Code? Schreib CODE in die Kommentare.'],
+      task: ['Nach dem Video. Erst das Video.', 'Moment, ich bin noch im Dreh.'], taskEnd: ['Schnitt. Weiter geht’s.', 'Das kommt nicht ins Video.'], heard: ['Klappert da jemand mit meinen Säcken?'] },
+    labels: { crash: '+1 Video', panik: 'ANGEBOT!', insider: 'Code?' },
+  },
 };
 
 // Fähigkeiten einer Einheit (st.units[i]) mit Stufe, zusammengeführten Werten (params) und Text der Stufe.
@@ -86,8 +100,9 @@ const BAIT_MS = 30_000, PHONE_WALK = 5000, PUDDLE_R = 1.5, HORDE_SPEED = 2, QUIT
 // Arbeitsgeräusch: Klauen, Sabotieren, Abdrehen usw. hören ruhige Wachen in WORK_R Kacheln (Misstrauen pro s, bis sie nachsehen)
 const WORK_R = 2, WORK_SUS = 0.3;
 const ARGUE = 'Deutsche Bank ist kein Geringverdiener.';
-const SPECIAL = new Set(['bernd', 'goebbels', 'himmler', 'ranger']);
-const QUITS = new Set(['pinguin', 'detektiv', 'camper', 'dackel', 'platzwart']); // „Feierabend!“: normale Wachen, keine Drohnen
+const SPECIAL = new Set(['bernd', 'goebbels', 'himmler', 'ranger', 'moshe']);
+const QUITS = new Set(['pinguin', 'detektiv', 'camper', 'dackel', 'platzwart', 'berater']); // „Feierabend!“: normale Wachen, keine Drohnen
+const stealMs = st => st.mission.stealMs || ACT_MS.steal; // v12: Rabino-Tresore dauern 6 s
 const TASKY = new Set(['junge', 'mutter', 'insider', 'vibra']); // Verhalten statt Betäubung: nicht auf schon Betäubte
 const NOISY = new Set(['steal', 'sabotage', 'valve', 'unplug', 'ignite']);
 const TASK_END = {
@@ -194,7 +209,7 @@ export function createQuest({ mission, setup, variant, team, rng = Math.random, 
     missionId: m.id, variantId: v.id, layoutId: su.layoutId, mirror: !!b.mirror, setup: su, mission: m, variant: v, layout: b.layout,
     theme: m.theme, w, h, tiles: [], gas: new Float64Array(w * h), smoke: new Float64Array(w * h), wall: new Float64Array(w * h), fwOpaque: new Float64Array(w * h), paths: new Map(),
     time: 0, timeLimit: m.timeMs ?? null, alarm: 0, fullAlarm: false, alarmEver: false, contact: false, reinforceAt: 0, reinforced: 0,
-    over: false, result: null, reason: null, paused: null, pausedBy: null, kieser: 0, fine: 0, solo: m.solo || null,
+    over: false, result: null, reason: null, paused: null, pausedBy: null, kieser: 0, videos: 0, fine: 0, solo: m.solo || null,
     units: [], enemies: [], objs: [], doors: [], pads: [], spots: [], effects: [], pending: [],
     delivered: 0, objective: null, gate: { x: b.gate[0], y: b.gate[1] }, lastSighting: null, nextId: 1, rng, dmgScale: 1, hpScale: 1,
   };
@@ -271,7 +286,7 @@ export function tratschMeet(st, a, b) {
   return path?.length ? mid(path[Math.floor((path.length - 1) / 2)]) : { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
 }
 
-// Ergebnis für onEnd und questResult(save, missionId, result, score, alarmFree, { kieser, fine }).
+// Ergebnis für onEnd und questResult(save, missionId, result, score, alarmFree, { kieser, videos, fine }).
 // score = erfüllte Ziele (Raub: abgelieferte Münzen); jeder liegengelassene Rüther (down, nicht auf P) kostet 1.
 export function questSummary(st) {
   const o = st.objective, alarmFree = !st.alarmEver;
@@ -279,7 +294,7 @@ export function questSummary(st) {
   return {
     result: st.result, reason: st.reason, missionId: st.missionId, layoutId: st.layoutId, variantId: st.variantId, mirror: st.mirror, setup: st.setup,
     score: Math.max(0, o.done - leftBehind), objective: { done: o.done, total: o.total, min: o.min }, timeMs: st.time, alarmFree,
-    delivered: st.delivered, leftBehind, kieser: st.kieser, fine: st.fine,
+    delivered: st.delivered, leftBehind, kieser: st.kieser, videos: st.videos, fine: st.fine,
   };
 }
 
@@ -394,7 +409,7 @@ function selfTargets(st, u, id, p) {
 
 // ---------- Schritt ----------
 
-// st.paused ('kieser'): Zeit steht, nur {type:'resume'} und {type:'abort'} werden angenommen.
+// st.paused ('kieser' | 'video'): Zeit steht, nur {type:'resume'} und {type:'abort'} werden angenommen.
 export function tick(st, dt, cmds = []) {
   const ev = [];
   if (st.over) return ev;
@@ -458,7 +473,7 @@ function end(st, result, reason, ev) {
   const why = reason === 'allDown' && st.solo ? `${st.units[0].name} ${END_TEXT.soloDown}` : END_TEXT[reason];
   const text = result === 'success' ? t.success : result === 'abort' ? END_TEXT.abort : late ? END_TEXT.late
     : reason === 'caught' && t.caught ? t.caught : `${why} ${t.fail}`;
-  ev.push({ type: 'end', result, reason, text, setup: st.setup, fine: st.fine, kieser: st.kieser, summary: questSummary(st) });
+  ev.push({ type: 'end', result, reason, text, setup: st.setup, fine: st.fine, kieser: st.kieser, videos: st.videos, summary: questSummary(st) });
 }
 
 const doneCount = (st, kind) => { let n = 0; for (const x of st.objs) if (x.kind === kind && x.done) n++; return n; };
@@ -680,7 +695,7 @@ function begin(st, u, it, ev) {
     const o = st.objs[it.obj];
     if (!checkObj(st, u, o, ev)) return;
     const kind = ACT[o.kind];
-    b = { kind, obj: o.id, unit: null, t: 0, ms: kind === 'fetch' ? st.mission.fetchMs || ACT_MS.fetch : ACT_MS[kind] }; at = mid(o);
+    b = { kind, obj: o.id, unit: null, t: 0, ms: kind === 'fetch' ? st.mission.fetchMs || ACT_MS.fetch : kind === 'steal' ? stealMs(st) : ACT_MS[kind] }; at = mid(o);
     if (kind === 'steal' && u.quickSteal) { b.ms = 0; u.quickSteal = false; } // Plus 70 Prozent Stufe 3
     unmask(u, 'klau', ev);
   }
@@ -716,7 +731,7 @@ function work(st, u, dt, ev) {
       o.coins--; u.carry++;
       ev.push({ type: 'steal', unit: u.i, obj: o.id, n: 1, coins: u.carry, left: o.coins, x: at.x, y: at.y });
     }
-    if (o.coins > 0 && u.carry < CARRY_MAX) u.busy = { ...b, t: 0, ms: ACT_MS.steal }; // nächste Münze (wieder normal lang)
+    if (o.coins > 0 && u.carry < CARRY_MAX) u.busy = { ...b, t: 0, ms: stealMs(st) }; // nächste Münze (wieder normal lang)
     else if (!o.coins) ev.push({ type: 'vaultEmpty', obj: o.id, x: at.x, y: at.y });
   } else if (b.kind === 'sabotage' || b.kind === 'valve' || b.kind === 'ignite') {
     o.done = true;
@@ -1264,14 +1279,15 @@ function spotFires(st, ev) {
   }
 }
 
-// Erwischt: 'kieser' pausiert bis resume, 'caught' beendet sofort mit Strafe
+// Erwischt: 'kieser' und 'video' pausieren bis resume (je eigener Zähler und Event), 'caught' beendet sofort mit Strafe
 function catchUnit(st, e, u, ev) {
   const T = ENEMY_TYPES[e.type];
   cancelBusy(u, 'erwischt', ev);
   u.path = []; u.intent = null; u.goal = null;
-  if (T.catches === 'kieser') {
-    st.kieser++; st.paused = 'kieser'; st.pausedBy = { enemy: e.i, unit: u.i };
-    return ev.push({ type: 'kieser', unit: u.i, enemy: e.i, count: st.kieser, x: u.x, y: u.y, say: line(st, e, 'alert') });
+  if (T.catches === 'kieser' || T.catches === 'video') {
+    const k = T.catches, count = k === 'video' ? ++st.videos : ++st.kieser;
+    st.paused = k; st.pausedBy = { enemy: e.i, unit: u.i };
+    return ev.push({ type: k, unit: u.i, enemy: e.i, count, x: u.x, y: u.y, say: line(st, e, 'alert') });
   }
   st.fine = T.fine || 0;
   ev.push({ type: 'caught', by: e.i, unit: u.i, fine: st.fine, x: u.x, y: u.y, say: line(st, e, 'caught') });

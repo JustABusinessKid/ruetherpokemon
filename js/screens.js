@@ -6,6 +6,7 @@ import { hashrateText, countText } from './format.js';
 import { playSheet, btcRain } from './fx.js';
 import { MISSIONS } from './quest/missions.js';
 import { abilitiesFor, ENEMY_TYPES, ABILITIES, FIXED, POOLS } from './quest/engine.js';
+import { hms, dealLeft } from './ad.js';
 
 const fmt = n => n.toLocaleString('de-DE');
 // Restzeit „7:41"
@@ -52,7 +53,7 @@ export const distText = m => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).to
 const emptyState = (icon, text, sub = '') =>
   `<div class="empty">${ico(icon, 'ico-xl empty-ico')}<p>${esc(text)}</p>${sub ? `<p class="sub">${esc(sub)}</p>` : ''}</div>`;
 // Versionsanzeige im Profil; bei jedem Release mitziehen
-export const VERSION = 'v11';
+export const VERSION = 'v12';
 // Jeder Knopf-Tipp baut die Liste neu auf: ein schneller zweiter Tipp träfe das nachgerückte Exemplar (falsches verkauft oder
 // gefüttert, zwei Super-Münzen gekauft). Darum schluckt node 300 ms nach einem Knopf-Tipp alle weiteren Klicks.
 function tapGuard(node, ms = 300) {
@@ -294,11 +295,37 @@ export function createDexScreen({ el, onBack }) {
 
 // ---------- Shop ----------
 // onBuy(itemId | 'haunebu-extend') -> { ok, reason }
-export function createShopScreen({ el, onBuy, onBack }) {
+// v12 §3: „Der Investment-Code" einmalig; Streichpreis, Rabatt-Countdown (rein optisch, 3 h von vorn), gekauft = „Lesen" (Popup mit
+// Seiten, der erste Knopf ist immer der harmlose „Zu") und „Verkaufen" für item.sell nach Rückfrage: onSell('investmentcode') -> { ok }
+const BOOK_PAGES = [
+  { page: 'Seite 1', html: '<p class="big">Trick 1: Verkaufe ein Buch.</p>' },
+  { page: 'Seiten 2 bis 99', html: '<p class="book-note">Platz für deine Notizen.</p>' },
+  { page: 'Seite 100 · Impressum', html: '<p>Rabino Empire Ltd., Limassol, Zypern. Keine Anlageberatung. Rückgabe ausgeschlossen.</p><p class="book-hint">Das ist die Adresse. Die Mission „Rabino Empire HQ“ ist freigeschaltet.</p>' },
+  { page: 'Beilage: 2 Geschenke', html: '<ul><li>Premium-Geschenk zu Immobilien: Flyer „Eigentumswohnung Duisburg-Marxloh, 3. OG, Boden optional“</li><li>Truhe mit Skripten und Vorlagen: Mahnung.docx</li></ul>' },
+];
+export async function readBook() {
+  for (let i = 0; i >= 0 && i < BOOK_PAGES.length;) {
+    const p = BOOK_PAGES[i], last = i === BOOK_PAGES.length - 1;
+    const buttons = [{ label: 'Zu' }, ...(i ? [{ label: 'Zurück' }] : []), ...(last ? [] : [{ label: 'Weiter', primary: true }])];
+    const r = await popup({ title: 'Der Investment-Code', icon: 'quest', html: `<div class="book"><p class="book-page">${esc(p.page)}</p>${p.html}</div>`, buttons });
+    i = r === 0 ? -1 : buttons[r].label === 'Zurück' ? i - 1 : i + 1;
+  }
+}
+export function createShopScreen({ el, onBuy, onSell, onBack }) {
   el.querySelector('.back').addEventListener('click', onBack);
   const list = el.querySelector('.shop-items');
   tapGuard(list);
   let save = null;
+  function bookButtons(item) {
+    if (save.items?.investmentcode) {
+      return `<div class="price"><button class="buy primary" data-id="read">Lesen</button><button class="buy sellbook" data-id="sellbook">Verkaufen ${fmt(item.sell)}${ico('coin')}</button></div>`;
+    }
+    return `<div class="price"><button class="buy primary" ${save.sats < item.cost ? 'disabled' : ''}>${fmt(item.cost)}${ico('coin')}</button><div class="sub was">statt <s>${fmt(item.was)}</s></div></div>`;
+  }
+  async function sellBook() {
+    const i = await popup({ title: 'Buch verkaufen?', icon: 'quest', html: `<p>Gebraucht, ohne Lesespuren: ${fmt(SHOP.find(x => x.id === 'investmentcode').sell)} Sats.</p><p class="sub">Danach ist die Adresse aus dem Impressum weg, die Mission „Rabino Empire HQ“ ist wieder gesperrt.</p>`, buttons: [{ label: 'Behalten' }, { label: 'Verkaufen', primary: true }] });
+    if (i === 1 && onSell?.('investmentcode')?.ok) render();
+  }
   // v8 §1: Haunebu-Preis steigt pro Beschwörung; im 10-Minuten-Fenster „Im Einsatz · noch 7:41"
   // v9 §1: dazu der Knopf „+10 Min · 5.000" (onBuy('haunebu-extend'): verlängert nur, beschwört nie, auch wenn das Fenster
   // zwischen Anzeige und Tipp abläuft)
@@ -319,22 +346,28 @@ export function createShopScreen({ el, onBuy, onBack }) {
     for (const item of SHOP) {
       const owned = item.id === 'supercoin' ? `Im Besitz: ${save.items.supercoin || 0}`
         : item.id === 'haunebu' ? ''
+        : item.id === 'investmentcode' ? (save.items.investmentcode ? 'Gekauft' : '')
         : (save.lureUntil > Date.now() ? 'Gerade aktiv (Kauf verlängert)' : '');
+      const deal = item.id === 'investmentcode' && !save.items.investmentcode ? `<div class="sub ad-deal">40 % Rabatt · Angebot endet in <span class="ad-left">${hms(dealLeft(Date.now()))}</span></div>` : '';
       const div = document.createElement('div');
       div.className = 'shop-item panel thin';
       div.innerHTML = `
         ${ico(kitName(item.icon) || 'shop', 'icon')}
-        <div class="meta"><div class="iname">${item.name}</div><div class="sub">${item.desc}</div><div class="sub owned">${owned}</div></div>
-        ${item.id === 'haunebu' ? haunebuButton() : `<button class="buy primary" ${save.sats < item.cost ? 'disabled' : ''}>${fmt(item.cost)}${ico('coin')}</button>`}`;
-      div.querySelector('.buy').addEventListener('click', e => {
-        const res = onBuy(e.currentTarget.dataset.id || item.id);
+        <div class="meta"><div class="iname">${item.name}</div><div class="sub">${item.desc}</div>${deal}<div class="sub owned">${owned}</div></div>
+        ${item.id === 'haunebu' ? haunebuButton() : item.id === 'investmentcode' ? bookButtons(item) : `<button class="buy primary" ${save.sats < item.cost ? 'disabled' : ''}>${fmt(item.cost)}${ico('coin')}</button>`}`;
+      div.querySelectorAll('.buy').forEach(b => b.addEventListener('click', e => {
+        const id = e.currentTarget.dataset.id || item.id;
+        if (id === 'read') return readBook();
+        if (id === 'sellbook') return sellBook();
+        const res = onBuy(id);
         render();
         if (res.ok) { const d = list.querySelector(`.shop-item:nth-child(${SHOP.indexOf(item) + 1})`); d?.classList.add('bought'); setTimeout(() => d?.classList.remove('bought'), 600); }
-      });
+      }));
       list.appendChild(div);
     }
   }
   haunebuTicker(el, () => save, render);
+  setInterval(() => { if (el.classList.contains('active')) el.querySelectorAll('.ad-left').forEach(n => { n.textContent = hms(dealLeft(Date.now())); }); }, 1000);
   return { show(s) { save = s; render(); } };
 }
 
@@ -396,10 +429,10 @@ export function createVictoryScreen({ el, onBack }) {
 // ---------- Quests ----------
 // v8 §5.1: oben „Haunebu-Quests" (gesperrt: Fortschritt + fehlende Arenen; frei: Haunebu-Status + Missionen mit Bestwert).
 // onClaim(id) -> { sats, xp } | null  (Toast macht der App-Code); onQuestStart(missionId); onShop()
-const THEME_BG = { neuschwabenland: 'neuschwabenland', hangar: 'neuschwabenland', pcsale: 'pcsale', keller: 'keller', mosel: 'mosel', bruch: 'ranger' };
+const THEME_BG = { neuschwabenland: 'neuschwabenland', hangar: 'neuschwabenland', pcsale: 'pcsale', keller: 'keller', mosel: 'mosel', bruch: 'ranger', zypern: 'anzeige' };
 // Bestwert mit Einheit in Einzahl/Mehrzahl („1 Baum", „3 Bäume"); Missionen ohne Einheit nur die Zahl
 const BEST_UNIT = { steal: ['Münze', 'Münzen'], sabotage: ['Flugscheibe', 'Flugscheiben'], fetch: ['PS3', 'PS3'], unplug: ['Stecker', 'Stecker'], valve: ['Anschluss', 'Anschlüsse'], ignite: ['Baum', 'Bäume'] };
-const bestText = (type, n) => (BEST_UNIT[type] ? countText(n, BEST_UNIT[type]) : String(n));
+const bestText = (m, n) => { const u = m.loot === 'q-sack' ? ['Sack', 'Säcke'] : BEST_UNIT[m.objective.type]; return u ? countText(n, u) : String(n); }; // v12: Rabino trägt Säcke statt Münzen
 // v9: Strafe, wenn ein Gegner der Mission erwischen kann (Ranger: fine), sonst 0
 const missionFine = m => Math.max(0, ...m.layouts.flatMap(l => l.variants.flatMap(v => v.enemies.map(e => ENEMY_TYPES[e.type]?.fine || 0))));
 const variantCount = m => m.layouts.reduce((n, l) => n + l.variants.length, 0);
@@ -407,7 +440,8 @@ const variantCount = m => m.layouts.reduce((n, l) => n + l.variants.length, 0);
 // Jeder Teil ein eigenes Flex-Element, damit die Zeile teilweise umbricht und die Münze vorne stehen bleibt.
 const questReward = (r, fine = 0) => [
   r.kieser && `${fmt(r.min)}–${fmt(r.base)}`, r.kieser && `jedes Kieser-Training −${fmt(r.kieser)}`,
-  r.coin && `${fmt(r.coin)} je Münze`, !r.kieser && r.base && fmt(r.base), r.done && `+${fmt(r.done)} Abschluss`, r.clean && `+${fmt(r.clean)} ohne Alarm`,
+  r.coin && `${fmt(r.coin)} je ${r.video ? 'Sack' : 'Münze'}`, !r.kieser && r.base && fmt(r.base), r.done && `+${fmt(r.done)} Abschluss`, r.clean && `+${fmt(r.clean)} ohne Alarm`,
+  r.video && `jedes Video −${fmt(r.video)}`,
   fine && `<span class="m-fine">Erwischt: −${fmt(fine)}</span>`,
 ].filter(Boolean).map((t, i, all) => `<span>${t}${i < all.length - 1 ? '&nbsp;·' : ''}</span>`).join('');
 export function createQuestsScreen({ el, onClaim, onQuestStart, onShop }) {
@@ -432,7 +466,9 @@ export function createQuestsScreen({ el, onClaim, onQuestStart, onShop }) {
       + MISSIONS.map(m => {
         const log = save.questLog?.[m.id], r = QUEST_SATS[m.id];
         // v9 §3: Solo-Mission ohne Team-Wahl, gesperrt ohne den Rüther in der Box; sein echtes Gesicht steht auf der Kachel
-        const solo = m.solo && RUETHER_BY_ID[m.solo], locked = solo && !save.box.some(i => i.id === m.solo);
+        const solo = m.solo && RUETHER_BY_ID[m.solo];
+        // v12 §4: needsItem (Rabino Empire HQ braucht den Investment-Code aus dem Shop; verkauft = wieder gesperrt)
+        const needs = m.needsItem && !(save.items?.[m.needsItem] >= 1), locked = (solo && !save.box.some(i => i.id === m.solo)) || needs;
         return `<div class="mission-card" data-id="${m.id}">
           <div class="m-art" style="background-image:url(art/bg-${THEME_BG[m.theme] || 'menu'}.png)">${solo ? `<img class="m-solo" src="${spriteOf(m.solo)}" alt="${esc(solo.name)}">` : ''}</div>
           <div class="m-meta">
@@ -441,9 +477,10 @@ export function createQuestsScreen({ el, onClaim, onQuestStart, onShop }) {
             <div class="m-goal">${esc(m.objective.label)}${m.objective.min ? ` (mind. ${m.objective.min})` : ''}</div>
             ${r ? `<div class="m-reward">${ico('coin', 'ico-in')}${questReward(r, missionFine(m))}</div>` : ''}
             <div class="sub m-maps">Karten: ${m.layouts.length} · Varianten: ${variantCount(m)}</div>
-            <div class="sub m-best">${log ? `Bestwert: ${bestText(m.objective.type, log.best)}${log.done ? ' · geschafft' : ''}${log.kieser ? ` · Kieser: ${log.kieser}` : ''}` : 'Noch nicht gespielt'}</div>
+            <div class="sub m-best">${log ? `Bestwert: ${bestText(m, log.best)}${log.done ? ' · geschafft' : ''}${log.kieser ? ` · Kieser: ${log.kieser}` : ''}` : 'Noch nicht gespielt'}</div>
+            ${needs ? '<div class="sub m-lock">Die Adresse steht im Impressum des Investment-Codes (Shop).</div>' : ''}
           </div>
-          <button class="m-start${active && !locked ? ' primary' : ''}" ${locked ? 'disabled' : ''}>${locked ? `Fang erst ${esc(solo.name)}` : solo ? 'Solo starten' : 'Starten'}</button>
+          <button class="m-start${active && !locked ? ' primary' : ''}" ${locked ? 'disabled' : ''}>${needs ? 'Adresse fehlt' : locked ? `Fang erst ${esc(solo.name)}` : solo ? 'Solo starten' : 'Starten'}</button>
         </div>`;
       }).join('');
     hq.querySelector('.hq-shop')?.addEventListener('click', () => onShop?.());
@@ -598,7 +635,8 @@ export function createQuestResultScreen({ el, onDone }) {
       tg = together;
       const ok = summary.result === 'success', o = summary.objective || { done: 0, total: 0 };
       const layout = mission.layouts?.find(l => l.id === setup?.layoutId), variant = layout?.variants.find(v => v.id === setup?.variantId);
-      const r = QUEST_SATS[mission.id] || {}, kieser = summary.kieser || 0, fine = reward?.fine || 0, caught = summary.reason === 'caught';
+      const r = QUEST_SATS[mission.id] || {}, kieser = summary.kieser || 0, videos = summary.videos || 0, fine = reward?.fine || 0, caught = summary.reason === 'caught';
+      const gross = ok ? r.coin * (summary.score || 0) + r.base + r.done + (summary.alarmFree ? r.clean || 0 : 0) : 0; // Summe vor Moshes Videos (questResult): der Abzug greift nur bei Erfolg und nie unter 0
       const left = summary.leftBehind || 0; // K.o. neben der Plattform liegengelassen: je Kopf −1 Wertung (engine questSummary)
       el.style.backgroundImage = `url(art/bg-${THEME_BG[mission.theme] || 'menu'}.png)`;
       el.classList.toggle('won', ok);
@@ -614,9 +652,10 @@ export function createQuestResultScreen({ el, onDone }) {
           <div class="qr-row"><span>Zeit</span><b>${clock(summary.timeMs || 0)}</b></div>
           <div class="qr-row"><span>Alarm</span><b>${clean}</b></div>
           ${r.kieser ? `<div class="qr-row"><span>Kieser-Training</span><b>${kieser ? `${kieser}×${ok ? ` · −${fmt(Math.min(kieser * r.kieser, r.base - r.min))}` : ''}` : 'keins'}</b></div>` : ''}
+          ${r.video ? `<div class="qr-row${videos && ok ? ' fine' : ''}"><span>Moshes Videos</span><b>${videos ? `${videos}×${ok ? ` · −${fmt(Math.min(videos * r.video, gross))}` : ''}` : 'keine'}</b></div>` : ''}
           ${left ? `<div class="qr-row fine"><span>Liegengelassen</span><b>${left} · −${left} Wertung${ok && r.coin ? ` · −${fmt(left * r.coin)}` : ''}</b></div>` : ''}
           ${caught || fine ? `<div class="qr-row fine"><span>Strafe</span><b>−${fmt(fine)}${fine < (summary.fine || 0) ? ' (mehr war nicht da)' : ''}</b></div>` : ''}
-          <div class="qr-row"><span>Bestwert</span><b>${reward ? `${bestText(mission.objective.type, reward.best)}${reward.newBest ? ' · neu!' : ''}` : '–'}</b></div>
+          <div class="qr-row"><span>Bestwert</span><b>${reward ? `${bestText(mission, reward.best)}${reward.newBest ? ' · neu!' : ''}` : '–'}</b></div>
           <div class="qr-gain"><span class="big">+${fmt(reward?.sats || 0)}${ico('coin', 'ico-in')}</span>${fine ? `<span class="big fine">−${fmt(fine)}${ico('coin', 'ico-in')}</span>` : ''}<span class="big xp">+${fmt(reward?.xp || 0)} XP</span></div>
         </div>
         <p class="qr-text">${esc(summary.text || (ok ? mission.texts.success : mission.texts.fail))}</p>
@@ -678,6 +717,8 @@ export function createProfileScreen({ el, onRename, onAvatar, onSettings, onShar
   $('.version').textContent = `Rüther GO ${VERSION}`;
   $('.go-shop').addEventListener('click', () => onShop?.());
   $('.go-together').addEventListener('click', () => onTogether?.()); // v11: Lobby „Zusammen spielen“
+  // Im Browser findet sich niemand (js/lobby.js appOnly): nicht Bluetooth versprechen, sondern auf die App verweisen
+  if (!globalThis.Capacitor?.isNativePlatform?.()) $('.go-together .sub').textContent = 'Nur in der Android-App. Download in der Lobby.';
   $('.share').addEventListener('click', () => onShare?.());
   $('.export').addEventListener('click', () => onExport?.());
   $('.edit-name').addEventListener('click', async () => {
@@ -717,7 +758,7 @@ export function createProfileScreen({ el, onRename, onAvatar, onSettings, onShar
     $('.xp-text').textContent = `${fmt(lp.xp)} / ${fmt(lp.need)} XP bis Lv. ${lp.level + 1}`;
     $('.online-id').textContent = onlineId ? `Online-ID ${onlineId} · ${nameTaken ? 'Name online vergeben, bitte umbenennen' : available ? 'verbunden' : 'offline'}` : 'Noch nicht online';
     const st = save.stats || {};
-    const mastered = Object.keys(save.arenaMastered || {}).length;
+    const mastered = ARENAS.filter(a => save.arenaMastered?.[a.id]).length; // v12: ohne Anzeige-Arena
     const tiles = [
       ['coin', fmt(st.catches || 0), 'Fänge'], ['trophy', fmt(st.arenaWins || 0), 'Arenasiege'], ['beer', fmt(st.stops || 0), 'Stops'],
       ['quest', `${dexCount(save)}/${DEX_TOTAL}`, 'Dex'], ['star', `${mastered}/${ARENAS.length}`, 'Gemeistert'], ['lightning', fmt(st.fusions || 0), 'Fusionen'],

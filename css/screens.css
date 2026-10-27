@@ -188,6 +188,12 @@
 .mp-hero-faces { display: flex; align-items: center; gap: 12px; font: 700 28px/1 var(--font-pixel); }
 .mp-hero-faces .frame img { width: 72px; height: 72px; }
 .mp-host, .mp-join { min-height: 56px; font-size: 20px; }
+/* Browser (js/lobby.js appOnly): statt Eröffnen/Beitreten der Weg zur App */
+.mp-app { display: none; }
+.mp-web .mp-app { display: flex; flex-direction: column; gap: 10px; text-align: center; font: 700 15px/1.4 var(--font-body); }
+.mp-app p { margin: 0; }
+.mp-apk { min-height: 56px; font-size: 20px; }
+.mp-web :is(.mp-host, .mp-join, .mp-how) { display: none; }
 .mp-wait { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
 .mp-wait-title { margin: 0; font: 700 20px/1.2 var(--font-pixel); }
 .mp-wait-sub { margin: 0; }
@@ -227,3 +233,18 @@ div.mp-mode:not(.on), div.mp-mission:not(.on) { box-shadow: none; border-style: 
 .mp-status { flex: 1; min-width: 0; font: 700 14px/1.25 var(--font-pixel); color: var(--paper); }
 .mp-foot button { flex: none; min-height: 52px; padding: 8px 14px; font-size: 18px; }
 .mp-ready.on { background: var(--teal); }
+
+/* ---------- v12 Shop: „Der Investment-Code" (Spec v12 §3): Streichpreis, tickender Rabatt-Countdown, gekauft = Lesen + Verkaufen ---------- */
+.shop-item .ad-deal { margin-top: 4px; padding: 2px 6px; font: 700 12px/1.3 var(--font-pixel); font-variant-numeric: tabular-nums; color: var(--gold); background: #000; border: 2px solid var(--ink); }
+.shop-item .was { font-weight: 800; color: var(--ink-soft); }
+.shop-item .was s { color: var(--red); }
+.shop-item .price .sellbook { min-height: 36px; padding: 4px 8px; font-size: 14px; gap: 4px; }
+.popup-body .book { min-height: 120px; display: flex; flex-direction: column; justify-content: center; padding: 12px; text-align: left; background: var(--paper-2); border: 3px solid var(--ink); box-shadow: inset 0 0 0 2px var(--paper); }
+.popup-body .book p { margin: 6px 0; }
+.popup-body .book .book-page { margin: 0 0 8px; font: 700 12px/1.2 var(--font-pixel); letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); }
+.popup-body .book .book-note { font-size: 13px; color: var(--ink-soft); }
+.popup-body .book .book-hint { font-weight: 800; color: var(--green); }
+.popup-body .book ul { margin: 4px 0 0; padding-left: 18px; }
+.popup-body .book li { margin: 4px 0; }
+/* Missionsliste: ohne das Buch gesperrt (needsItem) */
+.mission-card .m-lock { color: var(--red); font-weight: 800; }

@@ -1261,5 +1261,126 @@
   "prompt": "game sprite of an open brown cardboard box of a worker who just quit, packed with office belongings: a small green potted plant, a plain white coffee mug, a little desk lamp and a stack of folders as a tiny map game object, seen from a high three-quarter top-down angle, no logos, no symbols, bold simple chunky shapes readable at a very small size, lots of empty margin around it, single character/object, full body visible, centered, chunky 16-bit pixel art with a crisp 32-px grid feel, no anti-aliasing, clean 1-px dark bottle-green outlines, slightly rounded sturdy shapes; environment in warm cream, brick red and bottle green with amber highlights, characters and bosses in saturated contrasting colors that pop against it, pickups and attack effects marked with electric gold and bright teal glow; cozy German small-town pub-evening mood, warm late-afternoon light, flat ambient shading; high contrast between game elements and backgrounds, clean readable silhouettes, consistent flat frontal perspective across all assets, on a solid uniform bright magenta (#FF00FF) background, no shadows cast on the background, no ground plane, nothing cropped at the edges, no text, no letters, no labels, no scenery, no extra objects",
   "note": "attempt 2; attempt 1 came on a dull pink (#E33CB9) instead of magenta with a pink cast on the box. Resignation box with plant, plain mug, lamp, folders; rendered at 1k and keyed with keying.py --size 64 --margin 0.04 (NEAREST)",
   "attempt": 2
+ },
+ {
+  "id": "boss-moshe",
+  "file": "boss-moshe.png",
+  "kind": "sprite",
+  "role": "boss",
+  "width": 256,
+  "height": 256,
+  "model": "PIL (art/moshe.py)",
+  "note": "hand-built PIL pixel art (art/moshe.py, one script for all 11 v12 assets; rebuild: python art/moshe.py). Image model not available (Higgsfield account: 0 credits, free plan, no unlim generations; no job submitted). 64x64 grid, NEAREST x4. Moshe Hillel after the reference photos (viewed only, not in the repo): black flat-crown hat with wide brim, white side hair, full white beard with moustache, dark pinstripe suit with dark lapels, white shirt, red tie, open hands, golden book on the right palm, friendly eyes, narrow mouth. Dignified, no distorted features, no religious symbols, no text.",
+  "attempt": 1
+ },
+ {
+  "id": "q-moshe",
+  "file": "q-moshe.png",
+  "kind": "sprite",
+  "role": "quest-enemy",
+  "width": 64,
+  "height": 64,
+  "model": "PIL (art/moshe.py)",
+  "note": "hand-built PIL pixel art (art/moshe.py, one script for all 11 v12 assets; rebuild: python art/moshe.py). Image model not available (Higgsfield account: 0 credits, free plan, no unlim generations; no job submitted). same figure as boss-moshe drawn directly at 64 px, without the book, both hands open; the quest view adds the phone during his videos.",
+  "attempt": 1
+ },
+ {
+  "id": "q-berater",
+  "file": "q-berater.png",
+  "kind": "sprite",
+  "role": "quest-enemy",
+  "width": 64,
+  "height": 64,
+  "model": "PIL (art/moshe.py)",
+  "note": "hand-built PIL pixel art (art/moshe.py, one script for all 11 v12 assets; rebuild: python art/moshe.py). Image model not available (Higgsfield account: 0 credits, free plan, no unlim generations; no job submitted). sales consultant: headset (light band on dark gelled hair, earpiece, mic boom), salesman grin, shiny silver suit with a highlight stripe, blue tie, tablet in both hands. Generic figure, no Ruether.",
+  "attempt": 1
+ },
+ {
+  "id": "q-sack",
+  "file": "q-sack.png",
+  "kind": "sprite",
+  "role": "quest-object",
+  "width": 64,
+  "height": 64,
+  "model": "PIL (art/moshe.py)",
+  "note": "hand-built PIL pixel art (art/moshe.py, one script for all 11 v12 assets; rebuild: python art/moshe.py). Image model not available (Higgsfield account: 0 credits, free plan, no unlim generations; no job submitted). money sack with flat base, rope with knot, two gold coins in the opening, plain gold plaque without any sign.",
+  "attempt": 1
+ },
+ {
+  "id": "fx-book",
+  "file": "fx-book.png",
+  "kind": "sprite",
+  "role": "boss-fx",
+  "width": 192,
+  "height": 192,
+  "model": "PIL (art/moshe.py)",
+  "note": "hand-built PIL pixel art (art/moshe.py, one script for all 11 v12 assets; rebuild: python art/moshe.py). Image model not available (Higgsfield account: 0 credits, free plan, no unlim generations; no job submitted). 48x48 grid, NEAREST x4. Tilted dark-blue book with gold frame and diamond, gold spine, cream pages, teal/gold motion streaks (thrown like fx-disc).",
+  "attempt": 1
+ },
+ {
+  "id": "fx-contract",
+  "file": "fx-contract.png",
+  "kind": "sprite",
+  "role": "boss-fx",
+  "width": 192,
+  "height": 192,
+  "model": "PIL (art/moshe.py)",
+  "note": "hand-built PIL pixel art (art/moshe.py, one script for all 11 v12 assets; rebuild: python art/moshe.py). Image model not available (Higgsfield account: 0 credits, free plan, no unlim generations; no job submitted). 48x48 grid, NEAREST x4. Cream sheet with dog-ear, text lines as grey bars (no letters), red wax seal, signature as a scribble. The VERKAUFT stamp is drawn by the battle UI.",
+  "attempt": 1
+ },
+ {
+  "id": "fx-phone",
+  "file": "fx-phone.png",
+  "kind": "sprite",
+  "role": "boss-fx",
+  "width": 192,
+  "height": 192,
+  "model": "PIL (art/moshe.py)",
+  "note": "hand-built PIL pixel art (art/moshe.py, one script for all 11 v12 assets; rebuild: python art/moshe.py). Image model not available (Higgsfield account: 0 credits, free plan, no unlim generations; no job submitted). 48x48 grid, NEAREST x4. Black smartphone with cream screen, caller silhouette, green answer and red decline button, teal ringing arcs. No logo.",
+  "attempt": 1
+ },
+ {
+  "id": "ad-cover",
+  "file": "ad-cover.png",
+  "kind": "sprite",
+  "role": "ad-prop",
+  "width": 192,
+  "height": 256,
+  "model": "PIL (art/moshe.py)",
+  "note": "hand-built PIL pixel art (art/moshe.py, one script for all 11 v12 assets; rebuild: python art/moshe.py). Image model not available (Higgsfield account: 0 credits, free plan, no unlim generations; no job submitted). 48x64 grid, NEAREST x4. Book cover of the Investment-Code: dark blue, gold double frame, ornament lines with a diamond instead of a title, small Moshe portrait (mini_head), skyline with evening sky, spine and page edge. No text.",
+  "attempt": 1
+ },
+ {
+  "id": "ad-car",
+  "file": "ad-car.png",
+  "kind": "sprite",
+  "role": "ad-prop",
+  "width": 256,
+  "height": 128,
+  "model": "PIL (art/moshe.py)",
+  "note": "hand-built PIL pixel art (art/moshe.py, one script for all 11 v12 assets; rebuild: python art/moshe.py). Image model not available (Higgsfield account: 0 credits, free plan, no unlim generations; no job submitted). 64x32 grid, NEAREST x4. Red sports car side view facing left, dark windows with reflection, note on the windscreen (cream with two grey lines), amber headlight, red tail light.",
+  "attempt": 1
+ },
+ {
+  "id": "bg-anzeige",
+  "file": "bg-anzeige.png",
+  "kind": "background",
+  "role": "arena-bg",
+  "width": 1280,
+  "height": 720,
+  "model": "PIL (art/moshe.py)",
+  "note": "hand-built PIL pixel art (art/moshe.py, one script for all 11 v12 assets; rebuild: python art/moshe.py). Image model not available (Higgsfield account: 0 credits, free plan, no unlim generations; no job submitted). 320x180 grid, NEAREST x4, RGB. The sales page as shapes: black countdown bar with digit blocks without digits, hourglasses as triangles, gold crest with burgundy, menu/search/bag icons, the book centred (same cover(), k=2) so it stays inside the phone crop, three gift circles (gift box, chest, money stack) with text bars, black ribbon without text, five stars. No readable text.",
+  "attempt": 1
+ },
+ {
+  "id": "bg-video",
+  "file": "bg-video.png",
+  "kind": "background",
+  "role": "cutscene-bg",
+  "width": 1280,
+  "height": 720,
+  "model": "PIL (art/moshe.py)",
+  "note": "hand-built PIL pixel art (art/moshe.py, one script for all 11 v12 assets; rebuild: python art/moshe.py). Image model not available (Higgsfield account: 0 credits, free plan, no unlim generations; no job submitted). 320x180 grid, NEAREST x4, RGB. Limassol promenade: sea, two palms, white houses, sun; red sports car (same car(), k=3, no note) parked behind; Moshe centred as a bust (same moshe(), k=2, no book), legs below the frame, so he stays inside the portrait phone crop of center/cover. The portrait phone frame is CSS. Overlay anchors in 1280x720: face centre x 640, eyes y 416-432, mouth x 632-648 y 496-504, hat brim y 344-384, beard tip y 640, hands x 392-456 and 824-888 y 528-592.",
+  "attempt": 1
  }
 ]

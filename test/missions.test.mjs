@@ -8,8 +8,8 @@ const rngOf = s => () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 429
 const GOAL = { steal: 'C', sabotage: 'S', fetch: 'X', unplug: 'K', valve: 'V', ignite: 'B' };
 const WALK = '.DPX~', OPAQUE = '#LCSK~BT'; // V und W lassen hier Sicht durch: strenger für die Plattform-Prüfung
 // Sichtweite und halber Kegel je Typ (Bernd koffeiniert: Sicht ×1,3, Kegel ×1,2)
-const SIGHT = { pinguin: 5, drohne: 7, goebbels: 5, himmler: 4, detektiv: 6, bernd: 8, camper: 5, dackel: 3, platzwart: 6, ranger: 8 };
-const HALF = { pinguin: 45, drohne: 30, goebbels: 50, himmler: 70, detektiv: 40, bernd: 60, camper: 45, dackel: 60, platzwart: 35, ranger: 25 };
+const SIGHT = { pinguin: 5, drohne: 7, goebbels: 5, himmler: 4, detektiv: 6, bernd: 8, camper: 5, dackel: 3, platzwart: 6, ranger: 8, berater: 6, moshe: 8 };
+const HALF = { pinguin: 45, drohne: 30, goebbels: 50, himmler: 70, detektiv: 40, bernd: 60, camper: 45, dackel: 60, platzwart: 35, ranger: 25, berater: 35, moshe: 42 };
 const angle = (a, b) => Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI;
 const turn = (a, b) => ((b - a) % 360 + 540) % 360 - 180; // kürzester Bogen von a nach b in Grad
 
@@ -57,8 +57,8 @@ const grid = s => {
 };
 const center = pads => pads.reduce(([sx, sy], [x, y]) => [sx + x / pads.length, sy + y / pads.length], [0, 0]).map(Math.round);
 
-test('Missionen v9: 6 Stück, alle Ziele, Layouts und Varianten mit eindeutigen ids', () => {
-  assert.equal(MISSIONS.length, 6);
+test('Missionen v9: 6 Stück (v12: 7 mit Rabino), alle Ziele, Layouts und Varianten mit eindeutigen ids', () => {
+  assert.equal(MISSIONS.length, 7);
   assert.deepEqual(new Set(MISSIONS.map(m => m.objective.type)), new Set(Object.keys(GOAL)));
   for (const m of MISSIONS) {
     assert.ok(m.name && m.place && m.intro && m.hint && m.texts.success && m.texts.fail && m.objective.label && m.theme, m.id);

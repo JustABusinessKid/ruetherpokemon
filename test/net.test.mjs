@@ -90,7 +90,7 @@ test('link: anderes PROTO → disconnected version, Gast hört auf', async () =>
   const dis = once(b, 'disconnected');
   await b.join('Papa');
   fake.postMessage({ k: 'adv', from: 'alt', name: 'Alt' });
-  assert.deepEqual(await dis, { reason: 'version' });
+  assert.deepEqual(await dis, { reason: 'version', theirs: PROTO + 1 }); // die App sagt damit, wer aktualisieren muss
   await sleep(20);
   assert.equal(b.state, 'idle');
   assert.equal(b.peer, null);
@@ -164,7 +164,7 @@ function fakePlugin() {
       return Promise.resolve({ remove: async () => { subs[ev] = subs[ev].filter(f => f !== fn); } });
     },
   };
-  for (const m of ['host', 'join', 'send', 'close', 'keepAwake']) p[m] = async o => { p.calls.push([m, o]); };
+  for (const m of ['host', 'join', 'send', 'close', 'keepAwake', 'openSettings']) p[m] = async o => { p.calls.push([m, o]); };
   return p;
 }
 const hello = (sid, name = 'Papa') => ({ id: 'e1', data: JSON.stringify({ t: 'hello', v: PROTO, name, sid }) });
@@ -178,6 +178,8 @@ test('link: nearby ruft das Plugin auf, Plugin-Events werden Link-Events', async
   assert.equal(l.state, 'hosting');
   l.keepAwake(true);
   assert.deepEqual(p.calls.at(-1), ['keepAwake', { on: true }]);
+  l.openSettings('location');
+  assert.deepEqual(p.calls.at(-1), ['openSettings', { to: 'location' }]);
 
   p.fire('connected', { id: 'e1', name: 'Papa', code: '4711' });
   const h = p.sent()[0];
@@ -293,4 +295,25 @@ test('link: nearby Neustart nach dem Verlust scheitert → alle RETRY_MS erneut,
   p.fire('connected', { id: 'e2', name: 'Papa', code: '4711' });
   p.fire('message', hello('s1'));
   assert.deepEqual(log.at(-1), ['connected', { name: 'Papa', code: '4711', again: true }]);
+});
+
+test('link: nearby Funkstille reißt die Verbindung nicht selbst ab, erst nach SILENT_MS startet der Transport neu', async () => {
+  const p = fakePlugin(), l = createLink({ kind: 'nearby', plugin: p, timing: { PING_MS: 20, TIMEOUT_MS: 60, RETRY_MS: 20, SILENT_MS: 400, RECONNECT_MS: 5000 } });
+  links.push(l);
+  const log = record(l, ['lost', 'connected']);
+  await l.host('Sebi');
+  p.fire('connected', { id: 'e1', name: 'Papa', code: '4711' });
+  p.fire('message', hello('s1'));
+  assert.deepEqual(await once(l, 'lost'), { reason: 'timeout' }); // JS des Partners steht (Bildschirm aus), Nearby hält die Verbindung
+  await sleep(150); // früher: nach RETRY_MS host() → stopAll → Verbindung weg
+  assert.equal(p.calls.filter(c => c[0] === 'host').length, 1);
+  assert.ok(p.sent().filter(m => m.t === 'ping').length >= 3, 'pingt weiter');
+  p.fire('message', { id: 'e1', data: '{"t":"ping"}' }); // Partner wieder da: dieselbe Verbindung, derselbe Code
+  assert.deepEqual(log.at(-1), ['connected', { name: 'Papa', code: '4711', again: true }]);
+  assert.equal(l.state, 'connected');
+  await once(l, 'lost'); // bleibt es still, startet die Hülle nach SILENT_MS doch neu (Nearby meldet sonst disconnected)
+  await sleep(450);
+  assert.equal(p.calls.filter(c => c[0] === 'host').length, 2);
+  assert.equal(l.state, 'lost');
+  createLink({ kind: 'local' }).openSettings('app'); // im Browser: nichts zu öffnen, kein Fehler
 });

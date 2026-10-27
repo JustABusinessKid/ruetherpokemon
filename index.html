@@ -99,6 +99,17 @@
     <button id="btn-haunebu" class="haunebu-fab hidden" title="Flugscheibe" aria-label="Flugscheibe"><img class="ico ico-lg" src="art/icon-haunebu.png" alt=""></button>
     <button id="btn-locate" class="locate following" title="Karte folgt dir" aria-label="Karte folgt dir"><img class="ico ico-lg" src="art/icon-map.png" alt=""></button>
     <div id="online-dot" class="online-dot offline" title="Offline"></div>
+    <!-- v12: Moshes Anzeige (js/ad.js, app.js adTick): Karte oben auf der Karte, „Kein Interesse" klappt sie zum Badge neben dem Folge-Knopf -->
+    <div id="ad" class="ad hidden" role="region" aria-label="Anzeige">
+      <div class="ad-head"><span class="ad-timer">ANGEBOT ENDET IN 00:10:00</span><span class="ad-tags">· LETZTE EXEMPLARE · 40 % RABATT</span></div>
+      <div class="ad-body">
+        <img class="ad-cover" src="art/ad-cover.png" alt="">
+        <div class="ad-text"><b>Der Investment-Code.</b>Die finanzielle Wahrheit, die Immobilien in Reichtum verwandelt.<span class="sub">4,9/5 von über 1.000 Millionären · 2 Geschenke · Anwendbar in ganz Deutschland</span></div>
+        <div class="ad-car"><img src="art/ad-car.png" alt=""><span class="ad-note">Rückgabe bis 18 Uhr</span></div>
+      </div>
+      <div class="ad-actions"><button class="ad-no">Kein Interesse</button><button class="ad-buy primary">Jetzt sichern</button></div>
+    </div>
+    <button class="ad-badge hidden" title="Anzeige wieder öffnen">ANGEBOT 10:00</button>
   </div>
   <div id="debug" class="debug hidden">
     <strong>Test-Modus</strong>
@@ -117,11 +128,13 @@
     <button id="dbg-weakboss">Boss fast tot: aus</button>
     <button id="dbg-haunebu">Haunebu 10 Min</button>
     <button id="dbg-master">Alle Arenen meistern</button>
+    <button id="dbg-ad">Anzeige jetzt</button>
     <select id="dbg-mission" aria-label="Mission"></select>
     <select id="dbg-layout" aria-label="Karte"></select>
     <select id="dbg-mirror" aria-label="Spiegelung"><option value="">Spiegeln: Zufall</option><option value="0">Ungespiegelt</option><option value="1">Gespiegelt</option></select>
     <button id="dbg-quest">Quest starten</button>
     <button id="dbg-bernd">Stefan ruft</button>
+    <button id="dbg-moshe">Moshe ruft</button>
     <button id="dbg-lure">Lockmodul an</button>
     <button id="dbg-abilities">Alle Fähigkeiten Stufe 3</button>
     <button id="dbg-reset">Spielstand löschen</button>

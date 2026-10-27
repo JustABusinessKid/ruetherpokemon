@@ -16,6 +16,9 @@ export const THEMES = {
   keller: { bg: '#1c1512', floor: 'stone', wall: 'brick', cover: 'crate', f1: '#7a6d60', f2: '#6c6055', fd: '#4f453d', w1: '#5e3a2c', w2: '#8a4832', w3: '#4a2418', wl: '#b0664a', v1: '#8d6a44', v2: '#6b4e30', v3: '#3a2817', d1: '#7d7468', d2: '#4d463e' },
   // v9 §5: edge = Kartenrand als Hecke/Wald; cone/coneK = Farbe und Stärke ruhiger Kegel (grün auf Gras wäre unsichtbar); fl Blüten/Laub, q Wasser, k Kies, s Ufer, t Baumkrone (ta Herbst), h Hecke, p Holzsteg, c Wohnwagen
   mosel: { bg: '#1b2e1c', floor: 'grass', wall: 'camp', cover: 'tent', edge: true, cone: '#F4E8C8', coneK: 1.8, f1: '#86b552', f2: '#7aa94a', fd: '#5f8f3a', fl: '#F4E8C8', w1: '#b8573d', w2: '#e8dcc0', w3: '#7e3426', wl: '#d98366', wf: '#bfae8c', v1: '#4e8a35', v2: '#b07a20', v3: '#6b3a7a', d1: '#9a8a70', d2: '#5e5240', q1: '#2f6f9f', q2: '#3a7fb2', q3: '#5c9fcf', ql: '#bfe3f5', k1: '#cfc4a6', k2: '#b8ab8a', k3: '#8f8468', s1: '#e2cf98', s2: '#cdb87e', t1: '#6aa845', t2: '#3f7a34', t3: '#25521f', tr: '#6b4423', h1: '#3f7a34', h2: '#2f6128', h3: '#1d461b', hl: '#5c9a45', p1: '#b08250', p2: '#7d5530', c1: '#f1ece0', c2: '#cfc8b6', c3: '#9a9384' },
+  // v12 §4: Zypern (Rabino Empire HQ): helle Fliesen (lino-Muster), weiße Bürowände mit Fenstern und Plakaten (office), Schreibtische als Deckung (desk),
+  // Palmen (palm) und Meer am Rand; Kegel blau, grün ginge auf den hellen Fliesen unter
+  zypern: { bg: '#10304a', floor: 'lino', wall: 'office', cover: 'desk', edge: true, palm: true, cone: '#3F8EF5', coneK: 1.3, f1: '#eef0ea', f2: '#e3e6df', fd: '#c6ccc4', w1: '#f4f2ec', w2: '#e4dfd4', w3: '#b5afa2', wl: '#ffffff', wf: '#6fb6e6', v1: '#dcc8a4', v2: '#ab8d5f', v3: '#5a4630', d1: '#9aa3ab', d2: '#5f676f', q1: '#1f6fa8', q2: '#2a86c4', q3: '#5fb2e0', ql: '#d2f0ff', k1: '#e8e2d2', k2: '#d6cfbd', k3: '#b8b09e', s1: '#e9dba9', s2: '#d6c590', t1: '#5cc06a', t2: '#2f8a3f', t3: '#1f5f2c', tr: '#9a7a48', h1: '#3f9a4a', h2: '#2e7a3a', h3: '#1e5a2a', hl: '#7fd28a', p1: '#b08250', p2: '#7d5530' },
   bruch: { bg: '#141f17', floor: 'moss', wall: 'wood', cover: 'reed', edge: true, cone: '#F4E8C8', coneK: 1.8, f1: '#5f8a45', f2: '#567f3f', fd: '#3f6630', fl: '#c8902f', w1: '#5e4a2a', w2: '#8a5d36', w3: '#3a2c18', wl: '#7d6640', wf: '#5a3a1e', v1: '#a8b85a', v2: '#6f8f3a', v3: '#8a7a3a', d1: '#8a6a44', d2: '#5a4128', q1: '#1f4a48', q2: '#2a5c58', q3: '#3d7a70', ql: '#9ccfb8', lily: '#5BB55A', k1: '#8a7a58', k2: '#76684a', k3: '#5a4f38', s1: '#6b5a3a', s2: '#574a30', t1: '#7ab04a', t2: '#467a30', t3: '#264a1c', ta: '#c8902f', tr: '#5a3a1e', h1: '#2f5a26', h2: '#24491f', h3: '#163316', hl: '#467a30', p1: '#9a7046', p2: '#6b4a2a' },
 };
 // Rückfall für neue Kacheln (W, T) in alten Paletten
@@ -166,7 +169,17 @@ function hedge(g, t, x, y, same, dark) {
 
 // Einzelner Baum (T ohne T-Nachbarn): runde Krone mit Ink-Rand, im Bruch ab und zu Herbstlaub
 const CROWN = [[5, 6], [3, 10], [2, 12], [1, 14], [1, 14], [1, 14], [2, 12], [3, 10], [5, 6]];
+// v12: Palme (Zypern): schlanker Stamm mit Ringen, fünf Wedel mit Ink-Rand, manchmal eine Kokosnuss
+const PALM = [[[7, 4], [6, 4], [5, 5], [4, 5], [3, 6]], [[9, 4], [10, 4], [11, 5], [12, 5], [13, 6]], [[7, 3], [6, 2], [5, 2], [4, 1]], [[9, 3], [10, 2], [11, 2], [12, 1]], [[8, 3], [8, 2], [8, 1]]];
+function palm(g, t, x, y) {
+  g.fillStyle = 'rgba(30,42,34,.3)'; g.fillRect(8, 24, 20, 6);
+  px(g, INK, 6, 5, 4, 10); px(g, t.tr, 7, 5, 2, 10); for (const ry of [8, 11, 14]) px(g, t.t3, 7, ry, 2, 1);
+  for (const f of PALM) for (const [fx, fy] of f) px(g, INK, fx - 1, fy - 1, 3, 3);
+  for (const f of PALM) f.forEach(([fx, fy], i) => px(g, i < 2 ? t.t1 : t.t2, fx, fy));
+  if (hash(x, y, 91) < 0.5) px(g, '#8a5a2b', 6, 5);
+}
 function tree(g, t, x, y) {
+  if (t.palm) return palm(g, t, x, y);
   const r = k => hash(x, y, k + 90), c = t.ta && r(1) < 0.3 ? t.ta : t.t1;
   g.fillStyle = 'rgba(30,42,34,.3)'; g.fillRect(6, 24, 24, 6);
   px(g, INK, 6, 9, 4, 6); px(g, t.tr, 7, 9, 2, 6);
@@ -195,6 +208,13 @@ function house(g, t, st, x, y, van, comp) {
     if (front) {
       px(g, t.w2, 0, 9, 16, 7); px(g, t.wf, 0, 9, 16, 1); px(g, t.wf, 0, 15, 16, 1);
       if (r(2) < 0.5) { px(g, INK, 5, 11, 6, 3); px(g, '#9fd0ea', 6, 11, 4, 2); px(g, PAPER, 6, 11, 1, 1); }
+    }
+  } else if (t.wall === 'office') { // v12: weißes Bürogebäude mit Flachdach; vorn Fenster mit Meerblau oder ein Plakat „Rabino Empire“ (ohne lesbaren Text)
+    px(g, t.w1, 0, 0, 16, 16); px(g, t.w3, 0, 7, 16, 1); px(g, t.wl, 2, 2, 3, 1);
+    if (front) {
+      px(g, t.w2, 0, 9, 16, 7); px(g, t.w3, 0, 9, 16, 1);
+      if (r(2) < 0.5) { px(g, INK, 3, 10, 10, 5); px(g, t.wf, 4, 11, 8, 3); px(g, PAPER, 4, 11, 2, 1); }
+      else if (r(3) < 0.5) { px(g, INK, 5, 10, 7, 5); px(g, '#22305A', 6, 11, 5, 3); px(g, GOLD, 6, 11, 5, 1); px(g, '#B03B2B', 7, 13, 3, 1); }
     }
   } else {
     px(g, t.w1, 0, 0, 16, 16);
@@ -291,6 +311,14 @@ function cover(g, t, st, x, y) {
     return;
   }
   g.fillStyle = 'rgba(30,42,34,.28)'; g.fillRect(6, 24, 22, 4); // harter Schatten
+  if (t.cover === 'desk') { // v12: Schreibtisch mit Monitor, Tastatur und manchmal Papier
+    px(g, t.v3, 2, 12, 2, 3); px(g, t.v3, 12, 12, 2, 3);
+    px(g, INK, 1, 4, 14, 9); px(g, t.v1, 2, 5, 12, 7); px(g, t.v2, 2, 11, 12, 1);
+    px(g, INK, 5, 0, 6, 6); px(g, '#22305A', 6, 1, 4, 3); px(g, '#5fb2e0', 6, 1, 2, 1); px(g, t.v3, 7, 4, 2, 1);
+    px(g, INK, 3, 8, 5, 2); px(g, '#9AA0A6', 3, 8, 5, 1);
+    if (r(1) < 0.6) px(g, PAPER, 10, 7, 3, 3);
+    return;
+  }
   if (t.cover === 'tent') { // Zelt von vorn: Dreieck in Zeltfarbe, rechte Hälfte schattiert, dunkler Eingang
     const c = TENTS[Math.floor(r(1) * TENTS.length)];
     for (let i = 0; i <= 10; i++) {

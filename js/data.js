@@ -119,6 +119,13 @@ export const CONST = {
   ABILITY_UP: { 2: 2000, 3: 3000 },
   // v8: Quests (Kommando-Modus)
   QUEST_XP: 400,
+  // v12: Moshes Anzeige (js/ad.js): Fenster 10 min, einmal 5 min „verlängert", dann 2–3 h Pause (lokale Uhr).
+  // AD_RENDITE: Sieg über Moshe zahlt die im Kampf verlorenen Sats plus 10 % zurück (app.js)
+  AD_MS: 600_000,
+  AD_EXTEND_MS: 300_000,
+  AD_GAP_MIN: 7_200_000,
+  AD_GAP_MAX: 10_800_000,
+  AD_RENDITE: 0.1,
 };
 
 export const API_BASE = null; // Higgsfield-Backend abgeschaltet (2026-10-10)
@@ -180,6 +187,10 @@ export const ACHIEVEMENTS = [
   { id: 'quest_all', name: 'Kommando-Legende', desc: 'Schließe jede Haunebu-Quest einmal ab', icon: '🏆' },
   { id: 'kieser3', name: 'Stammkunde bei Kieser', desc: 'Lass dich dreimal von Stefan zum Kieser-Training schleppen', icon: '⚡' },
   { id: 'bruch_clean', name: 'Spurlos', desc: 'Feuer im Bruch, ohne dass ein Ranger Alarm schlägt', icon: '🔥' },
+  // v12 §6: Moshe Hillel. Icons direkt aus dem Kit (ui.js KIT)
+  { id: 'reingefallen', name: 'Reingefallen', desc: 'Kaufe den Investment-Code im Shop', icon: 'bag' },
+  { id: 'nichtreingefallen', name: 'Nicht reingefallen', desc: 'Besiege Moshe Hillel', icon: 'trophy' },
+  { id: 'rabino', name: 'Rabino Empire gestürzt', desc: 'Meistere Moshes Anzeige: Besiege ihn auf Level 5', icon: 'trophy' },
 ];
 
 export const RARITIES = [
@@ -195,6 +206,9 @@ export const SHOP = [
   { id: 'supercoin', name: 'Super-Münze', icon: '🪙', cost: 500, desc: 'Ein Wurf mit +50 % Fangchance. Wird beim Treffer verbraucht.' },
   // Kauf startet sofort den Kampf gegen Hitler (kein Inventar). Sieg = 10 Minuten Haunebu (save.haunebuUntil), Preis steigt je Beschwörung.
   { id: 'haunebu', name: 'Haunebu-Reichsflugscheibe', icon: '🛸', cost: 5000, desc: 'Beschwört die Flugscheibe. Adolf Hitler steigt aus und will sie behalten. Besieg ihn, dann gehört sie dir 10 Minuten: freie Flüge zu jeder Arena, nach Neuschwabenland und zu Quests. Gehört sie dir schon, verlängerst du für 5000 Sats um 10 Minuten. Jede Beschwörung kostet 1000 Sats mehr (höchstens 8000).' },
+  // v12 §3: Abzock-Buch, einmalig (save.items.investmentcode = 1). was = Streichpreis, sell = Rückkauf „gebraucht, ohne Lesespuren";
+  // der Countdown „Angebot endet in" ist rein optisch (screens.js). Das Buch schaltet die Quest „Rabino Empire HQ" frei (needsItem).
+  { id: 'investmentcode', name: 'Der Investment-Code', icon: 'quest', cost: 4999, was: 8333, sell: 10, desc: 'Die finanzielle Wahrheit, die Immobilien in Reichtum verwandelt. 100 Seiten inklusive. 2 Geschenke.' },
 ];
 
 export const ARENAS = [
@@ -314,10 +328,36 @@ export const BOSSES = {
       { name: 'Zeitschleife', damage: 0, warn: 1200, heal: 250, fx: 'timeloop' },
     ],
   },
+  // v12: Boss der Anzeige (AD_ARENA, Spec v12 §2). sats = die Attacke nimmt echte Sats vom Konto: min(max, floor(pct × Konto)),
+  // unter min nur „Dann eben Ratenzahlung."; Ausweichen rettet sie, Sieg zahlt sie plus AD_RENDITE zurück (battle.js, app.js)
+  moshe: {
+    id: 'moshe', name: 'Moshe Hillel', btc: 800,
+    fast: { name: 'Letzte Exemplare!', damage: 16, every: 2300, warn: 800, fx: 'books',
+      flavour: ['Nur noch 3 Stück!', 'Über 1.000 Millionäre können nicht irren.', '40 % Rabatt, aber nur heute.'] },
+    charged: [
+      { name: 'Investment-Code', damage: 15, warn: 1200, sats: { pct: 0.1, max: 500, min: 50 }, fx: 'code' },
+      { name: 'Anruf aus Zypern', damage: 10, warn: 1200, stun: 2500, fx: 'phone' },
+      { name: 'Telegram-VIP-Gruppe', damage: 10, warn: 1200, poison: { perSec: 4, ms: 6000 }, fx: 'telegram' },
+    ],
+  },
 };
 
+// v12 §1: Moshes Anzeige als virtuelle Arena. Steht in ARENA_BY_ID (arenaLevels, arenaMastered, Online-Ereignisse, Nachschlagen),
+// aber nicht in ARENAS: kein Marker, kein stationierter Rüther, zählt nicht für „alle Arenen" (questsUnlocked, master3, Zähler).
+export const AD_ARENA = { id: 'anzeige', name: 'Rabino Empire', boss: 'moshe', virtual: true };
+// v12 §2: Moshes Investment-Code nimmt echte Sats; je Treffer eine andere Immobilie, Reihenfolge per rng, ohne Wiederholung (battle.js)
+export const IMMOBILIEN = [
+  'Eigentumswohnung Duisburg-Marxloh, 3. OG, ohne Boden',
+  'Reihenhaus Gelsenkirchen, Keller unter Wasser',
+  'Garage Bottrop, ohne Tor',
+  'Dachgeschoss Herne, ohne Dach',
+  'Parkplatz Hagen, auf dem Radweg',
+  'Ferienwohnung Castrop-Rauxel, Blick auf die A42',
+  'Bauland Oberhausen, unter dem Gasometer',
+];
+
 export const RUETHER_BY_ID = Object.fromEntries(RUETHERS.map(r => [r.id, r]));
-export const ARENA_BY_ID = Object.fromEntries(ARENAS.map(a => [a.id, a]));
+export const ARENA_BY_ID = Object.fromEntries([...ARENAS, AD_ARENA].map(a => [a.id, a]));
 
 // v6: Sprüche. Der Humor des Spiels hängt an den echten Leuten: Diese Zeilen erscheinen beim Auftauchen
 // (Fang-Screen), im Kampf (Sprechblase des Gegners, Banner der eigenen Attacke), beim Fang und beim Abhauen.
@@ -368,6 +408,13 @@ export const LINES = {
     appear: ['Alle, die keine Bitcoin haben, verlassen sofort den Raum.', 'Die Flugscheibe gehört mir!', 'Wer hat die Flugscheibe ohne mich gestartet?!'],
     fight: ['Das war ein BEFEHL!', 'Wieso steigt bei Christian alles um 70 Prozent?!', 'Wer hat den Private Key verloren?!', 'Die Flugscheibe hätte längst fliegen müssen!', 'Ich will sofort einen Kurs von 100.000!'],
     defeat: ['Nehmt die Scheibe. Ich wollte eh nie fliegen.', 'Und die Wunderwaffe springt auch nicht an.'],
+  },
+  // v12: Der Witz geht auf den Abzock-Shop und seine KI-Videos (Spec v12 §0). rage = Wutphase (battle-ui.js)
+  moshe: {
+    appear: ['Sie haben bestellt. Jetzt zahlen Sie.'],
+    fight: ['Das Angebot endet in 00:09:58. Seit Jahren.', 'Schreib CODE in die Kommentare.', 'Versand aus Zypern, Rückgabe ausgeschlossen.'],
+    rage: ['Das Angebot ist gleich vorbei!'],
+    defeat: ['Die Bewertung bleibt trotzdem 4,9 von 5.', 'Dann eben Ratenzahlung.'],
   },
 };
 export const pickLine = (id, kind, rng = Math.random) => {

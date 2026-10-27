@@ -462,7 +462,7 @@ test('extract: erst mit Ziel und allen Stehenden auf P; Liegengelassene kosten W
   assert.equal(end.text, 'ok');
   assert.deepEqual({ ...end.summary }, {
     result: 'success', reason: 'extract', missionId: 'test', layoutId: null, variantId: 'v', mirror: false, setup: { layoutId: null, variantId: 'v', mirror: false, seed: 0 },
-    score: 1, objective: { done: 2, total: 2, min: 1 }, timeMs: st.time, alarmFree: true, delivered: 2, leftBehind: 1, kieser: 0, fine: 0,
+    score: 1, objective: { done: 2, total: 2, min: 1 }, timeMs: st.time, alarmFree: true, delivered: 2, leftBehind: 1, kieser: 0, videos: 0, fine: 0,
   });
   assert.equal(end.fine, 0);
   assert.equal(end.kieser, 0);

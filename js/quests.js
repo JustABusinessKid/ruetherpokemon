@@ -80,8 +80,8 @@ const COND = {
   dex10: s => dexCount(s) >= 10,
   dex20: s => dexCount(s) >= DEX_TOTAL,
   arena1: s => s.stats.arenaWins >= 1,
-  master1: s => Object.keys(s.arenaMastered).length >= 1,
-  master3: s => ARENAS.every(a => s.arenaMastered[a.id]),
+  master1: s => ARENAS.some(a => s.arenaMastered[a.id]),
+  master3: s => ARENAS.every(a => s.arenaMastered[a.id]), // Moshes Anzeige-Arena steht nicht in ARENAS und zählt nicht
   combo10: s => (s.stats.maxCombo || 0) >= 10,
   level10: s => s.box.some(i => i.level >= 10),
   stops10: s => (s.stats.stops || 0) >= 10,
@@ -92,9 +92,13 @@ const COND = {
   haunebu: s => (s.stats.haunebuWins || 0) >= 1,
   tachionen: s => (s.arenaLevels.neuschwabenland || 1) >= 2,
   quest1: s => Object.values(s.questLog || {}).some(q => q.done),
-  quest_all: s => Object.keys(QUEST_SATS).every(id => s.questLog?.[id]?.done), // v9: alle 6 Missionen
+  quest_all: s => Object.keys(QUEST_SATS).every(id => s.questLog?.[id]?.done), // v9: alle Missionen (v12: 7, mit Rabino Empire HQ)
   kieser3: s => (s.questLog?.camping?.kieser || 0) >= 3,
   bruch_clean: s => !!s.questLog?.bruch?.clean,
+  // v12 §6: Moshe Hillel. stats.moshe zählt app.js bei jedem Sieg über ihn
+  reingefallen: s => (s.items?.investmentcode || 0) >= 1,
+  nichtreingefallen: s => (s.stats.moshe || 0) >= 1,
+  rabino: s => !!s.arenaMastered.anzeige,
 };
 // Prüft alle Erfolge, schaltet neue frei (+Sats), gibt die neuen zurück
 export function checkAchievements(save, now = 1) {

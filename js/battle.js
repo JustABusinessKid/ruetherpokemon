@@ -1,4 +1,4 @@
-import { CONST } from './data.js';
+import { CONST, IMMOBILIEN } from './data.js';
 import { fighterStats, arenaScale } from './progress.js';
 
 // Echtzeit-Engine. tick() mutiert den State und liefert Events für die Animationen.
@@ -28,10 +28,12 @@ export function makeBoss(def, arenaLevel = 1) {
   };
 }
 
-export function createBattle({ team, enemy, rng = Math.random, duration = enemy.duration || CONST.BATTLE_DURATION }) {
+// sats (v12): Kontostand beim Kampfstart; Moshes Investment-Code (atk.sats) nimmt davon, satsLost zählt mit (Spec v12 §2)
+export function createBattle({ team, enemy, rng = Math.random, duration = enemy.duration || CONST.BATTLE_DURATION, sats = 0 }) {
   return {
     team: structuredClone(team), active: 0, enemy: structuredClone(enemy),
     time: 0, duration, summons: [], enemySummons: [], tapCooldown: 0, over: false, won: null, reason: null, rng,
+    sats, satsLost: 0, immobilien: [],
     // Abwehr: dodgeAt = gemerkter Wisch ohne Warnung (Puffer), dodgeLockUntil = Sperre nach Fehlversuch (dodgeLockQuiet: seitdem
     // nicht mehr gewischt), lastAttackAt/lastWarning = letzter Einschlag und seine Warnung (abwehrbar? ausgewichen?)
     dodgeAt: null, dodgeLockUntil: 0, dodgeLockQuiet: false, dodgeMisses: 0, lastAttackAt: -Infinity, lastWarning: null,
@@ -47,6 +49,17 @@ const stunned = (f, t) => f.status.stunUntil > t;
 function heal(f, n) { const h = Math.max(0, Math.min(n, f.maxBtc - f.btc)); f.btc += h; return h; }
 function hurt(f, n) { const d = Math.max(0, Math.min(Math.floor(n), f.btc)); f.btc -= d; return d; }
 function poison(f, p, t) { f.status.poison = { perSec: p.perSec, until: t + p.ms, acc: 0 }; }
+
+// v12: Moshes Investment-Code trifft (weder normal noch perfekt ausgewichen): amount = min(max, floor(pct × Rest)), unter min nur
+// „Ratenzahlung". Je Treffer eine andere Immobilie, Reihenfolge per rng, von vorn erst, wenn alle durch sind. Konto und
+// Rückzahlung (AD_RENDITE) verbucht app.js; die Engine kennt keinen Spielstand
+function loseSats(s, atk, ev) {
+  const left = s.sats - s.satsLost, cheap = left < atk.sats.min;
+  const amount = cheap ? 0 : Math.min(atk.sats.max, Math.floor(atk.sats.pct * left));
+  if (!cheap && !s.immobilien.length) s.immobilien = IMMOBILIEN.map(x => [s.rng(), x]).sort((a, b) => a[0] - b[0]).map(p => p[1]);
+  s.satsLost += amount;
+  ev.push({ type: 'satsLost', amount, note: cheap ? 'Dann eben Ratenzahlung.' : s.immobilien.pop() });
+}
 
 function stunEnemy(s, ms, ev) {
   const e = s.enemy;
@@ -83,6 +96,7 @@ function resolveEnemyAttack(s, me, ev) {
   if (!w.dodged) {
     if (atk.poison) { poison(me, atk.poison, s.time); ev.push({ type: 'poisoned', target: 'me', ms: atk.poison.ms }); }
     if (atk.stun) { me.status.stunUntil = s.time + atk.stun; ev.push({ type: 'stun', target: 'me', ms: atk.stun }); }
+    if (atk.sats) loseSats(s, atk, ev);
   }
   if (atk.heal) ev.push({ type: 'heal', target: 'enemy', amount: heal(e, atk.heal) });
   if (atk.summon) { // Gegner-Helfer, Ausweichen hilft nicht
