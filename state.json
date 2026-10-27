@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1793126228,
+ "lastMsgTime": 1793127390,
  "players": {
   "legacy:Josef": {
    "nickname": "Josef",
@@ -56,7 +56,7 @@
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1793126227871
+   "t": 1793127318300
   },
   "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
    "nickname": "BTC",
@@ -172,6 +172,13 @@
   }
  },
  "events": [
+  {
+   "at": 1793127390963,
+   "nickname": "Adolf",
+   "kind": "quest",
+   "text": "hat die Haunebu-Quest „Rabino Empire HQ“ geschafft!",
+   "m": "9GspjtyLQJWu01so"
+  },
   {
    "at": 1793041617655,
    "nickname": "BTC",
@@ -514,13 +521,6 @@
    "kind": "achievement",
    "text": "hat die Haunebu erbeutet und fliegt 10 Minuten lang frei zu jeder Arena!",
    "m": "aYsSFnhYP15-3S2S"
-  },
-  {
-   "at": 1791661293575,
-   "nickname": "BTC",
-   "kind": "fusion",
-   "text": "hat per Fusion einen epischen Onkel Micha erschaffen!",
-   "m": "fr3dhRBZSRW_PsJm"
   }
  ]
 }
