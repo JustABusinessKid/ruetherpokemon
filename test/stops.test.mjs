@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { overpassQuery, parseOverpass, spinReward, stopReady, useStop, cacheCell, fakeStops } from '../js/stops.js';
+import { overpassQuery, parseOverpass, spinReward, stopReady, useStop, cacheCell, fakeStops, generatedStops, mergeStops } from '../js/stops.js';
 import { emptySaveV3 } from '../js/progress.js';
 import { CONST } from '../js/data.js';
-import { offsetPoint } from '../js/geo.js';
+import { offsetPoint, distance } from '../js/geo.js';
 
 const seq = (...v) => { let i = 0; return () => v[Math.min(i++, v.length - 1)]; };
 const P = { lat: 51.37, lon: 7.48 };
@@ -58,4 +58,31 @@ test('cacheCell und fakeStops', () => {
   assert.equal(f.length, 3);
   assert.ok(f.every(x => x.dist >= 14 && x.dist <= 121 && x.id.startsWith('fake')));
   assert.ok(f[0].dist <= 36, `erster Fake-Stop in Reichweite: ${f[0].dist}`);
+});
+
+test('generatedStops: ohne Netz immer Stops, deterministisch, stabile ids, nah und sortiert', () => {
+  const a = generatedStops(P);
+  assert.deepEqual(a, generatedStops(P));
+  assert.ok(a.length >= 2 && a.length <= CONST.STOP_MAX, `Anzahl ${a.length}`);
+  assert.equal(new Set(a.map(s => s.id)).size, a.length);
+  assert.ok(a.every(s => s.id.startsWith('gen:') && s.kind === 'kiosk' && s.name && s.dist <= CONST.STOP_RADIUS));
+  assert.ok(a.every((s, i) => i === 0 || s.dist >= a[i - 1].dist), 'nach Entfernung sortiert');
+  assert.ok(a[0].dist <= 425, `nächster Stop in der eigenen Zelle: ${a[0].dist}`);
+  const moved = generatedStops(offsetPoint(P, 30, 20)); // kleiner Schritt in derselben Zelle: gleiche Stops, gleiche Orte
+  assert.deepEqual(moved.map(s => [s.id, s.lat, s.lon]).sort(), a.map(s => [s.id, s.lat, s.lon]).sort());
+  const far = generatedStops(offsetPoint(P, 5000, 5000));
+  assert.ok(!far.some(s => a.some(x => x.id === s.id)), 'woanders andere Stops');
+});
+
+test('mergeStops: echte Stops zuerst, Doppelte am selben Ort raus, Limit', () => {
+  const gen = generatedStops(P);
+  const near = offsetPoint(gen[0], 20, 0);
+  const real = [{ id: 'osm1', name: 'Zum Löwen', kind: 'pub', lat: near.lat, lon: near.lon, dist: distance(P, near) }];
+  const m = mergeStops(real, gen);
+  assert.ok(m.some(s => s.id === 'osm1') && !m.some(s => s.id === gen[0].id));
+  assert.equal(m.length, gen.length);
+  assert.ok(m.every((s, i) => i === 0 || s.dist >= m[i - 1].dist));
+  const many = Array.from({ length: 30 }, (_, i) => ({ id: 'osm' + i, name: 'x', kind: 'bar', lat: P.lat + (i + 10) * 0.0001, lon: P.lon, dist: (i + 10) * 11 }));
+  assert.equal(mergeStops(many, gen).length, CONST.STOP_MAX);
+  assert.deepEqual(mergeStops([], gen), gen);
 });

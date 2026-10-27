@@ -21,7 +21,7 @@ import { makeWild } from './wild.js';
 import { reachText } from './format.js';
 import { createTicker } from './ticker.js';
 import { dayKey, ensureDailyQuests, trackQuest, claimQuest, claimableCount, applyStreak, checkAchievements, featuredRuether, isHappyHour, seededRng } from './quests.js';
-import { spinReward, stopReady, useStop, fakeStops } from './stops.js';
+import { spinReward, stopReady, useStop, fakeStops, generatedStops, mergeStops } from './stops.js';
 import { fetchStops } from './overpass.js';
 import { setScreen, toast, popup, onTab, setTabBadge, esc, ico } from './ui.js';
 import { createOnboarding } from './onboarding.js';
@@ -336,17 +336,16 @@ spawnTimer = setTimeout(refreshSpawns, CONST.SPAWN_INTERVAL);
 
 // ---------- Stops ----------
 function renderStops() { map.setStops(stops, s => stopReady(save, s.id, Date.now())); }
-let stopSeq = 0, stopRetryAt = 0;
+let stopSeq = 0;
 async function refreshStops(force = false) {
   if (!pos) return;
   if (!force && lastStopPos && distance(lastStopPos, pos) < CONST.STOP_CACHE_CELL) return;
-  if (!force && Date.now() < stopRetryAt) return;
   lastStopPos = pos;
   const seq = ++stopSeq;
+  stops = generatedStops(pos); renderStops(); // sofort und auch ohne Netz; echte Läden aus OSM kommen obendrauf
   const list = await fetchStops(pos);
-  if (seq !== stopSeq) return; // inzwischen neuere Anfrage oder Fake-Stops
-  if (!list.length) { lastStopPos = null; stopRetryAt = Date.now() + 60_000; return; } // Overpass-Fehler: in 60 s erneut
-  stops = list; renderStops();
+  if (seq !== stopSeq || !list.length) return; // inzwischen neuere Anfrage oder Fake-Stops; Overpass-Fehler: nächste Rasterzelle erneut
+  stops = mergeStops(list, stops); renderStops();
 }
 
 // ---------- Ortung ----------

@@ -1027,10 +1027,10 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
     closeMenu(); endAim(); closeMini();
     const u = st.units[e.unit], n = e.count, r = kieserReward(n), r0 = kieserReward(n - 1);
     const sub = r == null ? '' : r < r0 ? `−${fmt(r0 - r)} Sats` : `Belohnung bleibt bei ${fmt(r)}`;
-    const says = (st.mission.texts?.kieser || KIESER_LINES).map(([who, t], k) => `<p class="q-cut-say ${who === 'bernd' ? 'boss' : 'hero'}" style="--d:${(0.8 + k).toFixed(1)}s">${esc(t)}</p>`).join('');
+    const says = (st.mission.texts?.kieser || KIESER_LINES).map(([who, t], k) => `<p class="q-cut-say ${who === 'bernd' ? 'boss' : 'hero'}" style="--d:${(0.8 + 1.6 * k).toFixed(1)}s">${esc(t)}</p>`).join('');
     sfx.play('rage'); haptic([60, 40, 60]);
     playCut('kieser', `<div class="q-cut-scene"><div class="q-cut-walk"><img class="q-cut-boss" src="art/boss-bernd.png" alt="${esc(ENEMY_TYPES.bernd.name)}"><i class="q-cut-rope"></i>${frameFace(u, 'dragged')}</div>${says}</div>`
-      + `<div class="q-cut-stamp"><b>Kieser-Training #${n}</b>${sub ? `<span>${esc(sub)}</span>` : ''}</div><span class="q-cut-skip">Tippen zum Überspringen</span>`, 4000, () => {
+      + `<div class="q-cut-stamp"><b>Kieser-Training #${n}</b>${sub ? `<span>${esc(sub)}</span>` : ''}</div><span class="q-cut-skip">Tippen zum Überspringen</span>`, 7000, () => { // 3 Zeilen à 1,6 s, Stempel bei 4,6 s, die letzte Zeile bleibt
       const mine = cut;
       cutEl.classList.add('black');
       if (remote()) return; // Koop-Gast: resume schickt nur der Host, die Szene schließt der nächste unpausierte Zustand (onSnapshot)

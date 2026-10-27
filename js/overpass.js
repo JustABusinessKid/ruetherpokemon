@@ -5,7 +5,7 @@ const cache = new Map();
 
 async function ask(url, body) {
   const ctrl = new AbortController();
-  const to = setTimeout(() => ctrl.abort(), 10000);
+  const to = setTimeout(() => ctrl.abort(), 6000);
   try {
     const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body, signal: ctrl.signal });
     return res.ok ? await res.json() : null;
