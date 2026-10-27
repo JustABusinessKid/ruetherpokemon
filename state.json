@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1793130776,
+ "lastMsgTime": 1793131084,
  "players": {
   "legacy:Josef": {
    "nickname": "Josef",
@@ -61,18 +61,18 @@
   "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
    "nickname": "BTC",
    "avatar": "christian",
-   "sats": 62861,
+   "sats": 65401,
    "dex": 20,
    "trophies": 65,
    "mastered": 5,
    "level": 30,
-   "xp": 1040,
+   "xp": 1520,
    "leader": {
     "id": "christian",
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1793130775320
+   "t": 1793131075312
   },
   "-pWtFGooNqrAhm2bZJVG-34XXqMnpAewbhOBWZCkxAc": {
    "nickname": "Tester",
@@ -172,6 +172,20 @@
   }
  },
  "events": [
+  {
+   "at": 1793131083092,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Christian erschaffen!",
+   "m": "flpQB0sZevRcq1s8"
+  },
+  {
+   "at": 1793131032185,
+   "nickname": "BTC",
+   "kind": "quest",
+   "text": "hat die Haunebu-Quest „Rabino Empire HQ“ geschafft!",
+   "m": "rG2k0DUcb4AtlDVd"
+  },
   {
    "at": 1793130741035,
    "nickname": "BTC",
@@ -507,20 +521,6 @@
    "kind": "catch",
    "text": "hat einen legendären Christian gefangen!",
    "m": "LI5qNCgWIxAaKVvU"
-  },
-  {
-   "at": 1791662211407,
-   "nickname": "Adolf",
-   "kind": "catch",
-   "text": "hat einen legendären Viktor gefangen!",
-   "m": "iRVhQL_k8kMWswP0"
-  },
-  {
-   "at": 1791662174744,
-   "nickname": "Adolf",
-   "kind": "catch",
-   "text": "hat einen legendären Christian gefangen!",
-   "m": "zGION2U-1L4wlogA"
   }
  ]
 }
