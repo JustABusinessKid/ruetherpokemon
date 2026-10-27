@@ -373,6 +373,7 @@
 
 <script src="vendor/leaflet/leaflet.js"></script>
 <!-- onerror: scheitert ein Modul beim Laden, kommt der error-Listener in app.js nie dran, der Splash hinge stumm -->
+<script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').then(r => r.update().catch(() => {})).catch(() => {});</script> <!-- vor den Modulen: Updates kommen auch an, wenn app.js beim Start stirbt -->
 <script type="module" src="js/app.js" onerror="document.querySelector('#splash p').textContent='Fehler beim Laden. Bitte Seite neu laden.'"></script>
 </body>
 </html>

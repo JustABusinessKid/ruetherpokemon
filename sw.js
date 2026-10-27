@@ -1,5 +1,5 @@
 // Service Worker: Rüther GO läuft komplett offline (auch als installierte App). Erzeugt von tools/make_sw.py – nicht von Hand ändern.
-const VERSION = 'cdf34eb5c641';
+const VERSION = '84c86e885aa1';
 const APP = `app-${VERSION}`, FONTS = 'fonts-1', TILES = 'tiles-1', VIDS = 'ruether-vids', TILE_MAX = 3000;
 const PRECACHE = [
   './',
