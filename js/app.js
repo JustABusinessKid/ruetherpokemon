@@ -1180,8 +1180,8 @@ const VERSION = 14;
 const NEWS = [
   'Moshe Hillel arbeitet für dich: Räume Rabino Empire HQ dreimal aus, dann steht er im Quest-Team. Fünf Fähigkeiten im Ton seiner Anzeige, Stufen wie bei den Rüthern.',
   'Erwischt dich Moshe, läuft jetzt eins seiner echten Videos. Überspringen geht nach 20 Sekunden.',
-  'Haunebu repariert: Nach der Landung ging keine Arena auf und das Beamen im Cheat-Menü lief nicht. Beides geht wieder.',
   'Zusammen spielen geht jetzt auch über Internet und im Browser: Raumcode teilen, fertig. Beide brauchen die neue Version.',
+  'Haunebu repariert: Nach der Landung ging keine Arena auf und das Beamen im Cheat-Menü lief nicht. Beides geht wieder.',
 ];
 const VERSION_URL = 'https://raw.githubusercontent.com/JustABusinessKid/ruetherpokemon/main/version.json';
 const newsHtml = list => `<ul class="news">${list.map(n => `<li>${esc(n)}</li>`).join('')}</ul>`;
