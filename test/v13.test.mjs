@@ -231,7 +231,7 @@ test('v13 §0: Fähigkeitstexte, Erfolg, Versionsmeldung ohne verbotene Wörter;
   texts.push(...v.news);
   for (const t of texts) assert.doesNotMatch(t, banned, t);
   assert.equal(v.v, 13);
-  assert.equal(v.news.length, 3);
+  assert.equal(v.news.length, 4);
   const app = readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
   for (const n of v.news) assert.ok(app.includes(`'${n}'`), `NEWS in app.js: ${n}`);
   assert.match(v.news[0], /^Moshe Hillel arbeitet für dich: Räume Rabino Empire HQ dreimal aus/);

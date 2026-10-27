@@ -805,7 +805,7 @@ function landPoint(a) { return offsetPoint(a, 40, 0); }
 // onPosition (setFake) holt Spawns und Stops für den neuen Ort genau einmal; erst folgen: die Lockmodul-Welle meidet dann die Knöpfe
 function land(a) {
   const p = landPoint(a);
-  lastSpawnPos = lastStopPos = null; stopRetryAt = 0;
+  lastSpawnPos = lastStopPos = null; // stopRetryAt gibt es seit den festen Stops (f7caf17) nicht mehr; der Rest hier ließ die Landung in einer ReferenceError sterben
   map.follow(p); locator.setFake(p);
 }
 // Flugmodus: Position einfrieren (letzte bekannte, sonst Worringen). Fangen, Kämpfen, Quests laufen ohne GPS und ohne Netz weiter.
@@ -1176,10 +1176,11 @@ $('#dbg-close').addEventListener('click', () => debug.classList.add('hidden'));
 // ---------- v11: Was ist neu / App-Update ----------
 // Einmal pro Version „Was ist neu“ (Web und App). Die App (APK) fragt dazu version.json im Repo ab und bietet eine
 // neuere APK zum Herunterladen an (der Link geht über Capacitor in den Browser, der lädt die Datei).
-const VERSION = 13;
+const VERSION = 14;
 const NEWS = [
   'Moshe Hillel arbeitet für dich: Räume Rabino Empire HQ dreimal aus, dann steht er im Quest-Team. Fünf Fähigkeiten im Ton seiner Anzeige, Stufen wie bei den Rüthern.',
   'Erwischt dich Moshe, läuft jetzt eins seiner echten Videos. Überspringen geht nach 20 Sekunden.',
+  'Haunebu repariert: Nach der Landung ging keine Arena auf und das Beamen im Cheat-Menü lief nicht. Beides geht wieder.',
   'Zusammen spielen geht jetzt auch über Internet und im Browser: Raumcode teilen, fertig. Beide brauchen die neue Version.',
 ];
 const VERSION_URL = 'https://raw.githubusercontent.com/JustABusinessKid/ruetherpokemon/main/version.json';
