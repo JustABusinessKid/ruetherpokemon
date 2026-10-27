@@ -11,14 +11,22 @@ function ac() {
   ctx.resume().catch(() => {}); // stumm (Hintergrund, iOS-Unterbrechung): nichts einplanen, die nächste Geste weckt ihn
   return null;
 }
-function tone({ f = 440, f2 = null, type = 'square', t = 0.08, g = 0.25, delay = 0 }) {
-  const c = ac(); if (!c || !enabled) return;
+// v14: Ist der Context gerade nicht 'running' (Firefox startet ihn suspended, Hintergrund, Unterbrechung durch ein Video), ging der
+// Ton bisher verloren; jetzt läuft er nach dem resume() nach, wenn das sofort klappt (sonst wie vorher weg)
+function withCtx(fn) {
+  if (!touched || !enabled) return;
+  if (!ctx) { const AC = globalThis.AudioContext || globalThis.webkitAudioContext; if (!AC) return; ctx = new AC(); }
+  if (ctx.state === 'running') return fn(ctx);
+  const c = ctx;
+  c.resume().then(() => { if (c.state === 'running') fn(c); }).catch(() => {});
+}
+function tone({ f = 440, f2 = null, type = 'square', t = 0.08, g = 0.25, delay = 0 }) { withCtx(c => {
   const o = c.createOscillator(), v = c.createGain(), t0 = c.currentTime + delay;
   o.type = type; o.frequency.setValueAtTime(f, t0);
   if (f2) o.frequency.exponentialRampToValueAtTime(f2, t0 + t);
   v.gain.setValueAtTime(g, t0); v.gain.exponentialRampToValueAtTime(0.001, t0 + t);
   o.connect(v).connect(c.destination); o.start(t0); o.stop(t0 + t + 0.02);
-}
+}); }
 const seq = (freqs, opts, gap) => freqs.forEach((f, i) => tone({ ...opts, f, delay: i * gap, ...(opts.last && i === freqs.length - 1 ? opts.last : {}) }));
 
 const SFX = {
@@ -48,18 +56,16 @@ const SFX = {
 };
 
 // Rauschen mit Abklingen (Giftgas-Zischen)
-function hiss(t, g) {
-  const c = ac(); if (!c || !enabled) return;
+function hiss(t, g) { withCtx(c => {
   const n = Math.floor(c.sampleRate * t), buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
   for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
   const src = c.createBufferSource(), v = c.createGain();
   src.buffer = buf; v.gain.value = g;
   src.connect(v).connect(c.destination); src.start();
-}
+}); }
 
 // Haunebu: Theremin-Sweep, Sinus rauf und runter, Vibrato wird immer wabbeliger (~2,6 s)
-function theremin() {
-  const c = ac(); if (!c || !enabled) return;
+function theremin() { withCtx(c => {
   const o = c.createOscillator(), lfo = c.createOscillator(), depth = c.createGain(), v = c.createGain(), t0 = c.currentTime;
   o.type = 'sine';
   o.frequency.setValueAtTime(320, t0);
@@ -72,7 +78,7 @@ function theremin() {
   lfo.connect(depth).connect(o.frequency);
   o.connect(v).connect(c.destination);
   o.start(t0); lfo.start(t0); o.stop(t0 + 2.65); lfo.stop(t0 + 2.65);
-}
+}); }
 
 export const sfx = {
   play(name) { if (enabled) try { SFX[name]?.(); } catch { /* kein Audio */ } },
