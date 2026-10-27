@@ -1,17 +1,19 @@
-// Verbindung zwischen zwei Geräten ohne Internet (Spec §1.2, §6).
-// Eine Hülle (Hallo, Herzschlag, Zerlegen, Wiederverbinden, Events) über zwei kleine Transporte:
-// 'nearby' = Capacitor-Plugin NearbyLink (Bluetooth/WLAN-Direct, Android-App), 'local' = BroadcastChannel
-// (zwei Fenster im selben Browser, zum Testen). Transporte reichen nur Rohtext durch.
+// Verbindung zwischen zwei Geräten ohne Internet (Spec §1.2, §6) oder über Internet (v13 §4).
+// Eine Hülle (Hallo, Herzschlag, Zerlegen, Wiederverbinden, Events) über drei kleine Transporte:
+// 'nearby' = Capacitor-Plugin NearbyLink (Bluetooth/WLAN-Direct, Android-App), 'online' = WebRTC-DataChannel mit
+// Raumcode, signalisiert über ntfy (js/net/online.js), 'local' = BroadcastChannel (zwei Fenster im selben Browser,
+// zum Testen). Transporte reichen nur Rohtext durch.
 // Eingehendes ist Daten von außen: kaputtes JSON und Nachrichten ohne Text-t werden still verworfen.
+import { onlineTransport } from './online.js';
 
-export const PROTO = 1; // erhöhen bei jeder inkompatiblen Änderung an Link-, Duell- oder Quest-Nachrichten
+export const PROTO = 2; // erhöhen bei jeder inkompatiblen Änderung an Link-, Duell- oder Quest-Nachrichten
 export const TIMING = { PING_MS: 2000, TIMEOUT_MS: 6000, RECONNECT_MS: 60_000, ADV_MS: 1000 };
 // Im Zustand 'lost': so lange nach dem Timeout bzw. nach einem fehlgeschlagenen Neustart startet die Hülle den Transport neu
 // (überschreibbar per timing.RETRY_MS)
 const RETRY_MS = 3000;
-// nearby: nach einem reinen Herzschlag-Timeout bleibt die Funkverbindung so lange stehen (timing.SILENT_MS). Nearby hält sie
-// selbst mit Keep-alive (alle 5 s, im GMS-Prozess) und meldet echte Abrisse als disconnected; still ist sie oft nur, weil das
-// JS des Partners kurz steht (Bildschirm aus, Hintergrund) oder Nearby gerade auf WLAN umschaltet.
+// nearby/online: nach einem reinen Herzschlag-Timeout bleibt die Verbindung so lange stehen (timing.SILENT_MS). Nearby hält sie
+// selbst mit Keep-alive (alle 5 s, im GMS-Prozess) und meldet echte Abrisse als disconnected, der DataChannel als close/failed;
+// still ist sie oft nur, weil das JS des Partners kurz steht (Bildschirm aus, Hintergrund) oder Nearby gerade auf WLAN umschaltet.
 const SILENT_MS = 30_000;
 const PART = 8000;      // Zeichen je Teil: auch als UTF-8 mit JSON-Escapes unter den 32 KB von Nearby
 const MAX_PARTS = 1000; // größer wird keine Nachricht (8 Mio. Zeichen)
@@ -125,7 +127,7 @@ function localTransport({ channel, lag, advMs }, cb) {
   };
 }
 
-export function createLink({ kind = pickKind(), plugin, channel = 'ruether-go-link', lag = 0, timing } = {}) {
+export function createLink({ kind = pickKind(), plugin, channel = 'ruether-go-link', lag = 0, timing, room, net } = {}) {
   const T = { RETRY_MS, SILENT_MS, ...TIMING, ...timing };
   const step = Math.max(5, Math.min(T.PING_MS, T.TIMEOUT_MS) / 4);
   const hears = new Map(), parts = new Map();
@@ -137,6 +139,7 @@ export function createLink({ kind = pickKind(), plugin, channel = 'ruether-go-li
   const cb = { found, up: onUp, down: onDown, data: onData, error: onError };
   const tr = kind === 'nearby'
     ? nearbyTransport(plugin ?? globalThis.Capacitor?.Plugins?.NearbyLink, cb)
+    : kind === 'online' ? onlineTransport({ room, net }, cb)
     : localTransport({ channel, lag, advMs: T.ADV_MS }, cb);
   const link = {
     kind, role: null, state: 'idle', peer: null, code: null,
@@ -226,7 +229,7 @@ export function createLink({ kind = pickKind(), plugin, channel = 'ruether-go-li
   }
   function lose(reason) {
     lostAt = now(); lostErr = null;
-    retryAt = reason !== 'timeout' ? Infinity : lostAt + (kind === 'nearby' ? T.SILENT_MS : T.RETRY_MS); // nativ weg: onDown startet sofort neu
+    retryAt = reason !== 'timeout' ? Infinity : lostAt + (kind !== 'local' ? T.SILENT_MS : T.RETRY_MS); // nativ weg: onDown startet sofort neu
     setState('lost');
     emit('lost', { reason });
   }
@@ -292,8 +295,8 @@ export function createLink({ kind = pickKind(), plugin, channel = 'ruether-go-li
     if (starting || (code === failCode && now() - failAt < 2000)) return;
     emit('error', { code, message: typeof message === 'string' ? message : code });
   }
-  // Funkstille (timeout): der Transport pingt weiter, das nächste Lebenszeichen heißt „wieder da“. Bleibt es RETRY_MS (nearby:
-  // SILENT_MS) still, startet die Hülle den Transport neu (§1.2 'lost'); ebenso RETRY_MS nach einem fehlgeschlagenen Neustart,
+  // Funkstille (timeout): der Transport pingt weiter, das nächste Lebenszeichen heißt „wieder da“. Bleibt es RETRY_MS (nearby,
+  // online: SILENT_MS) still, startet die Hülle den Transport neu (§1.2 'lost'); ebenso RETRY_MS nach einem fehlgeschlagenen Neustart,
   // bis RECONNECT_MS um ist.
   function tick() {
     const t = now();

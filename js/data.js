@@ -191,6 +191,8 @@ export const ACHIEVEMENTS = [
   { id: 'reingefallen', name: 'Reingefallen', desc: 'Kaufe den Investment-Code im Shop', icon: 'bag' },
   { id: 'nichtreingefallen', name: 'Nicht reingefallen', desc: 'Besiege Moshe Hillel', icon: 'trophy' },
   { id: 'rabino', name: 'Rabino Empire gestürzt', desc: 'Meistere Moshes Anzeige: Besiege ihn auf Level 5', icon: 'trophy' },
+  // v13 §6: Moshe spielbar (progress.js mosheUnlocked)
+  { id: 'moshe_spielbar', name: 'Mitarbeiter des Monats', desc: 'Räume Rabino Empire HQ dreimal aus, dann arbeitet Moshe für dich.', icon: 'star' },
 ];
 
 export const RARITIES = [
@@ -357,6 +359,12 @@ export const IMMOBILIEN = [
 ];
 
 export const RUETHER_BY_ID = Object.fromEntries(RUETHERS.map(r => [r.id, r]));
+// v13 §1: Quest-Charaktere, die kein Rüther sind (nicht in RUETHERS: kein Dex, kein Spawn, kein Onboarding, nicht in der Box).
+// makeFighter(QUEST_UNITS.moshe, mosheInst(save)) liefert alles, was createQuest braucht; Fähigkeiten über abilities.js unit 'moshe'
+export const QUEST_UNITS = { moshe: { id: 'moshe', name: 'Moshe Hillel', title: 'Rabino Empire', btc: 100, attacks: [] } };
+// Porträt für Rüther und Quest-Charaktere (sprites/<id>.png), null für Unbekannte (Koop: ids kommen auch vom Partner)
+const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k); // nicht 'constructor' und Co. aus dem Prototyp
+export const portraitOf = id => (has(RUETHER_BY_ID, id) || has(QUEST_UNITS, id) ? `sprites/${id}.png` : null);
 export const ARENA_BY_ID = Object.fromEntries([...ARENAS, AD_ARENA].map(a => [a.id, a]));
 
 // v6: Sprüche. Der Humor des Spiels hängt an den echten Leuten: Diese Zeilen erscheinen beim Auftauchen

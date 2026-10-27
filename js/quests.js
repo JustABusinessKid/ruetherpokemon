@@ -1,5 +1,5 @@
 import { CONST, QUESTS, ACHIEVEMENTS, RUETHERS, ARENAS } from './data.js';
-import { dexCount, DEX_TOTAL, QUEST_SATS } from './progress.js';
+import { dexCount, DEX_TOTAL, QUEST_SATS, mosheUnlocked } from './progress.js';
 
 export const dayKey = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -99,6 +99,7 @@ const COND = {
   reingefallen: s => (s.items?.investmentcode || 0) >= 1,
   nichtreingefallen: s => (s.stats.moshe || 0) >= 1,
   rabino: s => !!s.arenaMastered.anzeige,
+  moshe_spielbar: s => mosheUnlocked(s), // v13 §6
 };
 // Prüft alle Erfolge, schaltet neue frei (+Sats), gibt die neuen zurück
 export function checkAchievements(save, now = 1) {

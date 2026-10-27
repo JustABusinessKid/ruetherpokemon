@@ -77,6 +77,7 @@ function theremin() {
 export const sfx = {
   play(name) { if (enabled) try { SFX[name]?.(); } catch { /* kein Audio */ } },
   setEnabled(b) { enabled = !!b; },
+  enabled: () => enabled, // v13: Ton der Videoszene folgt der Sound-Einstellung
   // Touch: pointerdown zählt im Browser noch nicht als Geste (userActivation), erst pointerup; Safari < 16.4 kennt es nicht
   unlock() { touched ||= globalThis.navigator?.userActivation?.hasBeenActive ?? true; try { ac(); } catch { /* kein Audio */ } },
 };

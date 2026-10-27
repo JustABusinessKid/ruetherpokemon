@@ -40,7 +40,9 @@ const SWIPE = 40;
 // Vorlaufzeit eingehender Würfe (lead): beim Host ein Schritt, beim Gast die gemessene Umlaufzeit + ein Schritt. Der Gast sieht
 // die Ladung einen Funkweg zu spät, und sein Wischen braucht noch einen bis zum Host. Messung: Gast schickt alle ECHO_MS
 // { t: 'di', echo: seine Uhr }, der Host gibt im nächsten ds echo: [Stempel, wie lange er ihn gehalten hat] zurück.
-const ECHO_MS = 1000, LEAD = { MIN: 100, MAX: 450, START: 150 };
+// LEAD.MAX = DUEL.LAG_MAX (800): über Internet (Mobilfunk) liegt die Umlaufzeit in Spitzen über 350 ms; der Host schreibt dem Gast
+// rtt + SEND_MS/2 bis LAG_MAX gut (onMessage 'di'), der Vorlauf hier muss dieselbe Spanne abdecken, sonst fliegt das Requisit zu spät.
+const ECHO_MS = 1000, LEAD = { MIN: 100, MAX: 800, START: 150 };
 const KNOWN = new Set(['fast', 'stunnedTap', 'charge', 'cancel', 'dodge', 'special', 'specialDenied', 'poisoned', 'poison', 'stun', 'weaken', 'heal', 'summoned', 'summon', 'switch', 'faint', 'end']);
 const okEvent = e => e && typeof e === 'object' && KNOWN.has(e.type) && (e.side === undefined || e.side === 'a' || e.side === 'b');
 const AT = { me: { x: 'var(--fx-me-x)', y: 'var(--fx-me-y)' }, foe: { x: 'var(--fx-enemy-x)', y: 'var(--fx-enemy-y)' } };

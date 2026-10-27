@@ -679,3 +679,24 @@ export function puddle(g, x, y, t, k = 1) {
   g.fillStyle = PAPER;
   for (let j = 0; j < 4; j++) if ((t / 700 + hash(j, 11)) % 1 < 0.6) g.fillRect(x - w + 4 + Math.floor(hash(j, 12) * (2 * w - 8)), y - 1 + Math.floor(hash(j, 13) * h), 2, 2);
 }
+// ---------- v13: Requisiten für Moshes Fähigkeiten (t = Zeit in ms) ----------
+// Der Investment-Code: dunkelblaues Buch mit Goldrahmen in der Hand der lesenden Wache, Seite blättert
+export function book(g, x, y, t) {
+  x = Math.round(x); y = Math.round(y);
+  g.fillStyle = INK; g.fillRect(x - 6, y - 7, 12, 14);
+  g.fillStyle = '#22305A'; g.fillRect(x - 5, y - 6, 10, 12);
+  g.fillStyle = GOLD; g.fillRect(x - 4, y - 5, 8, 1); g.fillRect(x - 4, y + 4, 8, 1); g.fillRect(x - 4, y - 5, 1, 10); g.fillRect(x + 3, y - 5, 1, 10);
+  g.fillStyle = PAPER; g.fillRect(x + 2 + (Math.floor(t / 600) % 2), y - 4, 2, 8); // blätternde Seite
+}
+// „12 Personen bestellen gerade“: drei Käufer-Silhouetten hintereinander, die vorderste wippt (n = wie viele stehen schon da, 0…1)
+export function queue(g, x, y, t, k = 1) {
+  const n = Math.min(3, Math.ceil(3 * k));
+  for (let j = n - 1; j >= 0; j--) {
+    const bob = j === 0 ? Math.round(Math.abs(Math.sin(t / 420)) * 2) : (Math.floor(t / 700 + j) % 2);
+    const sx = Math.round(x - 9 + j * 9), sy = Math.round(y - bob);
+    g.fillStyle = INK; g.fillRect(sx - 4, sy - 12, 8, 7); g.fillRect(sx - 5, sy - 5, 10, 11); // Kopf und Körper
+    g.fillStyle = ['#3a3f55', '#4f3a3a', '#35503a'][j]; g.fillRect(sx - 4, sy - 4, 8, 9);
+    g.fillStyle = '#d8b38f'; g.fillRect(sx - 3, sy - 11, 6, 5);
+    g.fillStyle = PAPER; g.fillRect(sx - 2, sy - 1, 4, 3); // Bestellzettel in der Hand
+  }
+}

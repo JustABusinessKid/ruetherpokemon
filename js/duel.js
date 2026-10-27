@@ -8,8 +8,10 @@ import { makeFighter } from './battle.js';
 
 export const DUEL = {
   DURATION: 90_000, WARN: 1000, HP_MULT: 2, STEP: 50, SEND_MS: 100, MIN_REWARD_MS: 30_000,
-  // LAG_MAX: Funkzeit-Gutschrift (s.lag) höchstens so viele ms; STUN_SAFE: nach einer Betäubung so lange Schutz vor der nächsten
-  LAG_MAX: 400, STUN_SAFE: 2000,
+  // LAG_MAX: Funkzeit-Gutschrift (s.lag) höchstens so viele ms. 800 statt 400 seit v13 (Zusammen spielen über Internet): Mobilfunk-
+  // Umlaufzeiten liegen in Spitzen über 350 ms, mit 400 hätte der Gast dann ein kürzeres Ausweichfenster. Passt zu LEAD.MAX in
+  // duel-ui.js (Vorlauf des Gasts, gleiche Zahl). STUN_SAFE: nach einer Betäubung so lange Schutz vor der nächsten
+  LAG_MAX: 800, STUN_SAFE: 2000,
   REWARD: { win: { sats: 300, xp: 150 }, lose: { sats: 100, xp: 50 }, draw: { sats: 150, xp: 75 } },
 };
 export const TEAM_MAX = 3;

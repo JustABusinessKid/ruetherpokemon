@@ -46,16 +46,16 @@ test('v12 §3: Buch kaufen, verkaufen (10 Sats, Item weg), erneut kaufen; Erfolg
   assert.equal(s.items.investmentcode, 1);
 });
 
-test('v12 §1/§7: Karte, Badge und Debug-Knopf im Markup; Version 12 überall gleich', () => {
+test('v12 §1/§7: Karte, Badge und Debug-Knopf im Markup; Version 13 überall gleich', () => {
   const html = read('index.html');
   for (const sel of ['id="ad"', 'class="ad-head"', 'class="ad-timer"', 'class="ad-badge', 'class="ad-no"', 'class="ad-buy primary"', 'id="dbg-ad"', 'art/ad-cover.png', 'art/ad-car.png']) assert.ok(html.includes(sel), sel);
   assert.match(html, /Rückgabe bis 18 Uhr/);
   assert.match(html, /4,9\/5 von über 1\.000 Millionären · 2 Geschenke · Anwendbar in ganz Deutschland/);
-  assert.match(read('js/app.js'), /const VERSION = 12;/);
-  assert.match(read('js/screens.js'), /export const VERSION = 'v12';/);
+  assert.match(read('js/app.js'), /const VERSION = 13;/);
+  assert.match(read('js/screens.js'), /export const VERSION = 'v13';/);
   const v = JSON.parse(read('version.json'));
-  assert.equal(v.v, 12);
-  assert.match(v.apk, /app-v12\/RuetherGO\.apk$/);
+  assert.equal(v.v, 13);
+  assert.match(v.apk, /app-v13\/RuetherGO\.apk$/);
   assert.equal(v.news.length, 3);
-  assert.match(read('native/android/app/build.gradle'), /versionCode 12\s+versionName "12"/);
+  assert.match(read('native/android/app/build.gradle'), /versionCode 13\s+versionName "13"/);
 });

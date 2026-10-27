@@ -818,7 +818,7 @@ export const MISSIONS = [
   },
   {
     // v12 §4: Abzock-Shop in Limassol. needsItem: nur mit dem Investment-Code aus dem Shop (die Adresse steht im Impressum);
-    // stealMs: Tresor knacken dauert 6 s; loot: Säcke statt Münzen (Ansicht); texts.video: Untertitel der Videoszene, [0] immer zuerst, dann reihum
+    // stealMs: Tresor knacken dauert 6 s; loot: Säcke statt Münzen (Ansicht); die Videoszene zeigt echte Clips (v13 §3, js/quest/video.js)
     id: 'rabino', name: 'Rabino Empire HQ', place: 'Limassol, Zypern', theme: 'zypern',
     lat: 34.7071, lon: 33.0226, timeMs: 360_000, reinforce: 'berater', needsItem: 'investmentcode', stealMs: 6000, loot: 'q-sack',
     objective: { type: 'steal', min: 3, label: 'Geldsäcke zurückholen' },
@@ -827,14 +827,6 @@ export const MISSIONS = [
     texts: {
       success: 'Die Säcke sind an Bord. Rabino Empire meldet Lieferverzug: Versand aus Zypern dauert.',
       fail: 'Die Säcke bleiben in Limassol. Moshe dreht ein Video darüber.',
-      video: [
-        'Diese 3 Trcks verschweigen dir die Banken',
-        'Ich habe mit 3.000 Euro angefangen. Heute besitze ich 14 Wohnungen in Marxloh.',
-        'Dieser Trick ist in Deutschland völlig legal, nur kennt ihn keiner.',
-        'Mein Großvater sagte immer: Immobilien lügen nicht. Er hatte keine.',
-        'Schreib CODE in die Kommentare.',
-        'Nur noch heute. Morgen auch, aber nur noch heute.',
-      ],
     },
     layouts: [
       {

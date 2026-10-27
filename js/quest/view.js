@@ -23,14 +23,15 @@ import { createQuest, tick, canExtract, visibleCone, abilitiesFor, abilityTarget
 import { MISSION_BY_ID, MELEE_HINT } from './missions.js';
 import { COOP, cleanCmd, cleanSummary } from './coop.js';
 import { RACE } from './race.js';
+import { pickVideo, videoSrc, mountVideo, warmVideo, SKIP_MS, SAFETY_MS } from './video.js';
 import { makeFighter } from '../battle.js';
-import { RUETHER_BY_ID } from '../data.js';
+import { RUETHER_BY_ID, QUEST_UNITS, portraitOf } from '../data.js';
 import { QUEST_SATS } from '../progress.js';
 import { sfx, haptic } from '../audio.js';
 import { banner } from '../fx.js';
 import { popup, esc } from '../ui.js';
 import { TILE, INK, PAPER, GOLD, THEMES, BLUE_FIRE, loadImg, img, variant, paintMap, paintMini, doorHoriz, drawDoor, faceFrame, bitmap, bubble, dither, hash, flames, smoke, mug, fountain, swatter,
-  zigzag, phone, eye, suit, glitchFace, wifi, scold, puddle, fan } from './draw.js';
+  zigzag, phone, eye, suit, glitchFace, wifi, scold, puddle, fan, book, queue } from './draw.js';
 
 const STEP = 50, MAX_CATCHUP = 1500;
 const ZOOMS = [0.6, 0.8, 1, 1.25, 1.6, 2], ZOOM_MIN = 0.5, ZOOM_MAX = 2.4;
@@ -39,7 +40,7 @@ const DOUBLE_MS = 350, DOUBLE_PX = 30, DRAG_PX = 10, SPREAD = 0.9; // SPREAD: Mi
 const RING_UP = 30; // Kreismenü: Abstand der oberen Plätze über der Rüther-Mitte (Gesicht bis Zoom 2 frei)
 const RING_W = [78, 100]; // Kreismenü: Abstand der Seitenplätze, weiter raus, wenn ein Teamkamerad drunter läge
 const SUS_BAR = new Set(['patrol', 'suspicious', 'investigate', 'distracted']); // Misstrauens-Balken nur bei eingeschaltetem Kegel
-const face = id => `sprites/${RUETHER_BY_ID[id] ? id : 'unknown'}.png`; // Koop: ids kommen auch vom Host (Spec §0), nur bekannte
+const face = id => portraitOf(id) || 'sprites/unknown.png'; // Koop: ids kommen auch vom Host (Spec §0), nur bekannte (Rüther und Moshe, v13)
 const fxArt = n => `art/fx-${n}.png`;
 const short = id => id[0].toUpperCase() + id.slice(1); // „Onkel Micha“ → Micha
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
@@ -48,18 +49,16 @@ const mmss = ms => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math
 const GOAL_ART = { steal: 'art/q-coin.png', sabotage: 'art/q-saucer.png', fetch: 'art/q-ps3.png', unplug: 'art/q-plug.png', valve: 'art/q-valve.png', ignite: 'art/q-tree.png' };
 const FACE_LEFT = new Set(['dackel']); // Sprite schaut nach links: Spiegeln umgekehrt
 const KIESER_LINES = [['bernd', 'Erst Kieser, dann Kaffee!'], ['viktor', 'Ich wollte doch nur nicht duschen …'], ['bernd', 'Danach bin ich so breit, ich pass durch keine Tür mehr!']];
-// v12 §4: Untertitel der Videoszene (Fallback zu mission.texts.video): [0] immer zuerst, danach reihum einer aus dem Rest
-const VIDEO_LINES = ['Diese 3 Trcks verschweigen dir die Banken', 'Ich habe mit 3.000 Euro angefangen. Heute besitze ich 14 Wohnungen in Marxloh.', 'Schreib CODE in die Kommentare.'];
-const TYPE_MS = 45; // Untertitel tippen sich ein, absichtlich nicht im Takt des Munds (CSS)
 const MINI_W = 40; // Minikarte ab mehr als 40 Kacheln Breite
 const fmt = n => (Number(n) || 0).toLocaleString('de-DE'); // landet in innerHTML: nie fremder Text (Koop-Events)
 const isObj = x => !!x && typeof x === 'object' && !Array.isArray(x);
 const whose = n => (/[sßxz]$/i.test(n) ? `${n}’` : `${n}s`); // „Papas Rüther“, „Klaus’ Rüther“
-const THROWN = { can: fxArt('beer-can'), mms: fxArt('mms'), controller: fxArt('controller'), phone: 'art/q-phone.png' };
+const THROWN = { can: fxArt('beer-can'), mms: fxArt('mms'), controller: fxArt('controller'), phone: 'art/q-phone.png', queue: 'art/ab-schlange.png' };
 const MMS = ['#B03B2B', '#3F8EF5', '#5BB55A', '#F2C94C', '#E0A52B', '#7A4A2A'];
 const RED = '#E0634C', GREEN = '#5BB55A', TEAL = '#3FC1B0', AMBER = '#E0A52B', PINK = '#F29BC8', LILAC = '#C77DFF', SKY = '#9fd0ea';
 const NOISE = { can: { c: AMBER, t: 'SCHEPPER!' }, alarmanlage: { c: RED, t: 'PIEP PIEP PIEP' }, tuer: { c: PAPER, t: 'KNARZ!' }, familie: { c: GOLD, t: 'RÜTHER!' } };
-const STUN_TXT = { controller: 'KLONK!', hack: 'Firmware 0.0.1', slip: 'RUTSCH!', lizenz: 'ERROR 0x70!' }; // Blase sagt den Rest (WLAN: Blase und blinkendes „kein Netz“)
+const STUN_TXT = { controller: 'KLONK!', hack: 'Firmware 0.0.1', slip: 'RUTSCH!', lizenz: 'ERROR 0x70!', liest: 'liest den Investment-Code', finger: 'verwirrt' }; // Blase sagt den Rest (WLAN: Blase und blinkendes „kein Netz“)
+const VIDEO_SAYS = ['Ist das echt?', 'Warum blinzelt er nie?', 'Wo ist der Sportwagen?', 'Ich schreib mal CODE.']; // v13: Wachen vor Moshes neuem Video
 // v10: Zielmodus-Hinweise je Schritt (Wahl 0 bzw. 1) und wiederkehrende Sprüche (Schimpfen, Streiten)
 const HINT = {
   door: ['Verschlossene Tür antippen'], point: ['Ziel wählen: Punkt antippen'], enemy: ['Ziel wählen: Gegner antippen'],
@@ -195,6 +194,7 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
     }
   }
   const lootArt = () => `art/${st.mission.loot || 'q-coin'}.png`; // v12: Rabino trägt Säcke statt Münzen
+  const lootName = n => (st.mission.loot === 'q-sack' ? (n === 1 ? 'Sack' : 'Säcke') : n === 1 ? 'Münze' : 'Münzen'); // v13: Zinseszins-Text
   const coinsFly = (x0, y0, x1, y1, n, ms = 450, src = lootArt()) => { for (let k = 0; k < n; k++) throwArc(src, x0, y0, x1, y1, ms, { size: 12, spin: 0, h: 18, delay: k * 90 }); };
   function msg(t, ms = 2200) {
     if (!t) return;
@@ -538,7 +538,7 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
       b.classList.toggle('on', sel.includes(u.i));
       b.classList.toggle('down', u.down);
       b.classList.toggle('busy', !!u.busy);
-      const c = b.querySelector('.q-carry'), t = u.item ? 'PS3' : u.carry ? `${u.carry}` : '';
+      const c = b.querySelector('.q-carry'), t = u.item ? 'PS3' : u.carry ? `${u.carry}${u.interest ? `+${u.interest}` : ''}` : ''; // v13: „2+1“ = Zinseszins
       setText(c, t);
       c.classList.toggle('hidden', !t);
       c.classList.toggle('ps3', !!u.item);
@@ -682,7 +682,7 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
           break;
         case 'deliver':
           // Texte über der Untertasse, nicht auf den Gesichtern der oberen Plattform-Reihe
-          if (e.coins) { coinsFly(e.x, e.y - 0.5, pad.x, pad.y, e.coins, 500); text({ x: pad.x, y: pad.y0 - 1.2 }, `+${e.coins}`, GOLD, 20, 1300); sfx.play('coin'); }
+          if (e.coins) { coinsFly(e.x, e.y - 0.5, pad.x, pad.y, e.coins, 500); text({ x: pad.x, y: pad.y0 - 1.2 }, `+${e.coins}${e.interest ? ` (Zins +${e.interest})` : ''}`, GOLD, 20, 1300); sfx.play('coin'); }
           if (e.item) { text({ x: pad.x, y: pad.y0 - 1.2 }, 'PS3 an Bord!', GOLD, 18, 1500); sfx.play('win'); }
           break;
         case 'objective':
@@ -849,6 +849,19 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
         break;
       case 'alarmDrop': msg(`Der Kurs hat sich erholt: alle tiefenentspannt, Alarm −${Math.round(e.drop * 100)} %.`, 2800); sfx.play('quest'); break;
       case 'heard': popAt.set(en, now()); say({ e: e.enemy }, e.say); break;
+      // ---------- v13: Moshe ----------
+      case 'queue': // „12 Personen bestellen gerade“ steht
+        effAt.set(e.effect, now());
+        for (let k = 0; k < 2; k++) ring(e.x, e.y, e.r, GOLD, 900, k * 260);
+        text({ x: e.x, y: e.y - 1.3 }, e.block ? 'SCHLANGE: KEIN DURCHKOMMEN' : '12 PERSONEN VOR IHNEN', GOLD, 15, 1500);
+        sfx.play('coin');
+        break;
+      case 'zins': // Fälligkeit: ein Sack mehr an Bord, der nächste Zins läuft oder nicht
+        pop(lootArt(), e.x, e.y - 1.1, { size: 22, ms: 1100, kind: 'rise' });
+        text({ u: e.unit }, `+${e.amount} ${lootName(e.amount)} · Zinseszins`, GOLD, 15, 1700);
+        if (e.left) say({ u: e.unit }, 'Und noch mal. Der Markt läuft.', 2000); else say({ u: e.unit }, 'Verdoppelt. Ohne Arbeit, ohne Risiko, steht hier.', 2000);
+        sfx.play('coin');
+        break;
     }
   }
   function effectEnd(e) {
@@ -858,6 +871,7 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
     else if (e.kind === 'firewall') burst(e.x, e.y, 12, { kind: 'spark', colors: [TEAL, '#BFF5EC'], speed: 60, up: 30, grav: 40, ms: 700, size: 1.3 });
     else if (e.kind === 'decoy') { burst(e.x, e.y, 12, { colors: [TEAL, PINK, PAPER], speed: 50, up: 20, grav: 0, ms: 600, size: 3 }); text({ x: e.x, y: e.y - 0.8 }, 'verpufft', PINK, 13); }
     else if (e.kind === 'sale' || e.kind === 'horde') burst(e.x, e.y, 10, { colors: e.kind === 'sale' ? ['#8a8f94', PAPER] : [RED, GOLD, TEAL, '#3F8EF5'], speed: 50, up: 40, grav: 60, ms: 700, size: 3 });
+    else if (e.kind === 'schlange') { burst(e.x, e.y, 10, { colors: ['#3a3f55', PAPER, GOLD], speed: 45, up: 40, grav: 60, ms: 700, size: 3 }); text({ x: e.x, y: e.y - 0.8 }, 'ausverkauft', PAPER, 13); }
   }
 
   function ability(e, u) {
@@ -981,6 +995,32 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
         text({ u: e.unit }, `Feierabend: noch ${e.charges}×`, PAPER, 12, 1600);
         sfx.play('quest');
         break;
+      // ---------- v13: Moshe (Icons art/ab-<id>.png) ----------
+      case 'buch': // das Buch wandert von Moshe in die Hand der Wache; Stufe 3: die zweite kriegt ein Exemplar hinterher
+        throwArc('art/ab-buch.png', x, y - 0.3, e.tx, e.ty - 0.3, 320, { size: 20, spin: 0, h: 8 });
+        text({ e: e.enemy }, 'Bestseller', GOLD, 14, 1500); // das Label „4,9 Sterne“ blinkt schon am Leser (unten), nicht doppelt
+        if (e.second >= 0) { const s = st.enemies[e.second]; throwArc('art/ab-buch.png', e.tx, e.ty - 0.3, s.x, s.y - 0.3, 420, { size: 20, spin: 0, h: 8, delay: 500 }); text({ e: e.second }, 'liest mit', GOLD, 13, 1500); }
+        sfx.play('tap');
+        break;
+      case 'neuesvideo': // Handy hoch: Ringe um Moshe, jede Wache kriegt ein Play-Dreieck
+        for (let k = 0; k < 2; k++) ring(x, y, e.r, RED, 1100, k * 300);
+        pop('art/ab-neuesvideo.png', x, y - 1.2, { size: 26, ms: 1300, kind: 'rise' });
+        for (const en of ens(e.enemies)) text({ e: en.i }, 'Play', RED, 15, 1500);
+        if (e.finger) text({ u: e.unit }, 'sechs Finger', PINK, 12, 1600);
+        sfx.play('special');
+        break;
+      case 'zinseszins':
+        pop('art/ab-zinseszins.png', x, y - 1.2, { size: 26, ms: 1300, kind: 'rise' });
+        text({ u: e.unit }, `Zins in ${Math.round(e.ms / 1000)} s${e.times > 1 ? ' ×2' : ''}`, GOLD, 13, 1800);
+        sfx.play('coin');
+        break;
+      case 'geschenk': // Prospekt fliegt zur Wache, Konfetti; Stufe 3: die Familie kriegt auch einen
+        throwArc('art/ab-geschenk.png', x, y - 0.3, e.tx, e.ty - 0.4, Math.min(600, e.ms), { size: 22, spin: Math.PI });
+        burst(e.tx, e.ty - 0.4, 12, { colors: [GOLD, RED, TEAL, PAPER], speed: 60, up: 50, grav: 120, ms: 800, size: 3 });
+        text({ e: e.enemy }, 'GEWONNEN!', GOLD, 16, 1500);
+        if (e.second >= 0) text({ e: e.second }, 'kommt mit', GOLD, 13, 1500);
+        sfx.play('win');
+        break;
     }
   }
 
@@ -1026,7 +1066,7 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
     cut.done();
   }
   function closeCut() { cut = null; cutEl.className = 'q-cut hidden'; cutEl.innerHTML = ''; }
-  cutEl.addEventListener('click', () => { if (cut && performance.now() - cut.at > 600) endCut(); });
+  cutEl.addEventListener('click', () => { if (!cut) return; cut.video?.tap(); if (performance.now() - cut.at > (cut.lock ?? 600)) endCut(); }); // Video: erst Ton an, Überspringen ab cut.lock
   const frameFace = (u, cls = '', style = '') => `<span class="q-cut-face r-${esc(u.rarity)} ${cls}" style="${style}"><img src="${face(u.id)}" alt="${esc(short(u.id))}"><i></i></span>`;
 
   // Stefan zieht den Rüther am Kragen in den Kraftraum; danach Schnitt zurück zur Plattform (resume)
@@ -1047,32 +1087,26 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
     });
   }
 
-  // v12 §4: Moshes neues Video (7 s): Handy-Rahmen über bg-video, Hände in zwei Frames, Mund in anderem Takt als die Untertitel,
-  // einmal sechs Finger (CSS), Untertitel tippen sich ein, Stempel „Video Nr. N“ / „−1.000 Sats“, der erwischte Rüther guckt klein am Rand zu
+  // v13 §3: Moshes neues Video, echt (video.js): Clip Nr. pickVideo(seed, count) im Handy-Rahmen über bg-video, Stempel „Video Nr. N“ / „−1.000 Sats“ ab ~5 s,
+  // der erwischte Rüther guckt klein am Rand zu. Ende durch ended, Fehler (nach 1 s) oder Überspringen ab 20 s (Knopf erscheint dann); Sicherheitsnetz 45 s.
+  // Koop-Gast: spielt lokal, kann nicht überspringen, der nächste unpausierte Zustand des Hosts schließt (onSnapshot)
   function videoScene(e) {
     closeMenu(); endAim(); closeMini();
     const u = st.units[e.unit], n = e.count, cost = videoCost();
-    const lines = st.mission.texts?.video?.length > 1 ? st.mission.texts.video : VIDEO_LINES, pool = lines.slice(1);
-    const subs = [lines[0], pool[(n - 1) % pool.length]];
     sfx.play('rage'); haptic([60, 40, 60]);
-    playCut('video', `<div class="q-cut-scene"><div class="q-cut-phone"></div><i class="q-cut-hand l"></i><i class="q-cut-hand r"></i><i class="q-cut-hand six"></i><i class="q-cut-mouth"></i><p class="q-cut-sub"></p>`
+    playCut('video', `<div class="q-cut-scene"><div class="q-cut-phone"></div>`
       + `<div class="q-cut-viewer">${frameFace(u, 'viewer')}<i class="q-cut-viewphone"></i></div></div>`
-      + `<div class="q-cut-stamp"><b>Video Nr. ${n}</b>${cost ? `<span>−${fmt(cost)} Sats</span>` : ''}</div><span class="q-cut-skip">Tippen zum Überspringen</span>`, 7000, () => {
+      + `<div class="q-cut-stamp"><b>Video Nr. ${n}</b>${cost ? `<span>−${fmt(cost)} Sats</span>` : ''}</div><span class="q-cut-skip hidden">Tippen zum Überspringen</span>`, SAFETY_MS, () => {
       const mine = cut;
+      mine.video.stop(); // .black versteckt nur, der Ton liefe sonst weiter
       cutEl.classList.add('black');
-      if (remote()) return; // Koop-Gast: wie bei Kieser schließt der nächste unpausierte Zustand die Szene
+      if (remote()) return;
       later(() => { send({ type: 'resume' }); later(() => { if (cut === mine) closeCut(); }, 300); }, 240);
     });
-    const sub = cutEl.querySelector('.q-cut-sub'), mine = cut;
-    let k = 0, i = 0;
-    const typeNext = () => {
-      if (cut !== mine || cut.closing) return;
-      const t = subs[k];
-      setText(sub, t.slice(0, ++i));
-      if (i < t.length) later(typeNext, TYPE_MS);
-      else if (++k < subs.length) { i = 0; later(typeNext, 600); }
-    };
-    later(typeNext, 400);
+    const mine = cut;
+    mine.lock = remote() ? Infinity : SKIP_MS; // Klick-Handler: Tippen schließt erst ab 20 s, vorher nur Ton an
+    mine.video = mountVideo(cutEl.querySelector('.q-cut-phone'), videoSrc(pickVideo(st.setup.seed, n)), { sound: sfx.enabled(), later, onEnd: () => { if (cut === mine) endCut(); } });
+    if (!remote()) later(() => { if (cut === mine && !mine.closing) cutEl.querySelector('.q-cut-skip')?.classList.remove('hidden'); }, SKIP_MS);
   }
 
   // Ranger zückt den Block, das Team schaut betreten, Stempel mit der Strafe; danach Abspann (onEnd)
@@ -1319,7 +1353,27 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
       else if (f.kind === 'phone') drawPhoneFx(f, kout);
       else if (f.kind === 'sale') drawSign(f, kin, kout);
       else if (f.kind === 'firewall') drawFirewall(f, kin, kout);
+      else if (f.kind === 'schlange') drawQueue(f, kout);
+      else if (f.kind === 'wall') drawRope(f, kout);
     }
+  }
+  // v13: „12 Personen bestellen gerade“: drei Käufer in Reihe, Wirkkreis, Schild; Stufe 3 dazu ein Absperrband (wall) um die 3×3
+  function drawQueue(f, kout) {
+    const x = f.x * TILE, y = f.y * TILE, k = clamp(age(effAt.get(f.id) ?? f.until - f.ms) / 500);
+    g.globalAlpha = 0.35 * kout; g.setLineDash([3, 5]); g.strokeStyle = GOLD; g.lineWidth = 2;
+    g.beginPath(); g.arc(x, y, f.r * TILE, 0, 2 * Math.PI); g.stroke(); g.setLineDash([]);
+    g.globalAlpha = kout;
+    shadow(x, y + 10, 30);
+    queue(g, x, y + 4, gt, k);
+    g.globalAlpha = 1;
+    if (k >= 1 && (gt / 1600) % 1 < 0.7) label(x, y - 24, '12 Personen vor Ihnen', GOLD, 11);
+  }
+  function drawRope(f, kout) {
+    const r = rectPx(f);
+    g.globalAlpha = 0.8 * kout; g.setLineDash([6, 4]); g.lineDashOffset = -gt / 60;
+    g.strokeStyle = INK; g.lineWidth = 5; g.strokeRect(r.x + 3, r.y + 3, r.w - 6, r.h - 6);
+    g.strokeStyle = RED; g.lineWidth = 3; g.strokeRect(r.x + 3, r.y + 3, r.w - 6, r.h - 6);
+    g.setLineDash([]); g.globalAlpha = 1;
   }
   const rectPx = f => ({ x: f.x0 * TILE, y: f.y0 * TILE, w: (f.x1 - f.x0 + 1) * TILE, h: (f.y1 - f.y0 + 1) * TILE });
   // WLAN-Störung: dunkle Zone mit Rauschen, Wellen aus der Mitte, gestörtes WLAN-Symbol; Funkloch beschriftet
@@ -1519,7 +1573,7 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
     corners(qx, qy, true);
   }
 
-  const NO_STARS = new Set(['gas', 'argue', 'hack', 'wlan', 'lizenz']);
+  const NO_STARS = new Set(['gas', 'argue', 'hack', 'wlan', 'lizenz', 'liest']);
   function drawEnemies(inView) {
     for (const e of st.enemies) {
       if (e.gone) continue; // gekündigt: für die Mission weg
@@ -1585,7 +1639,9 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
       if (stun === 'argue') label(x, head, '…', PAPER, 18);
       if (stun === 'gas' && (gt / 1300 + e.i * 0.3) % 1 < 0.35) label(x + 10, head, '*hust*', '#9BE36B', 12);
       if (e.state === 'eating') { g.fillStyle = '#7FD36B'; for (let k = 0; k < 5; k++) g.fillRect(Math.round(x - 8 + k * 4), Math.round(head + Math.sin(rt / 120 + k) * 2), 3, 2); } // Pixel-Übelkeit
-      if (e.state === 'bribed') { const sx = Math.abs(Math.cos(rt / 160)); const c = img('art/q-coin.png'); if (c) g.drawImage(c, x - 6 * sx, head - 8, 12 * sx, 12); }
+      if (e.state === 'bribed' && e.reason === 'liest') { book(g, x + (left ? -9 : 9), y - 6, gt); if (blink(e, 1900, 0.4)) label(x, head - 2, '4,9 Sterne', GOLD, 11); } // v13: liest den Investment-Code
+      else if (e.state === 'bribed') { const sx = Math.abs(Math.cos(rt / 160)); const c = img('art/q-coin.png'); if (c) g.drawImage(c, x - 6 * sx, head - 8, 12 * sx, 12); }
+      if (stun === 'finger') label(x, head, '6?', PINK, 16); // v13: Sein neues Video Stufe 3
       if (task) taskFx(e, task, x, y, head, left, bounce);
       moodFx(e, x, y, head);
       if (e.state === 'alert') label(x, head - 2, '!', RED, Math.round(22 * bounce));
@@ -1634,6 +1690,17 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
       case 'horde': if (blink(e, 1000, 0.5)) label(x, head - 2, 'Hilfe!', AMBER, 12); break;
       case 'raubkopie': label(x, head - 2, '!', AMBER, Math.round(20 * bounce)); break;
       case 'feierabend': sprite(img('art/q-box.png'), hand, y + 1, 18); if (blink(e, 1600, 0.4)) label(x, head - 2, 'Tschüss!', PAPER, 12); break;
+      // ---------- v13: Moshe ----------
+      case 'neuesvideo': { // Handy mit Play-Dreieck in der Hand, Blick auf Moshe
+        phone(g, hand, y - 6, true, gt);
+        const px = Math.round(hand) - 1, py = Math.round(y - 6);
+        g.fillStyle = INK; g.beginPath(); g.moveTo(px - 2, py - 4); g.lineTo(px + 4, py); g.lineTo(px - 2, py + 4); g.closePath(); g.fill();
+        g.fillStyle = Math.floor(gt / 400) % 2 ? RED : PAPER; g.beginPath(); g.moveTo(px - 1, py - 2); g.lineTo(px + 2, py); g.lineTo(px - 1, py + 2); g.closePath(); g.fill();
+        if (blink(e, 1700, 0.4)) label(x, head - 2, own || VIDEO_SAYS[(Math.floor(gt / 1700) + e.i) % VIDEO_SAYS.length], own ? GOLD : PAPER, 11);
+        break;
+      }
+      case 'schlange': if (!stay) label(x, head - 2, '!', GOLD, 18); else if (blink(e, 1300, 0.45)) label(x, head - 2, own || 'Hinten anstellen!', GOLD, 11); break;
+      case 'geschenk': sprite(img('art/ab-geschenk.png'), hand, y - 12, 16); if (!stay && k.to) signpost(x, y, { x: k.to.x + 0.5, y: k.to.y + 0.5 }); else if (blink(e, 1500, 0.4)) label(x, head - 2, own || 'Limassol!', GOLD, 11); break;
     }
   }
   // Nachwirkungen: verheult, gereizt, brav, Spitzel-Auge, aufgedeckt
@@ -1718,7 +1785,13 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
         for (let k2 = 0; k2 < 3; k2++) { const a = rt / 300 + k2 * 2.09; bitmap(g, 'star', x + Math.cos(a) * 12, y - 18 + Math.sin(a) * 3, 0.8, GOLD); }
       }
       if (u.busy) bar(x, top - 8, 34, u.busy.t / u.busy.ms, u.busy.kind === 'revive' ? TEAL : GOLD, 5); // Klau-/Sabotage-Fortschritt
-      for (let k = 0; k < u.carry; k++) sprite(img(lootArt()), x - 6 + k * 12, top - 6 - (u.busy ? 10 : 0) - Math.abs(Math.sin(rt / 180 + k * 1.3)) * 4, 12);
+      const loot = u.carry + (u.interest || 0); // v13: Zinseszins-Säcke mit Goldstern dabei
+      for (let k = 0; k < loot; k++) {
+        const lx = x - 6 * Math.min(loot - 1, 2) + k * 12, ly = top - 6 - (u.busy ? 10 : 0) - Math.abs(Math.sin(rt / 180 + k * 1.3)) * 4;
+        sprite(img(lootArt()), lx, ly, 12);
+        if (k >= u.carry) bitmap(g, 'star', lx + 5, ly - 5, 0.8, GOLD);
+      }
+      if (u.zins && !u.down) label(x, top - 22, `Zins ${Math.ceil(Math.max(0, u.zins.at - st.time) / 1000)} s`, GOLD, 11);
       if (u.item) { g.fillStyle = INK; g.fillRect(x - 11, top - 23, 22, 20); g.fillStyle = '#E8D7A8'; g.fillRect(x - 10, top - 22, 20, 18); sprite(img('art/q-ps3.png'), x, top - 13 - Math.abs(Math.sin(rt / 220)) * 2, 18); }
     }
   }
@@ -1891,13 +1964,14 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
   function placeMenu() {
     if (aim) placeAim();
     if (menuFor < 0) return;
-    const p = upos(st.units[menuFor]), s = toScreen(p.x * TILE, p.y * TILE), four = abs[menuFor].length >= 3;
+    const p = upos(st.units[menuFor]), s = toScreen(p.x * TILE, p.y * TILE);
+    const low = Math.max(104, ...ringBox.map(b => b.y + b.h)); // unten: gemessene Unterkante (dreizeiliger Pool-Name wie „Premium-Geschenk: Immobilien“)
     // kein echtes Gesicht (Teamkameraden, auch das eigene am Rand) unter Symbolen oder Namen (§0): sonst die Seitenplätze
     // weiter raus bzw. den Ring etwas runter oder hoch; passt nichts, bleibt er normal
     const r = 15 * zoom, fs = st.units.map(o => { const q = upos(o), c = toScreen(q.x * TILE, q.y * TILE); return { x: c.x - r, y: c.y - r, w: 2 * r, h: 2 * r }; });
     let pick = null;
     for (const W of RING_W) for (const dy of [0, 40, -40, 80]) {
-      const x = clamp(s.x, W + 52, vw - W - 52), y = clamp(s.y + dy, RING_UP + 106, vh - (four ? 124 : 104)); // oben: Symbol, Punkte, zweizeiliger Name
+      const x = clamp(s.x, W + 52, vw - W - 52), y = clamp(s.y + dy, RING_UP + 106, vh - low); // oben: Symbol, Punkte, zweizeiliger Name
       const hit = ringBox.some(b => { const bx = x + b.x + b.sd * (W - RING_W[0]), by = y + b.y; return fs.some(f => bx < f.x + f.w && bx + b.w > f.x && by < f.y + f.h && by + b.h > f.y); });
       pick ||= { W, x, y };
       if (!hit) { pick = { W, x, y }; break; }
@@ -1971,9 +2045,15 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
   }
   // Gast: Der Host schickt qs alle 200 ms, auch in der Pause. Steht die Verbindung, aber es kommt nichts mehr (Host hat in einer
   // Funkstille beendet und den Screen verlassen), endet die Quest wie bei 'disconnected'. Vor dem ersten qs lädt der Host evtl. noch.
+  let watchedAt = 0;
   function watchHost() {
     if (!coop || coop.alone || coop.gone || ending || st.over || coop.link.state !== 'connected') return; // gone: away (Timer gedrosselt)
-    if (performance.now() - coop.qsAt > (coop.gotQs ? COOP.SILENT_MS : COOP.FIRST_MS)) partnerLeft();
+    const now = performance.now();
+    // v13: War dieser Tab selbst eingefroren (Debugger, Hintergrund ohne visibilitychange), zählt die Stille erst ab jetzt;
+    // sonst bricht der Gast die Quest im ersten Frame nach dem Auftauen ab, bevor der Link lost/again melden kann.
+    if (watchedAt && now - watchedAt > COOP.SILENT_MS) coop.qsAt = now;
+    watchedAt = now;
+    if (now - coop.qsAt > (coop.gotQs ? COOP.SILENT_MS : COOP.FIRST_MS)) partnerLeft();
   }
   function onMsg(m) {
     if (!coop || !st || !isObj(m)) return;
@@ -2038,8 +2118,9 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
     el.classList.toggle('coop', !!coop);
     // Koop: Picks des Partners sind Daten von außen; unbekannte Rüther fallen raus
     let squad = (fighters?.length ? fighters : team || []).map((f, i) => {
-      if (!f || !(f.maxBtc || RUETHER_BY_ID[f.id])) return null;
-      const x = f.maxBtc ? f : makeFighter(RUETHER_BY_ID[f.id], f), lo = loadouts?.[i] ?? f.loadout;
+      const def = f && (RUETHER_BY_ID[f.id] || QUEST_UNITS[f.id]); // v13: Moshe (QUEST_UNITS) spielt mit
+      if (!f || !(f.maxBtc || def)) return null;
+      const x = f.maxBtc ? f : makeFighter(def, f), lo = loadouts?.[i] ?? f.loadout;
       return lo ? { ...x, loadout: lo } : x; // v10: createQuest liest team[i].loadout
     }).filter(Boolean);
     if (m?.solo) { const own = squad.filter(f => f.id === m.solo).sort((a, b) => b.maxBtc - a.maxBtc); if (own.length) squad = own; } // sein stärkstes Exemplar
@@ -2062,6 +2143,7 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
     resize();
     // Cutscene-Kulissen laden nebenbei (groß, erst später gebraucht)
     for (const src of [...(catcher.kieser ? ['art/bg-kieser.png', 'art/boss-bernd.png'] : []), ...(catcher.video ? ['art/bg-video.png'] : []), ...(catcher.fine ? ['art/bg-ranger.png'] : [])]) loadImg(src);
+    if (catcher.video) warmVideo(videoSrc(pickVideo(st.setup.seed, 1))); // v13 §3: erstes Video der Reihenfolge in den Laufzeit-Cache
     await Promise.all([...ART, ...st.units.map(u => face(u.id))].map(loadImg));
     if (run !== seq) return; // inzwischen gestoppt oder neu gestartet
     mapCv = paintMap(st, th);

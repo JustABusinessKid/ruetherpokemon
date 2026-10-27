@@ -365,3 +365,20 @@ test('Funkzeit-Gutschrift: Ladung gegen den Gast kündigt sich lag.b länger an,
   run(s, DUEL.WARN + 100);
   assert.equal(find(tickDuel(s, 50, { a: { special: 0 } }), 'charge').ms, DUEL.WARN + DUEL.LAG_MAX);
 });
+
+test('Funkzeit-Gutschrift über Internet (v13): 700 ms Umlaufzeit voll, 900 ms auf 800 gedeckelt', () => {
+  // der Host setzt s.lag.b = min(LAG_MAX, rtt + SEND_MS/2) (duel-ui.js, 'di'); 700 ms Mobilfunk-RTT muss noch ganz hineinpassen
+  assert.equal(DUEL.LAG_MAX, 800);
+  const credit = rtt => Math.min(DUEL.LAG_MAX, rtt + DUEL.SEND_MS / 2);
+  assert.equal(credit(700), 750);
+  assert.equal(credit(900), 800);
+  const s = D(['christian'], ['viktor']);
+  s.lag.b = 700; s.a.team[0].energy = 100;
+  assert.equal(find(tickDuel(s, 50, { a: { special: 0 } }), 'charge').ms, DUEL.WARN + 700);
+  assert.ok(!has(run(s, DUEL.WARN + 600), 'special'), 'bei WARN + 650 ms noch unterwegs');
+  assert.ok(has(tickDuel(s, 50, { b: { dodge: true } }), 'dodge', 'b'), 'Ausweichen bei WARN + 700 ms zählt noch');
+  assert.equal(find(run(s, 100), 'special').dodged, true);
+  s.lag.b = 900; s.a.team[0].energy = 100;
+  run(s, DUEL.WARN + 100);
+  assert.equal(find(tickDuel(s, 50, { a: { special: 0 } }), 'charge').ms, DUEL.WARN + 800);
+});

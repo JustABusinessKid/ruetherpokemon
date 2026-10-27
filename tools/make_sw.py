@@ -15,7 +15,7 @@ version = h.hexdigest()[:12]
 files = ',\n  '.join(f"'{f}'" for f in FILES)
 (ROOT / 'sw.js').write_text(f"""// Service Worker: Rüther GO läuft komplett offline (auch als installierte App). Erzeugt von tools/make_sw.py – nicht von Hand ändern.
 const VERSION = '{version}';
-const APP = `app-${{VERSION}}`, FONTS = 'fonts-1', TILES = 'tiles-1', TILE_MAX = 3000;
+const APP = `app-${{VERSION}}`, FONTS = 'fonts-1', TILES = 'tiles-1', VIDS = 'ruether-vids', TILE_MAX = 3000;
 const PRECACHE = [
   {files},
 ];
@@ -54,6 +54,11 @@ self.addEventListener('fetch', e => {{
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
+  if (url.origin === location.origin && url.pathname.includes('/vids/')) {{ // v13 §3: Moshes Videos (16 MB) nicht vorab, sondern beim ersten Abspielen in einen
+    // eigenen Cache, der Releases überlebt; Range-Anfragen bekommen die volle 200-Antwort (reicht Chrome/Android), darum ohne Request-Header holen
+    e.respondWith(caches.open(VIDS).then(async c => (await c.match(url.pathname)) || fetch(url.pathname).then(r => {{ if (r.ok) c.put(url.pathname, r.clone()).catch(() => {{}}); return r; }}).catch(() => Response.error())));
+    return;
+  }}
   if (url.origin === location.origin) {{ // Spieldateien: erst Cache, dann Netz; Seitenaufrufe (auch ?debug=1) bekommen index.html
     e.respondWith((async () => {{
       const c = await caches.open(APP);

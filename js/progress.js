@@ -151,6 +151,14 @@ export const QUEST_SATS = {
 };
 const QUEST_FAIL = 0.1;
 const nat = n => (Number.isFinite(+n) ? Math.max(0, Math.floor(+n)) : 0);
+// v13 §1: Moshe als Quest-Charakter, ohne eigenes Spielstand-Feld: frei ab MOSHE_WINS Siegen in Rabino Empire HQ (questResult zählt
+// wins bei jedem Erfolg), Level = Siege (max LEVEL_MAX), Seltenheit ab 6/10/15 Siegen. uid 'moshe' darf in save.team stehen.
+export const MOSHE_WINS = 3;
+export const mosheUnlocked = save => nat(save?.questLog?.rabino?.wins) >= MOSHE_WINS;
+export const mosheInst = save => {
+  const w = nat(save?.questLog?.rabino?.wins);
+  return { uid: 'moshe', id: 'moshe', rarity: w >= 15 ? 'legendaer' : w >= 10 ? 'episch' : w >= 6 ? 'selten' : 'normal', level: Math.min(CONST.LEVEL_MAX, Math.max(1, w)) };
+};
 // result 'success' | 'fail' | 'abort' (Aufgeben zählt wie Misserfolg: 10 % der Sats und XP, kein Abschluss). Trostgeld und
 // Trost-XP nur mit Fortschritt (score > 0): seit die Quest die Haunebu nicht verbraucht, wäre „Los!“ + Aufgeben sonst gratis Geld.
 // extra.kieser: Kieser-Trainings dieser Runde, extra.fine: Strafe (Ranger hat erwischt; dann kein Trostgeld), nie unter 0 Sats.
@@ -194,6 +202,7 @@ export function abilityLevel(save, rid, aid) {
   return isFixed(rid, aid) ? Math.max(1, lv) : isPool(rid, aid) ? lv : 0;
 }
 export function buyAbility(save, rid, aid) {
+  if (rid === 'moshe' && !mosheUnlocked(save)) return { ok: false, reason: 'gesperrt' }; // v13: erst ab MOSHE_WINS Siegen
   if (!isPool(rid, aid)) return { ok: false, reason: 'pool' };
   if (abilityLevel(save, rid, aid)) return { ok: false, reason: 'besitz' };
   if (save.sats < CONST.ABILITY_BUY) return { ok: false, reason: 'sats' };
@@ -204,6 +213,7 @@ export function buyAbility(save, rid, aid) {
   return { ok: true, cost: CONST.ABILITY_BUY, level: 1 };
 }
 export function upgradeAbility(save, rid, aid) {
+  if (rid === 'moshe' && !mosheUnlocked(save)) return { ok: false, reason: 'gesperrt' };
   const lv = abilityLevel(save, rid, aid);
   if (!lv) return { ok: false, reason: 'fehlt' };
   const cost = CONST.ABILITY_UP[lv + 1];
@@ -394,7 +404,7 @@ function upgradeToV3({ flugscheibe, ...s }) {
   const profile = obj(s.profile), quests = obj(s.quests), streak = obj(s.streak);
   return {
     ...empty, ...s, version: 3, box, nextUid,
-    team: [...new Set(Array.isArray(s.team) ? s.team : [])].filter(uid => uids.has(uid)).slice(0, CONST.TEAM_SIZE),
+    team: [...new Set(Array.isArray(s.team) ? s.team : [])].filter(uid => uids.has(uid) || (uid === 'moshe' && mosheUnlocked(s))).slice(0, CONST.TEAM_SIZE), // v13: Moshe steht nicht in der Box
     sats: nat(s.sats), xp: nat(s.xp), trainerLevel: Math.max(1, nat(s.trainerLevel)), summonPending: nat(s.summonPending),
     dex: Object.fromEntries(Object.keys(obj(s.dex)).filter(k => { const [id, r] = k.split(':'); return own(RUETHER_BY_ID, id) && own(RARITY_BY_ID, r); }).map(k => [k, true])),
     arenaLevels: perArena(s.arenaLevels, v => Math.min(CONST.ARENA_LEVELS, Math.max(1, nat(v)))),

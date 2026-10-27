@@ -248,3 +248,7 @@ div.mp-mode:not(.on), div.mp-mission:not(.on) { box-shadow: none; border-style: 
 .popup-body .book li { margin: 4px 0; }
 /* Missionsliste: ohne das Buch gesperrt (needsItem) */
 .mission-card .m-lock { color: var(--red); font-weight: 800; }
+/* v13 §1/§6: Moshe-Karte in der Sammlung (kein Exemplar, Siege statt Zähler) und „Siege N/3 · dann arbeitet Moshe für dich“ unter Rabino */
+.rcard.moshe .m-wins { display: block; margin-top: 4px; font-weight: 800; }
+.mission-card .m-moshe { font-weight: 800; }
+.mission-card .m-moshe.on { color: var(--green); }

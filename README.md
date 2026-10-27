@@ -44,13 +44,14 @@ beim Start keinen fremden Server außer den OpenStreetMap-Kacheln.
 - Profil: Trainer-Level und XP, Statistik, Erfolge, Sound/Haptik, Avatar, Spielstand kopieren/einfügen/löschen, Teilen, **Zusammen spielen** (siehe unten).
 - Events: 18 bis 19 Uhr ist Rüther-Stunde (doppelte Spawns, 50 % mehr Sats). Jeden Tag ist ein anderer Rüther dreimal so häufig.
 
-## Zusammen spielen ohne Netz
+## Zusammen spielen ohne Netz oder über Internet
 
-Zwei Handys, kein WLAN, keine mobilen Daten (z. B. im Flugzeug): Die Android-App verbindet sich direkt über Google Nearby
-Connections (Bluetooth, BLE, WLAN-Direct). Ablauf:
+Zwei Wege, dieselbe Lobby (Profil → „Zusammen spielen“, die zwei Knöpfe unter dem Bild): **In der Nähe** ohne Internet (nur Android-App) oder
+**Über Internet** mit Raumcode (Browser, Web-App, iPhone und App). Weg „In der Nähe“: Zwei Handys, kein WLAN, keine mobilen Daten
+(z. B. im Flugzeug), die Android-App verbindet sich direkt über Google Nearby Connections (Bluetooth, BLE, WLAN-Direct). Ablauf:
 
 0. Beide brauchen die Android-App ab v11 (vor dem Flug laden, die APK gibt es nur mit Internet) und öffnen die App, nicht das
-   Web-App-Symbol. Im Browser, als Web-App und auf dem iPhone geht Zusammen spielen nicht; die Lobby zeigt dort den Download.
+   Web-App-Symbol. Im Browser, als Web-App und auf dem iPhone geht „In der Nähe“ nicht; die Lobby zeigt dort den Download.
 1. Beide: Bluetooth einschalten. Das geht auch im Flugmodus (Flugmodus an, dann Bluetooth wieder an). Bis Android 12 muss
    zusätzlich der Standort an sein.
 2. Beide: Profil → „Zusammen spielen“. Einer tippt „Spiel eröffnen“, der andere „Beitreten“. Beim ersten Mal fragt Android nach
@@ -69,10 +70,22 @@ Die Quest-Modi brauchen weder die Haunebu noch freigeschaltete Quests. Bricht di
 Apps verbinden sich 60 Sekunden lang neu. Danach gilt: Duell ohne Wertung, Koop beim Gast abgebrochen (der Gastgeber kann allein
 weiterspielen), Rennen ohne Bonus. Belohnungen werden sofort beim Ende gespeichert. Die Bildschirmsperre bleibt in der Lobby aus.
 
+**Über Internet** (ab v13): Beide brauchen Internet, sonst nichts. Einer wählt „Über Internet“ und tippt „Spiel eröffnen“: Die
+Lobby zeigt einen 6-stelligen Raumcode (groß, dazu „Code teilen“ für Messenger oder Zwischenablage). Der andere tippt den Code ins
+Feld und auf „Beitreten“, dann geht es weiter wie oben (Modus, Team, Bereit, Start); verbunden steht bei beiden „Raum XXXXXX“.
+Jedes „Spiel eröffnen“ macht einen neuen Code, der Code steht nie in einer URL. Verbindung: Signalisierung über ntfy.sh (eigenes
+Topic `ruether-go-rtc-<CODE>`, nur Name und WebRTC-Angebot, nie Spielstand oder Online-Kennung), das Spiel selbst läuft direkt
+zwischen den Geräten (WebRTC-DataChannel, STUN und ein öffentlicher TURN-Server). Im Mobilfunk klappt die Direktverbindung
+manchmal nicht („Gefunden: X. Verbinde …“ bleibt stehen): beide „Abbrechen“, neuer Code, oder ins WLAN. „Kein offenes Spiel mit
+diesem Code“: Code falsch oder der Gastgeber hat noch nicht eröffnet, die Suche läuft weiter. Im Browser trennt ein Tabwechsel oder
+Schließen die Verbindung nach kurzer Zeit (die Seite steht im Hintergrund still); in der App hält nur „In der Nähe“ sie im Hintergrund,
+über Internet ist das in der App noch nicht erprobt. Der Bildschirm bleibt in der Lobby an (Wake Lock).
+
 **Im Browser testen** (ohne Handys): Lokalen Server starten und das Spiel in **zwei Fenstern** (nicht Tabs, ein Hintergrund-Tab
-bremst) desselben Browsers öffnen, `http://localhost:8000/?slot=1` und `http://localhost:8000/?slot=2`. Dann verbinden sie sich über
-BroadcastChannel, jeder Slot hat einen eigenen Spielstand (`ruether-go-1`, `ruether-go-2`). `&lag=150` verzögert jede Nachricht
-um 150 ms wie eine echte Funkverbindung.
+bremst) desselben Browsers öffnen, `http://localhost:8000/?slot=1` und `http://localhost:8000/?slot=2`; jeder Slot hat einen eigenen
+Spielstand (`ruether-go-1`, `ruether-go-2`). Weg „In der Nähe“ verbindet die beiden Fenster über BroadcastChannel (`&lag=150`
+verzögert jede Nachricht um 150 ms wie eine echte Funkverbindung). Weg „Über Internet“ läuft auch lokal echt über ntfy.sh und
+WebRTC: Code aus dem Host-Fenster ins Gast-Fenster tippen (geht auch mit zwei verschiedenen Browsern oder Browser und Handy).
 
 **Android-App bauen:**
 

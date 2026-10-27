@@ -205,8 +205,7 @@ test('v12 §4: Mission rabino: needsItem = Shop-Buch, 2 Karten × 2 Varianten mi
   assert.ok(THEMES.zypern && THEMES.zypern.cover === 'desk' && THEMES.zypern.wall === 'office');
   assert.match(m.intro, /Impressum stand Limassol/);
   assert.match(m.hint, /6 s/);
-  assert.equal(m.texts.video[0], 'Diese 3 Trcks verschweigen dir die Banken');
-  assert.equal(m.texts.video.length, 6);
+  assert.equal(m.texts.video, undefined, 'v13: echte Clips statt Untertitel');
   assert.equal(m.layouts.length, 2);
   assert.deepEqual(m.layouts.map(l => l.id), ['grossraum', 'nacht']);
   for (const l of m.layouts) {

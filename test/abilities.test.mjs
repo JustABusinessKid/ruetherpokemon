@@ -5,14 +5,15 @@ import { createQuest, tick, visibleCone, abilitiesFor, abilityTargets, ENEMY_TYP
 import { ABILITIES, POOLS, FIXED, params } from '../js/quest/abilities.js';
 import { MISSION_BY_ID } from '../js/quest/missions.js';
 import { makeFighter } from '../js/battle.js';
-import { RUETHERS, RUETHER_BY_ID } from '../js/data.js';
+import { RUETHERS, RUETHER_BY_ID, QUEST_UNITS } from '../js/data.js';
 import { seededRng } from '../js/quests.js';
 
-// Einheit: 'id' (feste Stufe 1), ['id', {ability: level, …}] (genau diese) oder fertiger Kämpfer
+// Einheit: 'id' (feste Stufe 1), ['id', {ability: level, …}] (genau diese) oder fertiger Kämpfer; 'moshe' (v13) ist kein Rüther
+const DEF = id => RUETHER_BY_ID[id] || QUEST_UNITS[id];
 const F = (u, inst) => {
-  if (typeof u === 'string') return makeFighter(RUETHER_BY_ID[u], inst);
+  if (typeof u === 'string') return makeFighter(DEF(u), inst);
   const [id, lv] = u;
-  return Object.assign(makeFighter(RUETHER_BY_ID[id], inst), { loadout: Object.entries(lv).map(([a, level]) => ({ id: a, level })) });
+  return Object.assign(makeFighter(DEF(id), inst), { loadout: Object.entries(lv).map(([a, level]) => ({ id: a, level })) });
 };
 function Q(map, enemies = [], { team = ['christian'], ...opts } = {}) {
   const mission = {
@@ -49,8 +50,8 @@ const P = (x, y, dir = 0, more = {}) => ({ type: 'pinguin', at: [x, y], dir, ...
 
 // ---------- Daten ----------
 
-test('Daten: 25 Fähigkeiten, je Rüther 2 feste + 3 Pool, Stufen und Texte, Icons, params führt zusammen', () => {
-  assert.equal(Object.keys(ABILITIES).length, 25);
+test('Daten: 30 Fähigkeiten (25 Rüther + 5 Moshe, v13), je Rüther 2 feste + 3 Pool, Stufen und Texte, Icons, params führt zusammen', () => {
+  assert.equal(Object.keys(ABILITIES).length, 30);
   const NEW = ['vp', 'kursalarm', 'wlan', 'junge', 'mittag', 'tratsch', 'mutter', 'crash', 'insider', 'deo', 'firewall', 'raubkopie', 'vibra', 'horde', 'sale', 'feierabend'];
   const TARGETS = ['door', 'point', 'enemy', 'self', 'vaultOrDrone', 'enemyThenPoint', 'pointThenPoint', 'pointDir', 'teammatePoint'];
   for (const r of RUETHERS) {
@@ -657,6 +658,39 @@ test('§4 Alarm: alarmierte Gegner rufen Kollegen in 8 Kacheln', () => {
   const a = find(ev, 'alert', x => x.enemy === 0);
   assert.ok(a.called.includes(1), '7,6 Kacheln entfernt');
   assert.ok(!a.called.includes(2));
+});
+
+// ---------- v13: Moshe Hillel (Spec v13 §2; die Wirkungen je Stufe im Detail prüft test/v13.test.mjs) ----------
+
+test('Moshe: feste buch/neuesvideo, Pool-Slot; alle fünf feuern auf Stufe 1 und 3 mit Abklingzeit und Stufe-3-Merkmal; Rüther kriegen seine nicht', () => {
+  const E = [P(5, 4, 180), P(6, 3), P(14, 7)];
+  const target = { buch: { enemy: 0 }, neuesvideo: {}, schlange: { x: 7.5, y: 4.5 }, zinseszins: {}, geschenk: { enemy: 0 } };
+  const mark = { buch: ['second', -1, 1], neuesvideo: ['finger', false, true], schlange: ['block', 0, 8000], zinseszins: ['times', 1, 2], geschenk: ['second', -1, 1] };
+  const fx = { buch: ev => has(ev, 'stun', s => s.reason === 'liest'), neuesvideo: ev => has(ev, 'task', t => t.kind === 'neuesvideo'), schlange: ev => has(ev, 'queue'), zinseszins: (ev, st) => !!st.units[0].zins, geschenk: ev => has(ev, 'task', t => t.kind === 'geschenk' && t.to.x === 18) };
+  const st0 = Q(ROOM, E, { team: ['moshe'] });
+  assert.deepEqual(st0.units[0].abilities, [{ id: 'buch', level: 1 }, { id: 'neuesvideo', level: 1 }]);
+  assert.deepEqual(abilitiesFor(st0.units[0]).map(a => [a.name, a.cd]), [['Der Investment-Code', 20_000], ['Sein neues Video', 30_000]]);
+  for (const level of [1, 3]) for (const id of Object.keys(target)) {
+    const st = Q(ROOM, E, { team: [['moshe', { [id]: level }]] });
+    place(st.units[0], 3, 4); st.units[0].carry = 1;
+    const ev = run(st, 2000, [ab(0, id, target[id])]);
+    const a = find(ev, 'ability', x => x.ability === id);
+    assert.ok(a && a.level === level && a.name === ABILITIES[id].name, `${id} ${level}`);
+    assert.equal(st.units[0].cd[id], params(id, level).cd, `${id} ${level}: Abklingzeit`);
+    const [key, v1, v3] = mark[id];
+    assert.equal(a[key], level === 3 ? v3 : v1, `${id} ${level}: ${key}`);
+    assert.ok(fx[id](ev, st), `${id} ${level}: Wirkung`);
+    assert.ok(has(tick(st, 0, [ab(0, id, target[id])]), 'fail', f => f.reason === 'cd'), `${id}: noch nicht bereit`);
+  }
+  // Spezialgegner halb (Berater, Moshe), Pinguin voll
+  const sp = Q(ROOM, [{ type: 'berater', at: [5, 4], dir: 180 }, { type: 'moshe', at: [6, 3], dir: 180 }, P(5, 5, 180)], { team: ['moshe'] });
+  place(sp.units[0], 3, 4);
+  assert.deepEqual(find(run(sp, 100, [ab(0, 'neuesvideo')]), 'ability').enemies.sort(), [0, 1, 2]);
+  assert.deepEqual(sp.enemies.map(e => e.task.ms), [5000, 5000, 10_000]);
+  // Christian kann Moshes Fähigkeiten nicht ausrüsten, Moshe keine von Christian
+  assert.deepEqual(Q(ROOM, [], { team: [['christian', { buch: 3, plus70: 2 }]] }).units[0].abilities, [{ id: 'plus70', level: 2 }]);
+  assert.deepEqual(Q(ROOM, [], { team: [['moshe', { vp: 3, geschenk: 2 }]] }).units[0].abilities, [{ id: 'geschenk', level: 2 }]);
+  assert.ok(has(tick(st0, 0, [ab(0, 'zinseszins')]), 'fail', f => f.reason === 'ability'));
 });
 
 // ---------- Leistung ----------

@@ -4,11 +4,12 @@ import { findPath, castRay, lineOfSight } from '../js/quest/path.js';
 import { createQuest, tick, canExtract, questSummary, visibleCone, abilitiesFor, abilityTargets, ABILITIES, ENEMY_TYPES, tileAt } from '../js/quest/engine.js';
 import { MISSIONS, MISSION_BY_ID, buildSetup } from '../js/quest/missions.js';
 import { makeFighter } from '../js/battle.js';
-import { RUETHERS, RUETHER_BY_ID } from '../js/data.js';
+import { RUETHERS, RUETHER_BY_ID, QUEST_UNITS } from '../js/data.js';
 import { seededRng } from '../js/quests.js';
 import { fan, bubble } from '../js/quest/draw.js';
 
-const F = id => makeFighter(RUETHER_BY_ID[id]);
+// v13: 'moshe' ist kein Rüther (QUEST_UNITS), Pseudo-Exemplar wie progress.mosheInst nach 3 Siegen
+const F = id => (id === 'moshe' ? makeFighter(QUEST_UNITS.moshe, { uid: 'moshe', id: 'moshe', rarity: 'normal', level: 3 }) : makeFighter(RUETHER_BY_ID[id]));
 // Test-Mission aus einer Karte; Optionen überschreiben Missionsfelder
 function Q(map, enemies = [], { team = ['christian'], ...opts } = {}) {
   const mission = {
@@ -200,7 +201,7 @@ test('abilitiesFor: ohne Loadout die 2 festen auf Stufe 1, unbekannt keine; 25 F
     assert.deepEqual(abilitiesFor(st.units[0]).map(a => a.id), list.map(a => a.id)); // kein dritter Slot
   }
   assert.deepEqual(abilitiesFor('hitler'), []);
-  assert.equal(Object.keys(ABILITIES).length, 25);
+  assert.equal(Object.keys(ABILITIES).length, 30); // v13: + 5 für Moshe
   assert.equal(ABILITIES.handbag, undefined);
 });
 
@@ -557,10 +558,14 @@ test('Missionen: Engine kennt jede Kachel und jeden Gegnertyp, Zustand trägt se
   }
 });
 
-test('jede Kombination lösbar (Engine-Zustand): Weg von P zu jedem Ziel ohne L-Türen, Tor und Wegpunkte erreichbar', () => {
+test('jede Kombination lösbar (Engine-Zustand): Weg von P zu jedem Ziel ohne L-Türen, Tor und Wegpunkte erreichbar, auch mit Moshe im Team', () => {
   for (const { m, tag, setup } of combos()) {
-    const st = createQuest({ mission: m, setup, team: teamFor(m, ['christian']), rng: seededRng(1) });
+    const st = createQuest({ mission: m, setup, team: teamFor(m, ['christian', 'moshe']), rng: seededRng(1) });
     const p = st.spots[0];
+    if (!m.solo) { // v13: Moshe steht mit auf der Plattform und hat seine 2 festen Fähigkeiten
+      const mo = st.units.find(u => u.id === 'moshe');
+      assert.ok(mo && tileAt(st, mo.x, mo.y) === 'P' && mo.abilities.length === 2, `${tag}: Moshe`);
+    } else assert.ok(!st.units.some(u => u.id === 'moshe'), `${tag}: Solo ohne Moshe`);
     for (const o of st.objs) assert.ok(findPath(st.w, st.h, passClosed(st), p.x, p.y, o.x, o.y, 1.5), `${tag}: ${o.kind}@${o.x},${o.y} ohne L unerreichbar`);
     assert.ok(passClosed(st)(st.gate.x, st.gate.y), `${tag}: Tor`);
     for (const e of st.enemies) {

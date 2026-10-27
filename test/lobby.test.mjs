@@ -5,18 +5,22 @@ import assert from 'node:assert/strict';
 
 // Kleines Ersatz-DOM: ui.js greift beim Laden zu, createLobby baut Markup und hört auf Klicks (Ablauf-Test unten)
 function fakeEl() {
-  const kids = new Map(), on = {};
+  const kids = new Map(), on = {}, cls = new Set();
   return {
-    classList: { toggle() {}, add() {}, remove() {}, contains: () => false }, style: {}, dataset: {}, children: [], firstChild: null,
+    classList: { toggle: (c, on) => { (on ?? !cls.has(c)) ? cls.add(c) : cls.delete(c); }, add: c => cls.add(c), remove: c => cls.delete(c), contains: c => cls.has(c) },
+    style: {}, dataset: {}, children: [], firstChild: null,
     querySelector: sel => (kids.has(sel) ? kids.get(sel) : kids.set(sel, fakeEl()).get(sel)), querySelectorAll: () => [],
     addEventListener: (t, f) => { (on[t] ||= []).push(f); }, removeEventListener() {}, appendChild() {}, remove() {}, setAttribute() {}, focus() {},
-    click(cls) { for (const f of on.click || []) f({ target: { closest: () => ({ disabled: false, dataset: {}, classList: { contains: c => c === cls } }) } }); },
+    click(cls, dataset = {}) { for (const f of on.click || []) f({ target: { closest: () => ({ disabled: false, dataset, classList: { contains: c => c === cls } }) } }); },
+    fire(t, ev) { for (const f of on[t] || []) f(ev); },
   };
 }
 globalThis.document ??= { getElementById: () => fakeEl(), querySelector: () => fakeEl(), createElement: () => fakeEl(), addEventListener() {}, hidden: false };
-globalThis.location ??= { search: '' };
+globalThis.location ??= { search: '?slot=1' }; // Zwei-Fenster-Testmodus: Weg „In der Nähe“ = local-Link (v13: sonst wäre online die Vorgabe)
 const { cleanPicks, cleanStart, createLobby, appOnly } = await import('../js/lobby.js');
 const { createLink, PROTO } = await import('../js/net/link.js');
+const { ROOM_RE } = await import('../js/net/online.js');
+const { ONLINE } = await import('../js/data.js');
 const { MISSION_BY_ID, pickSetup } = await import('../js/quest/missions.js');
 
 const pick = (id, extra = {}) => ({ uid: `u-${id}`, id, rarity: 'selten', level: 5, loadout: null, ...extra });
@@ -25,6 +29,9 @@ test('cleanPicks: unbekannte id raus, Seltenheit und Level begrenzt, höchstens 
   const out = cleanPicks([pick('christian'), pick('hitler'), { id: 'viktor', rarity: 'gold', level: 99 }, null, 'x', pick('micha', { level: -3 }), pick('ramona')], 3);
   assert.deepEqual(out.map(p => [p.id, p.rarity, p.level]), [['christian', 'selten', 5], ['viktor', 'normal', 20], ['micha', 'selten', 1]]);
   assert.equal(cleanPicks('kaputt').length, 0);
+  // v13: Moshe (Quest-Charakter) nur in Koop/Rennen, nie im Duell
+  assert.equal(cleanPicks([{ uid: 'moshe', id: 'moshe', rarity: 'selten', level: 6 }], 3, true).length, 1);
+  assert.equal(cleanPicks([{ uid: 'moshe', id: 'moshe', rarity: 'selten', level: 6 }], 3, false).length, 0);
   const lo = cleanPicks([pick('micha', { loadout: [{ id: 'controller', level: 2 }, { id: 'x', level: 7 }, 'y', { id: 'z', level: 1 }] })])[0].loadout;
   assert.deepEqual(lo, [{ id: 'controller', level: 2 }, null, null]); // höchstens 3, Stufe 1–3; ob es zum Rüther passt, prüft createQuest
 });
@@ -107,6 +114,7 @@ test('appOnly: im Browser nur mit ?slot=N der Testmodus, sonst der Weg zur App',
   assert.equal(appOnly('local', '?slot=2'), false);
   assert.equal(appOnly('local', '?online=x&slot=1'), false);
   assert.equal(appOnly('nearby', ''), false);
+  assert.equal(appOnly('online', ''), false);
 });
 
 // App (nearby) mit Ersatz-Plugin: Fehler sagen, was zu tun ist, und führen in die Einstellungen; Version sagt, wer aktualisiert
@@ -161,5 +169,96 @@ test('Lobby (App): Berechtigung fehlt → Einstellungen öffnen; Verbinden-Toast
     delete globalThis.Capacitor;
     document.createElement = create;
     document.getElementById = byId;
+  }
+});
+
+// v13 §4.3: Weg „Über Internet“ im Browser. Mini-ntfy und Mini-WebRTC als Globals (online.js nimmt globalThis.*; ausführlich in
+// test/net.test.mjs), nur der glatte Weg Presence → Offer → Answer → Kanal offen. Nichts geht an ntfy.sh.
+function fakeNet() {
+  const log = [], subs = new Set(), pcs = new Map(); // ntfy-Verlauf; offene Abos; sdp → pc
+  let n = 0;
+  class Channel {
+    constructor() { this.readyState = 'connecting'; this.bufferedAmount = 0; this.peer = null; }
+    send(d) { const p = this.peer; setImmediate(() => p?.onmessage?.({ data: d })); }
+    close() { this.readyState = 'closed'; this.onclose?.(); }
+  }
+  class RTCPeerConnection {
+    constructor() { this.connectionState = 'new'; this.iceGatheringState = 'complete'; this.ch = null; }
+    createDataChannel() { return this.ch = new Channel(); }
+    async createOffer() { return { type: 'offer', sdp: 'o' + ++n }; }
+    async createAnswer() { return { type: 'answer', sdp: 'a' + ++n }; }
+    async setLocalDescription(d) { this.localDescription = d; pcs.set(d.sdp, this); }
+    async setRemoteDescription(d) { // der Bieter setzt die Answer: der Antworter bekommt den Kanal, beide gehen auf
+      if (d.type === 'offer') return;
+      const other = pcs.get(d.sdp), c = other.ch = new Channel();
+      c.peer = this.ch; this.ch.peer = c;
+      setImmediate(() => { other.ondatachannel?.({ channel: c }); for (const x of [c, this.ch]) { x.readyState = 'open'; x.onopen?.(); } });
+    }
+    close() { this.connectionState = 'closed'; this.ch?.close(); }
+  }
+  class EventSource {
+    constructor(url) { this.topic = url.split('/').at(-2); subs.add(this); setImmediate(() => { this.onopen?.(); for (const e of log) if (e.topic === this.topic) this.deliver(e); }); }
+    deliver(e) { if (subs.has(this)) this.onmessage?.({ data: JSON.stringify(e) }); }
+    close() { subs.delete(this); }
+  }
+  async function fetch(url, { body } = {}) {
+    const e = { id: 'n' + ++n, event: 'message', topic: url.split('/').at(-1), message: body };
+    log.push(e);
+    for (const s of subs) if (s.topic === e.topic) setImmediate(() => s.deliver(e));
+    return { ok: true, text: async () => '' };
+  }
+  return { log, fetch, EventSource, RTCPeerConnection };
+}
+
+test('Lobby (Browser, Weg online): Host sieht seinen Code, falscher Code → Toast, beide sehen „Raum XXXXXX“', async () => {
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const until = async (f, what) => { for (let i = 0; i < 150 && !f(); i++) await sleep(20); assert.ok(f(), what); };
+  const made = [], create = document.createElement, was = { fetch: globalThis.fetch, EventSource: globalThis.EventSource, RTCPeerConnection: globalThis.RTCPeerConnection };
+  document.createElement = () => { const e = fakeEl(); made.push(e); return e; };
+  const toasts = text => made.filter(e => String(e.className).startsWith('toast-item') && e.innerHTML.includes(text)).length;
+  const net = fakeNet();
+  Object.assign(globalThis, { fetch: net.fetch, EventSource: net.EventSource, RTCPeerConnection: net.RTCPeerConnection });
+  const saveOf = nick => ({ profile: { nickname: nick, avatar: 'viktor' }, box: [], team: [], trainerLevel: 1, seen: {} });
+  const h = fakeEl(), g = fakeEl();
+  const host = createLobby({ el: h, getSave: () => saveOf('Sebi'), persist() {}, onExit() {} });
+  const guest = createLobby({ el: g, getSave: () => saveOf('Papa'), persist() {}, onExit() {} });
+  try {
+    host.open(); guest.open();
+    assert.equal(h.classList.contains('mp-web'), false, 'mit ?slot=1 kein APK-Hinweis');
+    assert.ok(h.querySelector('.mp-room-code').classList.contains('hidden'), 'Codefeld nur im Weg online');
+    h.click('mp-way-btn', { way: 'online' }); g.click('mp-way-btn', { way: 'online' });
+    assert.ok(!h.querySelector('.mp-room-code').classList.contains('hidden'));
+    assert.match(h.querySelector('.mp-how').textContent, /Raumcode/);
+    assert.equal(h.classList.contains('mp-web'), false, 'online: keine APK-Karte');
+
+    h.click('mp-host');
+    await sleep(20);
+    const code = h.querySelector('.mp-wait-code').textContent;
+    assert.match(code, ROOM_RE);
+    assert.ok(!h.querySelector('.mp-wait-code').classList.contains('hidden') && !h.querySelector('.mp-share').classList.contains('hidden'), 'Code groß plus Teilen beim Host');
+    assert.equal(h.querySelector('.mp-wait-title').textContent, 'Warte auf Mitspieler …');
+
+    g.querySelector('.mp-room-code').value = 'ab 1';
+    g.click('mp-join');
+    await sleep(20);
+    assert.equal(toasts('Raumcode: 6 Zeichen'), 1);
+    assert.equal(net.log.length, 1, 'falscher Code: nichts gesendet');
+
+    g.querySelector('.mp-room-code').value = `Rüther GO, Zusammen spielen über Internet. Raumcode: ${code.toLowerCase()}`; // eingefügter Teilen-Text, klein: die Lobby hebt an und nimmt die letzten 6
+    g.querySelector('.mp-room-code').fire('keydown', { key: 'Enter' }); // Enter = Beitreten
+    await sleep(20);
+    assert.equal(g.querySelector('.mp-wait-title').textContent, `Suche Raum ${code} …`);
+    assert.ok(g.querySelector('.mp-wait-code').classList.contains('hidden'), 'der Gast zeigt keinen Code');
+    const roomLine = el => el.querySelector('.mp-code-text').textContent;
+    await until(() => roomLine(h) === `Raum ${code}` && roomLine(g) === `Raum ${code}`, 'beide verbunden mit Raumzeile');
+    assert.deepEqual(net.log.map(e => JSON.parse(e.message).t), ['host', 'offer', 'answer']);
+    assert.ok(net.log.every(e => e.topic === `ruether-go-rtc-${code}`), 'nur das Raum-Topic');
+    assert.ok(net.log.every(e => !e.message.includes(ONLINE.topic)), 'nie das Welt-Topic');
+    await until(() => h.querySelector('.mp-their-title').textContent === 'Team von Papa' && g.querySelector('.mp-their-title').textContent === 'Team von Sebi', 'me getauscht');
+  } finally {
+    h.click('mp-leave'); g.click('mp-leave');
+    await sleep(30);
+    Object.assign(globalThis, was);
+    document.createElement = create;
   }
 });

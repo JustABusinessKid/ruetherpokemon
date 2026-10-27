@@ -100,16 +100,21 @@ const BAIT_MS = 30_000, PHONE_WALK = 5000, PUDDLE_R = 1.5, HORDE_SPEED = 2, QUIT
 // Arbeitsgeräusch: Klauen, Sabotieren, Abdrehen usw. hören ruhige Wachen in WORK_R Kacheln (Misstrauen pro s, bis sie nachsehen)
 const WORK_R = 2, WORK_SUS = 0.3;
 const ARGUE = 'Deutsche Bank ist kein Geringverdiener.';
-const SPECIAL = new Set(['bernd', 'goebbels', 'himmler', 'ranger', 'moshe']);
+const SPECIAL = new Set(['bernd', 'goebbels', 'himmler', 'ranger', 'moshe', 'berater']); // v13 §2: special-Dauer auch für Moshe und Berater
 const QUITS = new Set(['pinguin', 'detektiv', 'camper', 'dackel', 'platzwart', 'berater']); // „Feierabend!“: normale Wachen, keine Drohnen
 const stealMs = st => st.mission.stealMs || ACT_MS.steal; // v12: Rabino-Tresore dauern 6 s
-const TASKY = new Set(['junge', 'mutter', 'insider', 'vibra']); // Verhalten statt Betäubung: nicht auf schon Betäubte
+const TASKY = new Set(['junge', 'mutter', 'insider', 'vibra', 'geschenk']); // Verhalten statt Betäubung: nicht auf schon Betäubte
 const NOISY = new Set(['steal', 'sabotage', 'valve', 'unplug', 'ignite']);
 const TASK_END = {
   junge: 'Ja, Frau Rüther …', mutter: 'Mama sagt, ich soll lieb sein.', crash: 'Puh. Nur ein Gerücht.', tratsch: 'Mit dir red ich nicht mehr.',
   insider: 'Hier ist ja gar nix.', kursalarm: 'Der Kurs war auch schon mal besser.', sale: 'Kein Geld dabei.', vp: 'Netter Mann, der Vizepräsident.',
   mittag: 'Ausgeschlafen.', horde: 'Endlich weg, die Bande.', panik: 'Zu spät. Alles weg.', raubkopie: 'Wo ist der hin?',
+  // v13 §2 (Moshe)
+  neuesvideo: 'Komisch. Die Lippen passen nicht zum Ton.', schlange: 'Ausverkauft. Nächste Lieferung aus Zypern.', geschenk: 'Boden optional, steht hier.',
 };
+// v13 §2: Der Investment-Code, Sprüche der lesenden Wache; Schlange: Wachen stellen sich bis QUEUE_NEAR Kacheln an
+const BUCH = ['4,9 von 5 Sternen?', 'Über 1.000 Millionäre …', 'Kein Füllmaterial, steht hier.'];
+const QUEUE_NEAR = 2.3;
 
 // V Wasseranschluss (fest, Sicht frei), B Baum zum Anzünden und T Baum/Deko (fest, blockieren Sicht), W Wasser (nicht begehbar, Sicht frei)
 const WALK = new Set('.DPX~'), OPAQUE = new Set('#LCSK~BT'), SOLID = new Set('#LCSKVBT');
@@ -125,8 +130,9 @@ const FAIL = {
   noPair: 'Zum Tratschen braucht es zwei.', charges: 'Für heute ist Feierabend aufgebraucht.', quits: 'Der kündigt nicht.', far: 'Zu weit weg.',
   noDoze: 'Keine Wache in der Nähe, die ein Nickerchen braucht.', noRumor: 'Keine Wache in der Nähe, die das Gerücht hört.', noWay: 'Da kommt die Wache nicht hin.',
   notYours: 'Das ist nicht dein Rüther.', // v11 Koop: Befehl an die Einheit des Partners
+  noViewer: 'Keine Wache in der Nähe, die das Video sieht.', noLoot: 'Nichts zu verzinsen.', // v13 Moshe
 };
-const NO_TARGET = { family: 'noEnemy', mittag: 'noDoze', crash: 'noRumor' }; // self-Fähigkeiten ohne Gegner im Umkreis
+const NO_TARGET = { family: 'noEnemy', mittag: 'noDoze', crash: 'noRumor', neuesvideo: 'noViewer' }; // self-Fähigkeiten ohne Gegner im Umkreis
 const END_TEXT = { allDown: 'Alle liegen flach. Die Haunebu fliegt ohne euch.', soloDown: 'liegt flach. Die Haunebu fliegt ohne dich.', time: 'Die Zeit ist um.', late: 'Die Zeit ist um. Ziel erfüllt, aber die Haunebu ist ohne euch abgehoben.', abort: 'Abgebrochen. Die Haunebu sammelt euch ein.', caught: 'Erwischt! „Das wird teuer!“' };
 
 const rad = d => d * Math.PI / 180;
@@ -242,7 +248,8 @@ export function createQuest({ mission, setup, variant, team, rng = Math.random, 
       i, id: f.id, name: f.name, rarity: f.rarity, level: f.level, power: f.power || 1, hp: f.maxBtc, maxHp: f.maxBtc,
       x: p.x + 0.5, y: p.y + 0.5, dir: 0, state: 'idle', path: [], goal: { x: p.x, y: p.y }, intent: null, busy: null,
       carry: 0, item: false, cd: {}, down: false, swingAt: 0,
-      abilities, charges, disguiseUntil: 0, disguiseK: 1, vpSend: null, quickSteal: false,
+      abilities, charges, disguiseUntil: 0, disguiseK: 1, vpSend: null, quickSteal: false, zins: null, interest: 0, // v13: Zinseszins
+
       owner: f.owner === 'host' || f.owner === 'guest' ? f.owner : null,
     });
   });
@@ -399,11 +406,11 @@ export function abilityTargets(st, unit, abilityId) {
 
 const enemyOk = (id, e) => !isOut(e) && (id !== 'wallet' || e.type === 'drohne') && (id !== 'feierabend' || QUITS.has(e.type)) && (!TASKY.has(id) || !TIMED.has(e.state));
 
-// Wen trifft eine Fähigkeit ohne Ziel? Familie: die n nächsten (auch Betäubte); Tratsch: die 2 nächsten; Mittagsruhe/Crash: alle im Umkreis
+// Wen trifft eine Fähigkeit ohne Ziel? Familie: die n nächsten (auch Betäubte); Tratsch: die 2 nächsten; Mittagsruhe/Crash/Video: alle im Umkreis
 function selfTargets(st, u, id, p) {
   if (id === 'family') return nearest(st, u, p.range, e => !isOut(e), p.n);
   if (id === 'tratsch') return nearest(st, u, p.r, canTask, 2);
-  if (id === 'mittag' || id === 'crash') return nearest(st, u, p.r, canTask);
+  if (id === 'mittag' || id === 'crash' || id === 'neuesvideo') return nearest(st, u, p.r, canTask);
   return [];
 }
 
@@ -434,7 +441,7 @@ export function tick(st, dt, cmds = []) {
     st.effects = st.effects.filter(f => {
       if (f.until > st.time) return true;
       ev.push({ type: 'effectEnd', effect: f.id, kind: f.kind, x: f.x, y: f.y });
-      if (f.kind === 'firewall') walls = true;
+      if (f.kind === 'firewall' || f.kind === 'wall') walls = true;
       if (f.alarmDrop) { st.alarm = Math.max(0, st.alarm - f.alarmDrop); ev.push({ type: 'alarmDrop', ability: 'kursalarm', effect: f.id, drop: f.alarmDrop, alarm: st.alarm }); }
       return false;
     });
@@ -674,6 +681,7 @@ function walk(ent, speed, dt, face = true) {
 
 function updateUnit(st, u, dt, ev, blk) {
   if (u.disguiseUntil) disguise(st, u, ev);
+  if (u.zins) compound(st, u, ev);
   if (!u.down) {
     if (u.busy) work(st, u, dt, ev);
     else {
@@ -748,10 +756,11 @@ function work(st, u, dt, ev) {
 }
 
 function deliver(st, u, ev) {
-  if (u.carry) {
-    st.delivered += u.carry;
-    ev.push({ type: 'deliver', unit: u.i, coins: u.carry, item: false, total: st.delivered, x: u.x, y: u.y });
-    u.carry = 0;
+  if (u.carry) { // v13: der Zinseszins (u.interest) kommt mit an Bord; delivered darf objective.total übersteigen
+    const n = u.carry + u.interest;
+    st.delivered += n;
+    ev.push({ type: 'deliver', unit: u.i, coins: n, interest: u.interest, item: false, total: st.delivered, x: u.x, y: u.y });
+    u.carry = 0; u.interest = 0;
   }
   if (u.item) {
     const o = st.objs.find(x => x.kind === 'item' && x.by === u.i);
@@ -786,6 +795,17 @@ function disguise(st, u, ev) {
   ev.push({ type: 'vpSend', unit: u.i, enemy: e.i, ms: u.vpSend.ms, x: u.x, y: u.y, say: 'Gehen Sie mal zum Tor!' });
   setTask(st, e, { kind: 'vp', to: st.gate, near: REACH, ms: Infinity, end: st.time + u.vpSend.ms, cone: true }, ev, 'Sofort, Herr Vizepräsident!');
   u.vpSend = null;
+}
+
+// Der Zinseszins (v13 §2): zur Fälligkeit verdoppelt sich die getragene Beute als interest (times-mal); flach oder ohne Beute verfällt er,
+// erwischt nullt ihn catchUnit. interest folgt der Beute: abgeliefert mit ihr (deliver), weg mit ihr.
+function compound(st, u, ev) {
+  const z = u.zins;
+  if (u.down || !u.carry) { u.zins = null; return; }
+  if (st.time < z.at) return;
+  u.interest += u.carry;
+  if (--z.left > 0) z.at += z.ms; else u.zins = null;
+  ev.push({ type: 'zins', unit: u.i, amount: u.carry, interest: u.interest, left: Math.max(0, z.left), next: u.zins ? z.at : null, x: u.x, y: u.y });
 }
 
 // Tarnung bricht: Klauen/Sabotieren ('klau'), Prügeln ('angriff'), abgelaufen ('zeit'), umgefallen ('flach')
@@ -860,10 +880,11 @@ function cast(st, u, it, ev) {
       ev.push({ ...base, door: d.id, tx: d.x + 0.5, ty: d.y + 0.5, ms: 900, silent: !p.noise, quick: !!p.quickSteal });
       break;
     }
-    case 'beer': case 'mms': case 'kursalarm': { // Würfe: Wirkung bei der Landung (resolve)
+    case 'beer': case 'mms': case 'kursalarm': case 'schlange': { // Würfe: Wirkung bei der Landung (resolve)
       const ms = flight(t);
       st.pending.push({ at: st.time + ms, kind: id, x: t.x, y: t.y, by: u.i, p });
-      const extra = id === 'beer' ? { item: 'can', puddle: !!p.puddle } : id === 'mms' ? { item: 'mms', portions: p.portions } : { item: 'phone', stare: p.ms, r: p.r };
+      const extra = id === 'beer' ? { item: 'can', puddle: !!p.puddle } : id === 'mms' ? { item: 'mms', portions: p.portions }
+        : id === 'schlange' ? { item: 'queue', r: p.r, block: p.block || 0, say: '12 Personen schließen gerade ihre Bestellung ab.' } : { item: 'phone', stare: p.ms, r: p.r };
       ev.push({ ...base, ...extra, tx: t.x, ty: t.y, ms });
       break;
     }
@@ -1034,6 +1055,32 @@ function cast(st, u, it, ev) {
       for (const x of buddy ? [e, buddy] : [e]) setTask(st, x, { kind: 'feierabend', to: st.gate, near: REACH, ms: 1500, end: st.time + QUIT_MS }, ev, x === e ? 'Wissen Sie was? Ich kündige!' : 'Warte, ich komm mit!');
       break;
     }
+    // ---------- v13 §2: Moshe Hillel ----------
+    case 'buch': { // liest (bribed: Kegel aus, wacht als Patrouille auf, kein Alarm); Stufe 3: die nächste Wache in spread liest mit
+      const two = second(st, e, p.spread), pick = () => BUCH[Math.floor(st.rng() * BUCH.length) % BUCH.length];
+      ev.push({ ...base, enemy: e.i, tx: e.x, ty: e.y, ms: dur(e, p), second: two ? two.i : -1, say: 'Hundert Seiten inklusive. Lesen Sie.' });
+      stun(st, e, 'liest', dur(e, p), ev, pick(), 'bribed');
+      if (two) stun(st, two, 'liest', dur(two, p), ev, pick(), 'bribed', { reader: e.i });
+      break;
+    }
+    case 'neuesvideo': { // alle Wachen in r schauen (Kegel aus, Blick auf Moshe); Stufe 3: danach finger ms verwirrt (endTask)
+      const hit = selfTargets(st, u, id, p);
+      if (!hit.length) return no(NO_TARGET[id]);
+      ev.push({ ...base, enemies: hit.map(x => x.i), r: p.r, ms: p.ms, finger: !!p.finger, say: 'Hallo Freunde, heute zeige ich euch …' });
+      for (const x of hit) setTask(st, x, { kind: 'neuesvideo', ms: dur(x, p), face: { x: u.x, y: u.y }, finger: p.finger || 0 }, ev, p.finger ? 'Warum hat er sechs Finger?' : 'Ist das echt?');
+      break;
+    }
+    case 'zinseszins': // nur mit Beute; die Fälligkeit rechnet compound() im Schritt
+      if (!u.carry) return no('noLoot');
+      u.zins = { at: st.time + p.ms, left: p.times, ms: p.ms };
+      ev.push({ ...base, ms: p.ms, times: p.times, at: u.zins.at, carry: u.carry, say: 'Das achte Weltwunder. Einfach warten.' });
+      break;
+    case 'geschenk': { // Reihenhaus in Limassol: zum Tor, Prospekt anschauen (Kegel aus), danach Patrouille; Stufe 3 bringt die Familie mit
+      const two = second(st, e, p.family);
+      ev.push({ ...base, enemy: e.i, tx: e.x, ty: e.y, ms: dur(e, p), second: two ? two.i : -1, say: 'Glückwunsch! Sie haben gewonnen. 0,00 € statt 4,95 €.' });
+      for (const x of two ? [e, two] : [e]) setTask(st, x, { kind: 'geschenk', to: st.gate, near: REACH, ms: dur(x, p) }, ev, x === e ? 'Ein Reihenhaus! In Limassol!' : 'Die Familie kommt mit.');
+      break;
+    }
   }
   u.cd[id] = st.time + (p.cd || 0);
   if (p.charges != null) u.charges[id]--;
@@ -1068,6 +1115,14 @@ function resolve(st, p, ev) {
     const hit = nearest(st, p, p.p.r, canTask), at = { x: p.x, y: p.y };
     ev.push({ type: 'phone', effect: f.id, x: p.x, y: p.y, r: p.p.r, ms: p.p.ms, enemies: hit.map(e => e.i) });
     for (const e of hit) setTask(st, e, { kind: 'kursalarm', to: at, near: REACH, ms: p.p.ms, face: at, effect: f.id, reset: !!p.p.reset }, ev, 'Was macht der Kurs?');
+  } else if (p.kind === 'schlange') { // v13: Schlange aus Käufern; ruhige Wachen in r stellen sich dazu; Stufe 3: 3×3-Wand (Firewall-Semantik) für block ms
+    const at = { x: Math.floor(p.x) + 0.5, y: Math.floor(p.y) + 0.5 };
+    const f = { id: st.nextId++, kind: 'schlange', ...at, r: p.p.r, until: st.time + p.p.ms + PHONE_WALK, ms: p.p.ms + PHONE_WALK, block: p.p.block || 0 };
+    st.effects.push(f);
+    if (f.block) { const w = rectEffect(st, 'wall', at.x, at.y, 3, 3, f.block, { queue: f.id }); paint(st, st.wall, w.tiles, w.until); wallChanged(st); }
+    const hit = nearest(st, at, p.p.r, e => canTask(e) && e.state !== 'alert');
+    ev.push({ type: 'queue', effect: f.id, x: at.x, y: at.y, r: f.r, ms: p.p.ms, block: f.block, enemies: hit.map(e => e.i) });
+    for (const e of hit) setTask(st, e, { kind: 'schlange', to: at, near: QUEUE_NEAR, ms: dur(e, p.p), face: at, effect: f.id }, ev, 'Hinten anstellen!');
   } else if (p.kind === 'controller') {
     const e = st.enemies[p.enemy];
     if (isOut(e)) return;
@@ -1142,6 +1197,7 @@ function endTask(st, e, ev, why) {
     }
   }
   if (k.kind === 'crash' && k.panic) return setTask(st, e, { kind: 'panik', to: st.gate, near: REACH, ms: Infinity, end: st.time + k.panic, wasAlert: k.wasAlert, lastSeen: k.lastSeen }, ev, 'Verkaufen! Alles verkaufen!');
+  if (k.kind === 'neuesvideo' && k.finger) return stun(st, e, 'finger', k.finger, ev, 'SECHS FINGER?!'); // v13 Stufe 3: verwirrt, sieht nichts
   if (k.kind === 'raubkopie') return investigate(st, e, k.last || e, 0.3);
   if (k.kind === 'kursalarm' && k.reset) { e.suspicion = 0; return; }
   if (k.kind === 'junge' && k.calm) { e.suspicion = 0; e.calmUntil = st.time + k.calm; return; }
@@ -1283,7 +1339,7 @@ function spotFires(st, ev) {
 function catchUnit(st, e, u, ev) {
   const T = ENEMY_TYPES[e.type];
   cancelBusy(u, 'erwischt', ev);
-  u.path = []; u.intent = null; u.goal = null;
+  u.path = []; u.intent = null; u.goal = null; u.zins = null; // v13: der laufende Zinseszins verfällt
   if (T.catches === 'kieser' || T.catches === 'video') {
     const k = T.catches, count = k === 'video' ? ++st.videos : ++st.kieser;
     st.paused = k; st.pausedBy = { enemy: e.i, unit: u.i };
@@ -1517,12 +1573,12 @@ function calm(st, e, ev) {
   ev.push({ type: 'calm', enemy: e.i, x: e.x, y: e.y, say: line(st, e, 'calm') });
 }
 
-const WAKE = { eat: 'Mir ist schlecht ...', bribe: 'Das Geld ist alle.', slip: 'Wer kippt hier Bier aus?', lizenz: 'Lizenz … egal.' };
+const WAKE = { eat: 'Mir ist schlecht ...', bribe: 'Das Geld ist alle.', slip: 'Wer kippt hier Bier aus?', lizenz: 'Lizenz … egal.', liest: 'Kapitel 3 ist stark.' };
 
 function wake(st, e, ev) {
   const r = e.reason;
   ev.push({ type: 'wake', enemy: e.i, reason: r, x: e.x, y: e.y, say: WAKE[r] || line(st, e, 'wake') });
-  if (r === 'eat' || r === 'bribe') Object.assign(e, { state: 'patrol', reason: null, suspicion: 0, path: [], goal: null, until: 0 });
+  if (r === 'eat' || r === 'bribe' || r === 'liest') Object.assign(e, { state: 'patrol', reason: null, suspicion: 0, path: [], goal: null, until: 0 });
   else investigate(st, e, e, 0.4); // nach KO, Gas oder Argument: misstrauisch umsehen
 }
 

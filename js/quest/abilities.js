@@ -2,7 +2,7 @@
 // stages[k] enthält nur, was sich ab Stufe k+1 ändert; params(id, level) führt bis zur Stufe zusammen.
 // Reichweiten (range, r) in Kacheln, Zeiten (ms, cd) in ms. target je Stufe (Gas und Horde wechseln auf Stufe 3):
 // 'door' | 'point' | 'enemy' | 'self' | 'vaultOrDrone' | 'enemyThenPoint' | 'pointThenPoint' | 'pointDir' | 'teammatePoint'.
-// special < 1: Spezialgegner (Stefan, Goebbels, Himmler, Ranger) nur so lange. Weicher Trennstrich (u00AD) = Trennstelle im Kreismenü.
+// special < 1: Spezialgegner (Stefan, Goebbels, Himmler, Ranger, Moshe, Berater (v13)) nur so lange. Weicher Trennstrich (u00AD) = Trennstelle im Kreismenü.
 const A = (id, unit, kind, name, icon, stages, texts) => ({ id, unit, kind, name, icon: `art/${icon}.png`, target: stages[0].target, stages, texts });
 
 export const ABILITIES = Object.fromEntries([
@@ -185,6 +185,43 @@ export const ABILITIES = Object.fromEntries([
     'Eine normale Wache direkt neben dir kündigt, packt ihren Karton und ist für die Mission weg. Nicht bei Stefan, Goebbels, Himmler, Rangern und Drohnen. 1× pro Mission.',
     '2× pro Mission.',
     'Sie nimmt einen normalen Kollegen in 4 Kacheln gleich mit.',
+  ]),
+  // ---------- v13: Moshe Hillel (Spec v13 §2), Quest-Charakter ohne Rüther-Eintrag. Ids kollidieren nicht mit Event-Typen
+  // ('video' ist der Fangszenen-Event, daher neuesvideo). special 0.5: Stefan, Goebbels, Himmler, Ranger, Moshe, Berater halb so lang ----------
+  A('buch', 'moshe', 'fixed', 'Der Investment-Code', 'ab-buch', [
+    { target: 'enemy', range: 2, ms: 8000, cd: 20_000, special: 0.5 }, { ms: 12_000 }, { spread: 2 },
+  ], [
+    'Drückt einer Wache bis 2 Kacheln das Buch in die Hand. Sie liest 8 s und sieht nichts. Abklingzeit 20 s.',
+    'Sie liest 12 s. Kapitel 2: „Wie ein Kredit wirklich funktioniert.“',
+    'Sie empfiehlt es weiter: Die nächste Wache in 2 Kacheln liest mit.',
+  ]),
+  A('neuesvideo', 'moshe', 'fixed', 'Sein neues Video', 'ab-neuesvideo', [
+    { target: 'self', r: 6, ms: 10_000, cd: 30_000, special: 0.5 }, { ms: 14_000, r: 7 }, { finger: 5000 },
+  ], [
+    'Moshe hält das Handy hoch: Alle Wachen in 6 Kacheln schauen 10 s sein neues Video. Spezialgegner halb so lang. Abklingzeit 30 s.',
+    '14 s und 7 Kacheln. Der Algorithmus liebt ihn.',
+    'Sechs Finger: Nach dem Video sind sie 5 s verwirrt und sehen nichts.',
+  ]),
+  A('schlange', 'moshe', 'pool', '12 Personen bestellen gerade', 'ab-schlange', [
+    { target: 'point', range: 6, r: 6, ms: 10_000, cd: 30_000, special: 0.5 }, { ms: 14_000 }, { block: 8000 },
+  ], [
+    'Stellt an einem Punkt bis 6 Kacheln eine Schlange aus Käufern auf. Ruhige Wachen in 6 Kacheln regeln 10 s den Andrang. Abklingzeit 30 s.',
+    '14 s. „Noch 12 Personen vor Ihnen.“',
+    'Die Schlange steht im Gang: 8 s lang kommt keine Wache durch.',
+  ]),
+  A('zinseszins', 'moshe', 'pool', 'Der Zinseszins', 'ab-zinseszins', [
+    { target: 'self', ms: 20_000, times: 1, cd: 40_000 }, { ms: 15_000 }, { times: 2 },
+  ], [
+    'Das achte Weltwunder: Beute, die Moshe 20 s lang trägt, verdoppelt sich einmal. Länger tragen, mehr Risiko. Abklingzeit 40 s.',
+    'Schon nach 15 s. Der Markt läuft.',
+    'Verdoppelt sich zweimal: nach weiteren 15 s noch einmal.',
+  ]),
+  A('geschenk', 'moshe', 'pool', 'Premium-Geschenk: Immobilien', 'ab-geschenk', [
+    { target: 'enemy', range: 6, ms: 20_000, cd: 30_000, special: 0.5 }, { ms: 30_000 }, { family: 3 },
+  ], [
+    'Eine Wache bis 6 Kacheln gewinnt ein Reihenhaus in Limassol (0,00 € statt 4,95 €). Sie läuft zum Tor und schaut es 20 s an. Abklingzeit 30 s.',
+    '30 s. Mit Blick aufs Meer, sagt der Prospekt.',
+    'Sie bringt die Familie mit: Die nächste Wache in 3 Kacheln kommt mit zur Besichtigung.',
   ]),
 ].map(a => [a.id, a]));
 

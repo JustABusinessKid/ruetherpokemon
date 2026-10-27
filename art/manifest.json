@@ -1382,5 +1382,71 @@
   "model": "PIL (art/moshe.py)",
   "note": "hand-built PIL pixel art (art/moshe.py, one script for all 11 v12 assets; rebuild: python art/moshe.py). Image model not available (Higgsfield account: 0 credits, free plan, no unlim generations; no job submitted). 320x180 grid, NEAREST x4, RGB. Limassol promenade: sea, two palms, white houses, sun; red sports car (same car(), k=3, no note) parked behind; Moshe centred as a bust (same moshe(), k=2, no book), legs below the frame, so he stays inside the portrait phone crop of center/cover. The portrait phone frame is CSS. Overlay anchors in 1280x720: face centre x 640, eyes y 416-432, mouth x 632-648 y 496-504, hat brim y 344-384, beard tip y 640, hands x 392-456 and 824-888 y 528-592.",
   "attempt": 1
+ },
+ {
+  "id": "moshe",
+  "file": "sprites/moshe.png",
+  "kind": "sprite",
+  "role": "portrait",
+  "width": 256,
+  "height": 256,
+  "model": "PIL (art/v13.py)",
+  "note": "hand-built PIL pixel art (art/v13.py, imports colours and helpers from art/moshe.py; rebuild: python -B art/v13.py). No image model used. Portrait like the Ruether sprites: head cut from boss-moshe (hat to tie knot, 48x48 cells of the 64 grid, hands outside, the book edge and its sparkle at the right border cleared), NEAREST x5 = 240 px centred on 256, transparent background, 16 colours from the boss palette. Dignified, no religious symbols, no text.",
+  "attempt": 1
+ },
+ {
+  "id": "ab-buch",
+  "file": "ab-buch.png",
+  "kind": "ui",
+  "role": "ability-icon",
+  "width": 64,
+  "height": 64,
+  "model": "PIL (art/v13.py)",
+  "note": "hand-built PIL pixel art (art/v13.py, imports colours and helpers from art/moshe.py; rebuild: python -B art/v13.py). No image model used. the same book as ad-cover: navy, gold double frame, diamond, skyline, small portrait, sparkles; 1-px bottle-green outline like ab-vp. No text.",
+  "attempt": 1
+ },
+ {
+  "id": "ab-neuesvideo",
+  "file": "ab-neuesvideo.png",
+  "kind": "ui",
+  "role": "ability-icon",
+  "width": 64,
+  "height": 64,
+  "model": "PIL (art/v13.py)",
+  "note": "hand-built PIL pixel art (art/v13.py, imports colours and helpers from art/moshe.py; rebuild: python -B art/v13.py). No image model used. phone with cream screen, red play button with white triangle, progress bar, teal sound arcs. No logo, no text.",
+  "attempt": 1
+ },
+ {
+  "id": "ab-schlange",
+  "file": "ab-schlange.png",
+  "kind": "ui",
+  "role": "ability-icon",
+  "width": 64,
+  "height": 64,
+  "model": "PIL (art/v13.py)",
+  "note": "hand-built PIL pixel art (art/v13.py, imports colours and helpers from art/moshe.py; rebuild: python -B art/v13.py). No image model used. three shopper silhouettes with shopping bags in a row (navy/teal/red), no sign (the in-game effect draws the \"12 Personen vor Ihnen\" sign). No text.",
+  "attempt": 1
+ },
+ {
+  "id": "ab-zinseszins",
+  "file": "ab-zinseszins.png",
+  "kind": "ui",
+  "role": "ability-icon",
+  "width": 64,
+  "height": 64,
+  "model": "PIL (art/v13.py)",
+  "note": "hand-built PIL pixel art (art/v13.py, imports colours and helpers from art/moshe.py; rebuild: python -B art/v13.py). No image model used. three gold coin stacks growing to the right, green arrow up. No text.",
+  "attempt": 1
+ },
+ {
+  "id": "ab-geschenk",
+  "file": "ab-geschenk.png",
+  "kind": "ui",
+  "role": "ability-icon",
+  "width": 64,
+  "height": 64,
+  "model": "PIL (art/v13.py)",
+  "note": "hand-built PIL pixel art (art/v13.py, imports colours and helpers from art/moshe.py; rebuild: python -B art/v13.py). No image model used. three terraced houses with red gables, windows, doors, pavement, gold bow with ribbon over the middle house. No text, no symbols.",
+  "attempt": 1
  }
 ]

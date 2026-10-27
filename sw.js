@@ -1,6 +1,6 @@
 // Service Worker: Rüther GO läuft komplett offline (auch als installierte App). Erzeugt von tools/make_sw.py – nicht von Hand ändern.
-const VERSION = 'a68a9930bf42';
-const APP = `app-${VERSION}`, FONTS = 'fonts-1', TILES = 'tiles-1', TILE_MAX = 3000;
+const VERSION = '32fec3c3a5d3';
+const APP = `app-${VERSION}`, FONTS = 'fonts-1', TILES = 'tiles-1', VIDS = 'ruether-vids', TILE_MAX = 3000;
 const PRECACHE = [
   './',
   'index.html',
@@ -50,24 +50,31 @@ const PRECACHE = [
   'js/quest/missions.js',
   'js/quest/path.js',
   'js/quest/race.js',
+  'js/quest/video.js',
   'js/quest/view.js',
   'js/net/link.js',
+  'js/net/online.js',
+  'art/ab-buch.png',
   'art/ab-crash.png',
   'art/ab-deo.png',
   'art/ab-feierabend.png',
   'art/ab-firewall.png',
+  'art/ab-geschenk.png',
   'art/ab-horde.png',
   'art/ab-insider.png',
   'art/ab-junge.png',
   'art/ab-kursalarm.png',
   'art/ab-mittag.png',
   'art/ab-mutter.png',
+  'art/ab-neuesvideo.png',
   'art/ab-raubkopie.png',
   'art/ab-sale.png',
+  'art/ab-schlange.png',
   'art/ab-tratsch.png',
   'art/ab-vibra.png',
   'art/ab-vp.png',
   'art/ab-wlan.png',
+  'art/ab-zinseszins.png',
   'art/ad-car.png',
   'art/ad-cover.png',
   'art/bg-anzeige.png',
@@ -181,6 +188,7 @@ const PRECACHE = [
   'sprites/icon-192.png',
   'sprites/icon-512.png',
   'sprites/micha.png',
+  'sprites/moshe.png',
   'sprites/ps3.png',
   'sprites/ramona.png',
   'sprites/satoshi.png',
@@ -230,6 +238,11 @@ self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
+  if (url.origin === location.origin && url.pathname.includes('/vids/')) { // v13 §3: Moshes Videos (16 MB) nicht vorab, sondern beim ersten Abspielen in einen
+    // eigenen Cache, der Releases überlebt; Range-Anfragen bekommen die volle 200-Antwort (reicht Chrome/Android), darum ohne Request-Header holen
+    e.respondWith(caches.open(VIDS).then(async c => (await c.match(url.pathname)) || fetch(url.pathname).then(r => { if (r.ok) c.put(url.pathname, r.clone()).catch(() => {}); return r; }).catch(() => Response.error())));
+    return;
+  }
   if (url.origin === location.origin) { // Spieldateien: erst Cache, dann Netz; Seitenaufrufe (auch ?debug=1) bekommen index.html
     e.respondWith((async () => {
       const c = await caches.open(APP);

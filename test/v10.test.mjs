@@ -11,6 +11,7 @@ const IDS = {
   viktor: { fixed: ['gas', 'argue'], pool: ['crash', 'insider', 'deo'] },
   micha: { fixed: ['wallet', 'controller'], pool: ['firewall', 'raubkopie', 'vibra'] },
   ramona: { fixed: ['mms', 'credits'], pool: ['horde', 'sale', 'feierabend'] },
+  moshe: { fixed: ['buch', 'neuesvideo'], pool: ['schlange', 'zinseszins', 'geschenk'] }, // v13 §2
 };
 const rich = (sats = 1e6) => Object.assign(emptySaveV3(), { sats });
 
@@ -75,10 +76,11 @@ test('v10: Upgrade auf 2 und 3 kostet ABILITY_UP, auch feste; Fehlerfälle', () 
   assert.deepEqual(loadoutFor(s, 'micha'), [{ id: 'wallet', level: 1 }, { id: 'controller', level: 3 }, null]);
 });
 
-test('v10: alles kaufen und ausbauen kostet 28.000 je Rüther, 140.000 für alle', () => {
+test('v10: alles kaufen und ausbauen kostet 28.000 je Rüther, 168.000 für alle sechs (v13: Moshe frei)', () => {
   assert.equal(CONST.ABILITY_BUY, 1000);
   assert.deepEqual(CONST.ABILITY_UP, { 2: 2000, 3: 3000 });
-  const s = rich(140_000);
+  const s = rich(168_000);
+  s.questLog = { rabino: { wins: 3 } };
   for (const [rid, { fixed, pool }] of Object.entries(IDS)) {
     const before = s.sats;
     for (const aid of pool) assert.equal(buyAbility(s, rid, aid).ok, true);

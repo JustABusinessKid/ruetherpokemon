@@ -1,6 +1,6 @@
-import { CONST, RUETHERS, RUETHER_BY_ID, RARITIES, RARITY_BY_ID, SHOP, QUESTS, ACHIEVEMENTS, ARENAS } from './data.js';
+import { CONST, RUETHERS, RUETHER_BY_ID, QUEST_UNITS, portraitOf, RARITIES, RARITY_BY_ID, SHOP, QUESTS, ACHIEVEMENTS, ARENAS } from './data.js';
 import { fighterStats, levelCost, DEX_TOTAL, dexCount, arenaReward, canFuse, nextRarity, levelProgress, pickFood, sell, sellDuplicates,
-  summonCost, haunebuActive, questsUnlocked, QUEST_SATS, abilityLevel, buyAbility, upgradeAbility, loadoutFor } from './progress.js';
+  summonCost, haunebuActive, questsUnlocked, QUEST_SATS, abilityLevel, buyAbility, upgradeAbility, loadoutFor, MOSHE_WINS, mosheUnlocked, mosheInst } from './progress.js';
 import { esc, popup, ico, kitName } from './ui.js';
 import { hashrateText, countText } from './format.js';
 import { playSheet, btcRain } from './fx.js';
@@ -22,7 +22,17 @@ function haunebuTicker(el, getSave, render) {
   }, 1000);
 }
 const rarityRank = id => RARITIES.findIndex(r => r.id === id);
-const spriteOf = id => `sprites/${RUETHER_BY_ID[id] ? id : 'unknown'}.png`;
+const spriteOf = id => portraitOf(id) || 'sprites/unknown.png'; // v13: Rüther und Moshe (QUEST_UNITS)
+const defOf = id => RUETHER_BY_ID[id] || QUEST_UNITS[id];
+// v13 §1: Team-Wahl und Koop-Raster: Box-Exemplare (Team zuerst, dann Seltenheit, Level), dahinter Moshe, sobald er frei ist
+export const questTeamList = save => {
+  const order = uid => { const i = save.team.indexOf(uid); return i < 0 ? 9 : i; };
+  const list = [...save.box].sort((a, b) => order(a.uid) - order(b.uid) || rarityRank(b.rarity) - rarityRank(a.rarity) || b.level - a.level);
+  if (mosheUnlocked(save)) list.push(mosheInst(save));
+  return list;
+};
+// v13 §6: Zeile unter Rabino Empire HQ in der Missionsliste
+export const mosheLine = save => (mosheUnlocked(save) ? 'Moshe spielbar' : `Siege ${Math.max(0, Math.floor(Number(save.questLog?.rabino?.wins)) || 0)}/${MOSHE_WINS} · dann arbeitet Moshe für dich`);
 // v10: Fähigkeits-Icon (Familientreffen: die echten Gesichter von Christian und Micha, §0) und Stufen-Punkte ●●○ als Pixel-Quadrate
 const abIcon = a => a.id === 'family' ? `<span class="q-fam"><img src="${spriteOf('christian')}" alt=""><img src="${spriteOf('micha')}" alt=""></span>` : `<img src="${a.icon}" alt="">`;
 const abDots = lv => `<span class="ab-dots" role="img" aria-label="Stufe ${lv} von 3">${[1, 2, 3].map(k => `<i${k <= lv ? ' class="on"' : ''}></i>`).join('')}</span>`;
@@ -53,7 +63,7 @@ export const distText = m => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).to
 const emptyState = (icon, text, sub = '') =>
   `<div class="empty">${ico(icon, 'ico-xl empty-ico')}<p>${esc(text)}</p>${sub ? `<p class="sub">${esc(sub)}</p>` : ''}</div>`;
 // Versionsanzeige im Profil; bei jedem Release mitziehen
-export const VERSION = 'v12';
+export const VERSION = 'v13';
 // Jeder Knopf-Tipp baut die Liste neu auf: ein schneller zweiter Tipp träfe das nachgerückte Exemplar (falsches verkauft oder
 // gefüttert, zwei Super-Münzen gekauft). Darum schluckt node 300 ms nach einem Knopf-Tipp alle weiteren Klicks.
 function tapGuard(node, ms = 300) {
@@ -83,9 +93,28 @@ export function createCollectionScreen({ el, onTeamChange, onPowerUp, onFuse, on
   // ersetzen box, ändern sats und questAbilities, aber keine Exemplare (test/map.test.mjs prüft das an eingefrorenen Exemplaren).
   const dry = (fn, ...a) => fn({ ...save, box: [...save.box], team: [...save.team], questAbilities: structuredClone(save.questAbilities || {}) }, ...a);
   const statLine = inst => {
-    const st = fighterStats(RUETHER_BY_ID[inst.id], inst);
+    const st = fighterStats(defOf(inst.id), inst);
     return `${fmt(st.btc)} BTC · ${ico('hashrate', 'ico-in')}${hashrateText(st.power)}`;
   };
+  // v13 §1: Moshe-Karte hinter den Rüthern, nur freigeschaltet: kein Exemplar, Level und Seltenheit aus den Siegen (mosheInst)
+  function mosheCard() {
+    const inst = mosheInst(save), def = QUEST_UNITS.moshe, r = RARITY_BY_ID[inst.rarity];
+    const div = document.createElement('div');
+    div.className = `rcard panel thin moshe r-${inst.rarity}`;
+    div.dataset.id = 'moshe';
+    div.innerHTML = `
+      <div class="rhead">
+        <div class="frame big r-${inst.rarity}"><img src="${spriteOf('moshe')}" alt="${esc(def.name)}"><span class="shine"></span></div>
+        <div class="meta">
+          <div class="cname">${esc(def.name)} <span class="badge-pixel">Lv. ${inst.level}</span></div>
+          <div class="counts"><span class="cnt r-${inst.rarity}">${r.name}</span><span class="cnt">${esc(def.title)}</span></div>
+          <div class="sub">${statLine(inst)}</div>
+          <div class="sub m-wins">Siege in Rabino Empire HQ: ${fmt(Math.max(0, Math.floor(Number(save.questLog?.rabino?.wins)) || 0))} · jeder Sieg macht ihn stärker</div>
+        </div>
+      </div>`;
+    div.appendChild(abilityBox('moshe'));
+    return div;
+  }
 
   function ruetherCard(def, mine) {
     const best = mine[0], isOpen = open.has(def.id);
@@ -262,6 +291,7 @@ export function createCollectionScreen({ el, onTeamChange, onPowerUp, onFuse, on
         .sort((a, b) => rarityRank(b.rarity) - rarityRank(a.rarity) || b.level - a.level);
       if (mine.length) box.appendChild(ruetherCard(def, mine));
     }
+    if (mosheUnlocked(save)) box.appendChild(mosheCard());
   }
   function toggleTeam(uid) {
     const i = save.team.indexOf(uid);
@@ -478,6 +508,7 @@ export function createQuestsScreen({ el, onClaim, onQuestStart, onShop }) {
             ${r ? `<div class="m-reward">${ico('coin', 'ico-in')}${questReward(r, missionFine(m))}</div>` : ''}
             <div class="sub m-maps">Karten: ${m.layouts.length} · Varianten: ${variantCount(m)}</div>
             <div class="sub m-best">${log ? `Bestwert: ${bestText(m, log.best)}${log.done ? ' · geschafft' : ''}${log.kieser ? ` · Kieser: ${log.kieser}` : ''}` : 'Noch nicht gespielt'}</div>
+            ${m.id === 'rabino' ? `<div class="sub m-moshe${mosheUnlocked(save) ? ' on' : ''}">${esc(mosheLine(save))}</div>` : ''}
             ${needs ? '<div class="sub m-lock">Die Adresse steht im Impressum des Investment-Codes (Shop).</div>' : ''}
           </div>
           <button class="m-start${active && !locked ? ' primary' : ''}" ${locked ? 'disabled' : ''}>${needs ? 'Adresse fehlt' : locked ? `Fang erst ${esc(solo.name)}` : solo ? 'Solo starten' : 'Starten'}</button>
@@ -575,14 +606,13 @@ export function createQuestTeamScreen({ el, onStart, onEquip, onBack }) {
     el.querySelector('.qt-intro').textContent = mission.intro;
     el.querySelector('.qt-hint').textContent = mission.hint;
     el.querySelector('.qt-count').textContent = `${picked.length}/${CONST.TEAM_SIZE}`;
-    const order = uid => { const i = save.team.indexOf(uid); return i < 0 ? 9 : i; };
-    const insts = [...save.box].sort((a, b) => order(a.uid) - order(b.uid) || rarityRank(b.rarity) - rarityRank(a.rarity) || b.level - a.level);
+    const insts = questTeamList(save); // v13: Moshe als letzte Zeile, sobald er frei ist
     listEl.innerHTML = insts.length ? insts.map(inst => {
-      const def = RUETHER_BY_ID[inst.id], n = picked.indexOf(inst.uid), st = fighterStats(def, inst);
+      const def = defOf(inst.id), n = picked.indexOf(inst.uid), st = fighterStats(def, inst);
       return `<div class="qt-row btn${n >= 0 ? ' on' : ''}" data-uid="${inst.uid}" role="button" tabindex="0" aria-pressed="${n >= 0}">
         <div class="frame r-${inst.rarity}"><img src="${spriteOf(inst.id)}" alt=""><span class="shine"></span></div>
         <div class="qt-meta">
-          <div class="qt-name">${esc(def.name)} <span class="badge-pixel">Lv. ${inst.level}</span> <span class="sub">${fmt(st.btc)} BTC</span></div>
+          <div class="qt-name">${esc(def.name)}${inst.id === 'moshe' ? ` <span class="sub">${esc(def.title)}</span>` : ''} <span class="badge-pixel">Lv. ${inst.level}</span> <span class="sub">${fmt(st.btc)} BTC</span></div>
           <div class="qt-powers">${powers(inst.id)}</div>
         </div>
         <span class="qt-pick">${n >= 0 ? n + 1 : ''}</span>
@@ -597,7 +627,7 @@ export function createQuestTeamScreen({ el, onStart, onEquip, onBack }) {
   return {
     show(s, m) {
       save = s; mission = m;
-      picked = save.team.filter(uid => save.box.some(i => i.uid === uid)).slice(0, CONST.TEAM_SIZE);
+      picked = save.team.filter(uid => save.box.some(i => i.uid === uid) || (uid === 'moshe' && mosheUnlocked(save))).slice(0, CONST.TEAM_SIZE);
       render();
       el.querySelector('.qt-scroll').scrollTop = 0;
     },
@@ -642,7 +672,7 @@ export function createQuestResultScreen({ el, onDone }) {
       el.classList.toggle('won', ok);
       const clean = summary.alarmFree ? `nie ausgelöst${ok && QUEST_SATS[mission.id]?.clean ? ` · +${fmt(QUEST_SATS[mission.id].clean)} Bonus` : ''}` : 'ausgelöst';
       body.innerHTML = `
-        <div class="qr-faces">${team.map((inst, i) => `<div class="frame r-${RARITY_BY_ID[inst.rarity] ? inst.rarity : 'normal'}" style="--d:${i * 120}ms"><img src="${spriteOf(inst.id)}" alt="${esc(RUETHER_BY_ID[inst.id]?.name || '')}"><span class="shine"></span></div>`).join('')}</div>
+        <div class="qr-faces">${team.map((inst, i) => `<div class="frame r-${RARITY_BY_ID[inst.rarity] ? inst.rarity : 'normal'}" style="--d:${i * 120}ms"><img src="${spriteOf(inst.id)}" alt="${esc(defOf(inst.id)?.name || '')}"><span class="shine"></span></div>`).join('')}</div>
         <h2 class="qr-title">${ok ? 'Mission erfüllt!' : caught ? 'Erwischt!' : summary.result === 'abort' ? 'Abgebrochen' : 'Mission gescheitert'}</h2>
         <p class="qr-mission">${esc(mission.name)}${layout ? ` · ${esc(layout.name)}` : ''}${variant ? ` · ${esc(variant.name)}` : ''}${setup?.mirror ? ' · gespiegelt' : ''}</p>
         ${tg?.mode === 'coop' ? `<div class="qr-together">${player(tg.me)}<span class="qr-vs">Koop mit ${esc(tg.partner.name)}</span>${player(tg.partner)}</div>` : ''}
@@ -718,7 +748,7 @@ export function createProfileScreen({ el, onRename, onAvatar, onSettings, onShar
   $('.go-shop').addEventListener('click', () => onShop?.());
   $('.go-together').addEventListener('click', () => onTogether?.()); // v11: Lobby „Zusammen spielen“
   // Im Browser findet sich niemand (js/lobby.js appOnly): nicht Bluetooth versprechen, sondern auf die App verweisen
-  if (!globalThis.Capacitor?.isNativePlatform?.()) $('.go-together .sub').textContent = 'Nur in der Android-App. Download in der Lobby.';
+  if (!globalThis.Capacitor?.isNativePlatform?.()) $('.go-together .sub').textContent = 'Über Internet mit Raumcode. Ohne Netz nur in der Android-App.'; // v13 §4.3
   $('.share').addEventListener('click', () => onShare?.());
   $('.export').addEventListener('click', () => onExport?.());
   $('.edit-name').addEventListener('click', async () => {
@@ -748,7 +778,7 @@ export function createProfileScreen({ el, onRename, onAvatar, onSettings, onShar
 
   function render(onlineId, available, nameTaken) {
     const p = save.profile || {};
-    const leader = save.box.find(i => i.uid === save.team[0]);
+    const leader = save.team.map(uid => save.box.find(i => i.uid === uid)).find(Boolean); // v13: 'moshe' im Team überspringen
     $('.profile-head .frame').className = `frame r-${leader?.rarity || 'normal'}`;
     $('.avatar').src = spriteOf(p.avatar);
     $('.nick').textContent = p.nickname || 'Trainer';

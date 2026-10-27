@@ -1,4 +1,4 @@
-import { CONST, RUETHERS, RUETHER_BY_ID, BOSSES, ARENAS, ARENA_BY_ID, AD_ARENA, RARITY_BY_ID, pickLine } from './data.js';
+import { CONST, RUETHERS, RUETHER_BY_ID, QUEST_UNITS, BOSSES, ARENAS, ARENA_BY_ID, AD_ARENA, RARITY_BY_ID, pickLine } from './data.js';
 import * as storage from './storage.js';
 import { createLocator, distance, offsetPoint, geoHint } from './geo.js';
 import { updateSpawns, lureWave, lureTrim } from './spawn.js';
@@ -14,7 +14,7 @@ import { makeFighter, makeBoss } from './battle.js';
 import {
   catchReward, arenaWin, arenaReward, arenaScale, powerUp, buyItem, lureActive, dexCount, DEX_TOTAL, addXp, fuse, migrate,
   pickFood, feed, sell, sellDuplicates, levelUpUids, haunebuWin, startBeam, activeBeam, endBeam,
-  haunebuActive, extendHaunebu, questsUnlocked, questResult, fighterStats, buyAbility, upgradeAbility, equipAbility, loadoutFor,
+  haunebuActive, extendHaunebu, questsUnlocked, questResult, fighterStats, buyAbility, upgradeAbility, equipAbility, loadoutFor, mosheUnlocked, mosheInst,
 } from './progress.js';
 import { playSummon, playBeam, playReturn } from './flight.js';
 import { makeWild } from './wild.js';
@@ -119,11 +119,13 @@ function banner(text, kind) {
 }
 $('#banner').addEventListener('click', () => { if ($('#banner').dataset.kind === 'name') show('screen-profile'); });
 const instById = uid => save.box.find(i => i.uid === uid);
+// v13: die uid 'moshe' (Quest-Charakter, progress.js mosheInst) darf im Team stehen, ist aber kein Exemplar: Arena, Anführer,
+// Siegesscreen und Online-Leader überspringen ihn; nur Quests (launchQuest, questFighters) kennen ihn
 function teamInstances() {
-  save.team = save.team.filter(uid => instById(uid));
-  return save.team.map(instById);
+  save.team = save.team.filter(uid => instById(uid) || (uid === 'moshe' && mosheUnlocked(save)));
+  return save.team.map(instById).filter(Boolean);
 }
-const ticker = createTicker({ el: $('#btc-ticker'), getLeaderId: () => instById(save.team[0])?.id });
+const ticker = createTicker({ el: $('#btc-ticker'), getLeaderId: () => teamInstances()[0]?.id });
 // Level-Ups nach Siegen (levelUpUids-Ergebnis): ein Toast für alle, nach den Erfolgs-Toasts (sonst verdrängt, max. 3 sichtbar)
 function levelUpToast(ups) {
   ups = ups.filter(u => instById(u.uid));
@@ -132,7 +134,7 @@ function levelUpToast(ups) {
   sfx.play('levelup');
 }
 function leaderInfo() {
-  const l = instById(save.team[0]);
+  const l = teamInstances()[0];
   return l ? { id: l.id, rarity: l.rarity, level: l.level } : null;
 }
 function persist() {
@@ -448,10 +450,10 @@ const collection = createCollectionScreen({
   onEquipAbility: equipQuestAbility,
 });
 // v10 §1: Quest-Fähigkeiten gehören dem Rüther; Kaufen/Upgrade ziehen Sats ab, Ausrüsten ist gratis. persist speichert und synct.
-const abName = aid => ABILITIES[aid].name.replace(/\u00AD/g, ''); // ohne Trennstellen des Kreismenüs
+const abName = aid => `„${ABILITIES[aid].name.replace(/[\u00AD„“]/g, '')}“`; // in Anführungszeichen (Moshes Namen sind Sätze), ohne Trennstellen des Kreismenüs
 function abilityPaid(res, aid, what) {
   if (res.ok) { sfx.play('levelup'); haptic(30); toast(`${abName(aid)} ${what(res)}! −${fmt(res.cost)} Sats`, { kind: 'level' }); persist(); }
-  else toast(res.reason === 'sats' ? 'Nicht genug Sats.' : res.reason === 'max' ? 'Schon auf Stufe 3.' : 'Das geht nicht.');
+  else toast(res.reason === 'sats' ? 'Nicht genug Sats.' : res.reason === 'max' ? 'Schon auf Stufe 3.' : res.reason === 'gesperrt' ? 'Moshe arbeitet noch nicht für dich. Räume Rabino Empire HQ dreimal aus.' : 'Das geht nicht.');
   return res;
 }
 function equipQuestAbility(rid, aid) {
@@ -632,7 +634,7 @@ function bookArena(arena, uids, won, lost = 0) {
   const msg = arena.virtual ? bookMoshe(won, lost) : '';
   if (!won) { afterChange(); return { msg }; }
   const wasUnlocked = questsUnlocked(save), first = !save.arenaMastered[arena.id];
-  const w = arenaWin(save, arena.id, save.team[0]);
+  const w = arenaWin(save, arena.id, uids[0]); // v13: der erste echte Kämpfer, nie 'moshe'
   gainXp(CONST.XP_ARENA * w.level);
   trackQuest(save, 'arenaWin');
   const ups = levelUpUids(save, uids);
@@ -692,7 +694,7 @@ const battleScreen = createBattleScreen({
 createVictoryScreen({ el: $('#screen-victory'), onBack() { show('screen-map'); } });
 // Sieg-Screen: Gesicht des Team-Anführers mit Krone und einem Spruch (Spec §0.4)
 function showVictoryFace() {
-  const l = instById(save.team[0]) || save.box[0];
+  const l = teamInstances()[0] || save.box[0];
   if (!l) return;
   const face = $('.victory-face'), name = RUETHER_BY_ID[l.id].name;
   face.src = `sprites/${l.id}.png`;
@@ -944,7 +946,8 @@ async function openQuest(id) {
 async function launchQuest(id, uids, { setup = null, kieser = false } = {}) {
   const mission = MISSION_BY_ID[id];
   if (!mission || questRun || flying) return;
-  const insts = mission.solo ? [soloInst(mission.solo)].filter(Boolean) : uids.map(instById).filter(Boolean);
+  const pick = uid => (uid === 'moshe' ? mosheUnlocked(save) && mosheInst(save) : instById(uid)); // v13: Moshe ist kein Exemplar
+  const insts = mission.solo ? [soloInst(mission.solo)].filter(Boolean) : uids.map(pick).filter(Boolean);
   if (!haunebuActive(save, Date.now())) { toast('Die Haunebu ist weg. Beschwöre sie neu.', { icon: 'haunebu' }); return show('screen-quests'); }
   if (!insts.length) return toast(mission.solo ? `Fang erst ${RUETHER_BY_ID[mission.solo].name}.` : 'Nimm mindestens einen Rüther mit.');
   flying = true; // sperrt schon beim Laden: Doppeltipp auf „Abflug" startet sonst zwei Flüge
@@ -957,7 +960,7 @@ async function launchQuest(id, uids, { setup = null, kieser = false } = {}) {
   show('screen-quest');
   // v10: je Einheit die ausgerüsteten Fähigkeiten mit Stufe (auch am Kämpfer, so liest createQuest sie als team[i].loadout)
   const loadouts = insts.map(i => loadoutFor(save, i.id));
-  const fighters = insts.map((i, k) => ({ ...makeFighter(RUETHER_BY_ID[i.id], i), loadout: loadouts[k] }));
+  const fighters = insts.map((i, k) => ({ ...makeFighter(RUETHER_BY_ID[i.id] || QUEST_UNITS[i.id], i), loadout: loadouts[k] }));
   await questScreen.start({ mission, setup: questRun.setup, team: insts, fighters, loadouts, rng: Math.random });
   if (questRun?.kieser && current === 'screen-quest') { // Debug „Stefan ruft": Briefing zu, dann holt Stefan Viktor sofort
     $('#screen-quest .q-go')?.click();
@@ -1029,8 +1032,12 @@ const duelScreen = createDuelScreen({
   },
   onEnd() { together = null; show('screen-lobby'); lobby.back(); showLevelUps(); },
 });
-// Kämpfer aus Picks (die Lobby hat sie gesäubert, duelFighters rechnet die Werte neu): Quest-Modi mit Loadout, Koop mit owner
-const questFighters = (picks, owner) => duelFighters(picks).map((f, i) => ({ ...f, loadout: picks[i].loadout, ...(owner && { owner }) }));
+// Kämpfer aus Picks (die Lobby hat sie gesäubert, duelFighters rechnet die Werte neu): Quest-Modi mit Loadout, Koop mit owner.
+// v13: ein Pick mit id 'moshe' (cleanPicks lässt ihn nur im Quest-Modus durch) wird makeFighter(QUEST_UNITS.moshe, pick); duelFighters verwirft ihn
+const questFighters = (picks, owner) => picks.map(p => {
+  const f = p.id === 'moshe' ? makeFighter(QUEST_UNITS.moshe, p) : duelFighters([p])[0];
+  return f && { ...f, loadout: p.loadout, ...(owner && { owner }) };
+}).filter(Boolean);
 async function startTogether(g) {
   const t = together = { ...g, booked: false };
   if (g.mode === 'duel') {
@@ -1134,6 +1141,7 @@ dbgMission.addEventListener('change', dbgLayouts);
 dbgLayouts();
 function dbgQuest(id, kieser = false) {
   const m = MISSION_BY_ID[id], uids = teamInstances().map(i => i.uid);
+  if (!m.solo && mosheUnlocked(save) && uids.length < CONST.TEAM_SIZE) uids.push('moshe'); // v13: Moshe fliegt mit, wenn ein Platz frei ist
   if (!m.solo && !uids.length) return toast('Stell erst ein Team auf.');
   if (m.solo && !soloInst(m.solo)) return toast(`Fang erst ${RUETHER_BY_ID[m.solo].name}.`);
   if (!haunebuActive(save, Date.now())) save.haunebuUntil = Date.now() + CONST.HAUNEBU_USE_MS;
@@ -1164,11 +1172,11 @@ $('#dbg-close').addEventListener('click', () => debug.classList.add('hidden'));
 // ---------- v11: Was ist neu / App-Update ----------
 // Einmal pro Version „Was ist neu“ (Web und App). Die App (APK) fragt dazu version.json im Repo ab und bietet eine
 // neuere APK zum Herunterladen an (der Link geht über Capacitor in den Browser, der lädt die Datei).
-const VERSION = 12;
+const VERSION = 13;
 const NEWS = [
-  'Moshe Hillel: Alle paar Stunden findet dich seine Anzeige. „Jetzt sichern“ heißt kämpfen, sein Investment-Code nimmt dir echte Sats, Ausweichen rettet sie.',
-  'Im Shop gibt es den Investment-Code, 100 Seiten inklusive. Im Impressum steht, wo die neue Mission „Rabino Empire HQ“ spielt.',
-  'Zusammen spielen ohne Netz läuft jetzt (nur in der Android-App, Download unter Profil → Zusammen spielen; beide Handys brauchen die neue Version). Dosenbier-Stops gibt es auch ohne Netz, Stefans Kieser-Szene ist länger.',
+  'Moshe Hillel arbeitet für dich: Räume Rabino Empire HQ dreimal aus, dann steht er im Quest-Team. Fünf Fähigkeiten im Ton seiner Anzeige, Stufen wie bei den Rüthern.',
+  'Erwischt dich Moshe, läuft jetzt eins seiner echten Videos. Überspringen geht nach 20 Sekunden.',
+  'Zusammen spielen geht jetzt auch über Internet und im Browser: Raumcode teilen, fertig. Beide brauchen die neue Version.',
 ];
 const VERSION_URL = 'https://raw.githubusercontent.com/JustABusinessKid/ruetherpokemon/main/version.json';
 const newsHtml = list => `<ul class="news">${list.map(n => `<li>${esc(n)}</li>`).join('')}</ul>`;
