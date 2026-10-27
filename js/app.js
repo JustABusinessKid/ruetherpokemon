@@ -1210,13 +1210,14 @@ sfx.setEnabled(save.settings.sound !== false);
 setHapticsEnabled(save.settings.haptics !== false);
 // Haunebu-Flug über Neuladen: noch aktiv → ohne Animation wieder hin, abgelaufen → aufräumen
 const beamAtStart = activeBeam(save, Date.now());
-if (beamAtStart && ARENA_BY_ID[beamAtStart.arenaId]) { homePos = beamAtStart.from || null; land(ARENA_BY_ID[beamAtStart.arenaId]); } // homePos: Entfernungen im Popup, Rückflugziel bei neuem Flug
-else if (save.beam) endBeam(save);
+try { // v14: ein Fehler beim Wiederherstellen des Flugs darf den Start nicht töten (sonst kommt nie ein Update an)
+  if (beamAtStart && ARENA_BY_ID[beamAtStart.arenaId]) { homePos = beamAtStart.from || null; land(ARENA_BY_ID[beamAtStart.arenaId]); } // homePos: Entfernungen im Popup, Rückflugziel bei neuem Flug
+  else if (save.beam) endBeam(save);
+} catch (e) { console.error(e); endBeam(save); }
 if (!save.beam && save.settings.flight && save.settings.flightPos) locator.setFake(save.settings.flightPos); // Flugmodus über Neustart
 updateHud();
 ticker.refresh();
-// Offline-Start und App-Installation: Service Worker (sw.js, erzeugt von tools/make_sw.py)
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+// Service Worker: wird in index.html registriert, noch bevor ein Modul laden kann (so kommt ein Update auch nach einem Startfehler an)
 setTimeout(() => {
   $('#splash').classList.add('gone');
   setTimeout(() => $('#splash').remove(), 400);
