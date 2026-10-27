@@ -1,6 +1,6 @@
 // Onboarding: drei Erklärkarten (wischen oder „Weiter"), dann Pflichtprofil mit Name und Avatar.
 // avatars = RUETHERS; onDone({ nickname, avatar }) genau einmal pro start().
-export function createOnboarding({ el, avatars, onDone }) {
+export function createOnboarding({ el, avatars, onDone, onRestore, onImport, hasBackup }) {
   const slides = [...el.querySelectorAll('.onb-slide')];
   const dots = el.querySelector('.onb-dots');
   const next = el.querySelector('.onb-next');
@@ -28,6 +28,7 @@ export function createOnboarding({ el, avatars, onDone }) {
     next.textContent = profile ? 'Los geht\'s' : 'Weiter';
     skip.classList.toggle('hidden', profile);
     err.classList.add('hidden');
+    el.querySelector('.onb-restore')?.classList.toggle('hidden', !(profile && hasBackup?.()));
   }
   function finish() {
     const nick = name.value.trim();
@@ -45,6 +46,9 @@ export function createOnboarding({ el, avatars, onDone }) {
   skip.addEventListener('click', () => go(LAST));
   name.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); finish(); } });
   name.addEventListener('input', () => err.classList.add('hidden'));
+  // v14: Wer zurückgesetzt hat oder das Gerät wechselt, holt hier den alten Stand, statt erst ein Profil anzulegen
+  el.querySelector('.onb-restore')?.addEventListener('click', () => onRestore?.());
+  el.querySelector('.onb-import')?.addEventListener('click', () => onImport?.());
 
   // Wischen auf den Erklärkarten (nicht auf dem Profil: dort markiert man Text im Namensfeld)
   const area = el.querySelector('.onb-slides');

@@ -55,3 +55,31 @@ export function cleanSummary(s) {
     text: typeof o.text === 'string' ? o.text.slice(0, 300) : '', setup: o.setup ?? null, team: Array.isArray(o.team) ? o.team : [],
   };
 }
+
+// v14: Delta-Schnappschuss. Der volle Stand (8 KB alle 200 ms = 40 KB/s, zwei Teile je Nachricht) überfordert Bluetooth bei Nearby,
+// die Warteschlange wächst, der Gast hinkt Sekunden hinterher. Der Host schickt nur noch, was sich seit dem letzten qs geändert
+// hat (meist 0,5–1 KB): Felder je Einheit/Gegner/Objekt/Tür, sonst ganze Schlüssel. applyQuestSnapshot merged Teilobjekte
+// ohnehin je Index; fehlende Schlüssel bleiben beim Gast, wie sie sind. reset() erzwingt wieder einen vollen Stand
+// (erster qs, Partner neu verbunden, qr vom Gast). Längenänderungen (Verstärkung) und effects gehen immer komplett.
+const J = JSON.stringify;
+const SPARSE = new Set(['units', 'enemies', 'objs', 'doors']); // wie KEEP in engine.js: Objekt-Identität je Index
+export function createDelta() {
+  let prev = null;
+  return {
+    reset() { prev = null; },
+    next(s) {
+      if (!prev) { prev = s; return s; }
+      const out = {};
+      for (const k of Object.keys(s)) {
+        const v = s[k], o = prev[k];
+        if (SPARSE.has(k) && Array.isArray(v) && Array.isArray(o) && v.length === o.length && v.every(x => x && typeof x === 'object')) {
+          let changed = false;
+          const arr = v.map((x, i) => { const d = {}; for (const f in x) { if (!o[i] || J(x[f]) !== J(o[i][f])) { d[f] = x[f]; changed = true; } } return d; });
+          if (changed) out[k] = arr;
+        } else if (J(v) !== J(o)) out[k] = v;
+      }
+      prev = s;
+      return out;
+    },
+  };
+}

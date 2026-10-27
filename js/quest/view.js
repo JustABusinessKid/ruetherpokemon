@@ -21,7 +21,7 @@
 //   setRival({ name, avatar, done, total, over, result, lost? } | null): Gegner-Chip in der oberen Leiste.
 import { createQuest, tick, canExtract, visibleCone, abilitiesFor, abilityTargets, tratschMeet, questSummary, questSnapshot, applyQuestSnapshot, packEvents, ABILITIES, ENEMY_TYPES } from './engine.js';
 import { MISSION_BY_ID, MELEE_HINT } from './missions.js';
-import { COOP, cleanCmd, cleanSummary } from './coop.js';
+import { createDelta, COOP, cleanCmd, cleanSummary } from './coop.js';
 import { RACE } from './race.js';
 import { pickVideo, videoSrc, mountVideo, warmVideo, SKIP_MS, SAFETY_MS } from './video.js';
 import { makeFighter } from '../battle.js';
@@ -2029,14 +2029,14 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
     const ev = coop.out.length ? coop.out : st.over && coop.endEv ? [coop.endEv] : [];
     coop.endEv ||= ev.find(e => e.type === 'end') || null;
     coop.out = [];
-    coop.link.send({ t: 'qs', s: questSnapshot(st), ev: packEvents(ev), p: paused });
+    coop.link.send({ t: 'qs', s: coop.delta.next(questSnapshot(st)), ev: packEvents(ev), p: paused }); // v14: nur Änderungen
   }
   function sendQr() { coop.qrAt = performance.now(); coop.link.send({ t: 'qr' }); }
   function linkUp() {
     const L = coop.link, on = (type, fn) => { const off = L.on?.(type, fn); if (typeof off === 'function') coop.offs.push(off); };
     on('message', onMsg);
     on('lost', () => partnerAway(true));
-    on('connected', e => { if (e?.again) partnerAway(false); });
+    on('connected', e => { coop.delta?.reset(); if (e?.again) partnerAway(false); }); // v14: nach Wiederverbinden erst ein voller Stand
     on('disconnected', () => partnerLeft());
     coop.qsAt = performance.now();
     if (L.state !== 'connected' && L.state !== 'lost') return partnerLeft(); // schon weg, während die Bilder luden (disconnected verpasst)
@@ -2059,7 +2059,7 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
     if (!coop || !st || !isObj(m)) return;
     if (m.t === 'away' || m.t === 'back') return partnerAway(m.t === 'away'); // Lobby: App im Hintergrund bzw. zurück
     if (hosting()) {
-      if (m.t === 'qr') { coop.ready = true; updateGo(); } else if (m.t === 'qc') {
+      if (m.t === 'qr') { coop.ready = true; coop.delta?.reset(); updateGo(); } else if (m.t === 'qc') {
         const c = cleanCmd(m.cmd, st.units.length);
         if (c && !st.over) feed(tick(st, 0, [c]));
       } else if (m.t === 'qp' && !briefingOpen() && !st.over) setPaused(!!m.on);
@@ -2071,7 +2071,7 @@ export function createQuestScreen({ el, onEnd, onProgress }) {
     coop.qsAt = performance.now(); coop.gotQs = true;
     try {
       // Interpolation nur neu starten, wenn die Host-Zeit weiterlief: in der Pause kommt qs auch, gt bliebe sonst nicht stehen
-      const moved = m.s.time !== st.time;
+      const moved = 'time' in m.s && m.s.time !== st.time; // v14: Delta lässt time weg, wenn die Zeit steht
       if (moved) snap(true);
       applyQuestSnapshot(st, m.s);
       if (moved) acc = 0;

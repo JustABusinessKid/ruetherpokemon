@@ -1,0 +1,7 @@
+native/www/
+native/android/app/src/main/assets/
+vids/
+sprites/
+vendor/
+node_modules/
+native/android/app/build/

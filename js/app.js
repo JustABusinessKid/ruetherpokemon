@@ -7,8 +7,7 @@ import { createCatchScreen } from './catch.js';
 import {
   createCollectionScreen, createDexScreen, createShopScreen, createArenaScreen, createVictoryScreen,
   createQuestsScreen, createLeaderboardScreen, createProfileScreen, createStopScreen, distText,
-  createQuestTeamScreen, createQuestResultScreen, clock,
-} from './screens.js';
+  createQuestTeamScreen, createQuestResultScreen, clock, askText } from './screens.js';
 import { createBattleScreen } from './battle-ui.js';
 import { makeFighter, makeBoss } from './battle.js';
 import {
@@ -505,6 +504,24 @@ const questsScreen = createQuestsScreen({
   onShop() { show('screen-shop'); },
 });
 const leaderboard = createLeaderboardScreen({ el: $('#screen-leaderboard') });
+// Spielstand einfügen (Profil und Onboarding): prüfen, migrieren, speichern, neu laden
+function importSave(text) {
+    let data = null;
+    try { data = JSON.parse(text); } catch { /* kein JSON */ }
+    const v = data && typeof data === 'object' ? data.version : null;
+    if (!(v === 1 || ((v === 2 || v === 3) && Array.isArray(data.box)))) {
+      toast(Number.isFinite(v) && v > 3 ? 'Der Spielstand ist aus einer neueren Version. Lade erst die Seite neu.' : 'Das war kein gültiger Spielstand.');
+      return false;
+    }
+    const { _key, ...rest } = data, next = migrate(rest);
+    if (!storage.save(next)) { toast('Speichern fehlgeschlagen: Speicher voll oder gesperrt.'); return false; }
+    save = next;
+    if (typeof _key === 'string') online.importKey?.(_key);
+    toast('Spielstand übernommen.');
+    setTimeout(() => location.reload(), 600);
+    return true;
+  }
+
 const profile = createProfileScreen({
   el: $('#screen-profile'),
   onRename(nick) {
@@ -535,22 +552,7 @@ const profile = createProfileScreen({
     return json;
   },
   // Nur bekannte Versionen; v2/v3 brauchen box (sonst überschriebe ein leerer Stand den alten). Erfolg erst nach dem Speichern.
-  onImport(text) {
-    let data = null;
-    try { data = JSON.parse(text); } catch { /* kein JSON */ }
-    const v = data && typeof data === 'object' ? data.version : null;
-    if (!(v === 1 || ((v === 2 || v === 3) && Array.isArray(data.box)))) {
-      toast(Number.isFinite(v) && v > 3 ? 'Der Spielstand ist aus einer neueren Version. Lade erst die Seite neu.' : 'Das war kein gültiger Spielstand.');
-      return false;
-    }
-    const { _key, ...rest } = data, next = migrate(rest);
-    if (!storage.save(next)) { toast('Speichern fehlgeschlagen: Speicher voll oder gesperrt.'); return false; }
-    save = next;
-    if (typeof _key === 'string') online.importKey?.(_key);
-    toast('Spielstand übernommen.');
-    setTimeout(() => location.reload(), 600);
-    return true;
-  },
+  onImport: importSave,
   onReset() { storage.clear(); location.reload(); },
   onShop() { show('screen-shop'); },
   onTogether() { // v11: braucht nur das Profil; nicht mitten im Haunebu-Flug oder in der Quest
@@ -1084,6 +1086,12 @@ function bookRace(r) {
 const onboarding = createOnboarding({
   el: $('#screen-onboarding'),
   avatars: RUETHERS,
+  hasBackup: () => storage.hasBackup(),
+  onRestore() { if (storage.restore()) location.reload(); else toast('Keine Sicherung da.'); },
+  async onImport() {
+    const v = await askText({ title: 'Spielstand einfügen', html: '<p class="sub">Den kopierten Spielstand (Profil → Spielstand kopieren) hier einfügen.</p><textarea class="import" rows="5" placeholder="{ … }"></textarea>', cls: 'import', ok: 'Übernehmen' });
+    if (v) importSave(v);
+  },
   onDone({ nickname, avatar }) {
     const first = !save.seen.onboarding && !save.box.length;
     save.profile = { nickname, avatar, token: uuid(), createdAt: Date.now() };
@@ -1176,12 +1184,13 @@ $('#dbg-close').addEventListener('click', () => debug.classList.add('hidden'));
 // ---------- v11: Was ist neu / App-Update ----------
 // Einmal pro Version „Was ist neu“ (Web und App). Die App (APK) fragt dazu version.json im Repo ab und bietet eine
 // neuere APK zum Herunterladen an (der Link geht über Capacitor in den Browser, der lädt die Datei).
-const VERSION = 14;
+const VERSION = 15;
 const NEWS = [
   'Moshe Hillel arbeitet für dich: Räume Rabino Empire HQ dreimal aus, dann steht er im Quest-Team. Fünf Fähigkeiten im Ton seiner Anzeige, Stufen wie bei den Rüthern.',
   'Erwischt dich Moshe, läuft jetzt eins seiner echten Videos. Überspringen geht nach 20 Sekunden.',
   'Zusammen spielen geht jetzt auch über Internet und im Browser: Raumcode teilen, fertig. Beide brauchen die neue Version.',
   'Haunebu repariert: Nach der Landung ging keine Arena auf und das Beamen im Cheat-Menü lief nicht. Beides geht wieder.',
+  'Zusammen spielen in der Nähe ruckelt nicht mehr: Der Host schickt nur noch Änderungen statt des ganzen Spielstands. Nach einem Zurücksetzen oder Gerätewechsel holst du den alten Spielstand jetzt direkt beim Start zurück.',
 ];
 const VERSION_URL = 'https://raw.githubusercontent.com/JustABusinessKid/ruetherpokemon/main/version.json';
 const newsHtml = list => `<ul class="news">${list.map(n => `<li>${esc(n)}</li>`).join('')}</ul>`;

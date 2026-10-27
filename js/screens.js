@@ -48,7 +48,7 @@ function agoText(ms) {
   return `${Math.floor(h / 24)} Tagen`;
 }
 // Popup mit Eingabefeld. Der Wert wird per Delegation mitgelesen, weil ui.js die Karte beim Schließen sofort ersetzt.
-async function askText({ title, html, cls, initial = '', ok = 'Speichern' }) {
+export async function askText({ title, html, cls, initial = '', ok = 'Speichern' }) {
   let value = initial;
   const box = document.getElementById('popup');
   const onInput = e => { if (e.target.classList.contains(cls)) value = e.target.value; };
@@ -63,7 +63,7 @@ export const distText = m => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).to
 const emptyState = (icon, text, sub = '') =>
   `<div class="empty">${ico(icon, 'ico-xl empty-ico')}<p>${esc(text)}</p>${sub ? `<p class="sub">${esc(sub)}</p>` : ''}</div>`;
 // Versionsanzeige im Profil; bei jedem Release mitziehen
-export const VERSION = 'v14';
+export const VERSION = 'v15';
 // Jeder Knopf-Tipp baut die Liste neu auf: ein schneller zweiter Tipp träfe das nachgerückte Exemplar (falsches verkauft oder
 // gefüttert, zwei Super-Münzen gekauft). Darum schluckt node 300 ms nach einem Knopf-Tipp alle weiteren Klicks.
 function tapGuard(node, ms = 300) {

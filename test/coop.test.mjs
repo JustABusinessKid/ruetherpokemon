@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createQuest, tick, questSnapshot, applyQuestSnapshot, packEvents, tileAt } from '../js/quest/engine.js';
 import { MISSIONS, pickSetup } from '../js/quest/missions.js';
-import { cleanCmd, cleanSummary, COOP } from '../js/quest/coop.js';
+import { createDelta, cleanCmd, cleanSummary, COOP } from '../js/quest/coop.js';
 import { RACE, raceWinner } from '../js/quest/race.js';
 import { makeFighter } from '../js/battle.js';
 import { RUETHER_BY_ID } from '../js/data.js';
@@ -173,4 +173,26 @@ test('Koop-Gast: Schnappschuss ändert nie, wer eine Einheit ist; Zusammenfassun
   assert.deepEqual(c, { result: 'abort', reason: 'caught', score: 0, objective: { done: 0, total: 4, min: 0 }, timeMs: 0, alarmFree: false,
     delivered: 0, leftBehind: 0, kieser: 0, videos: 2, fine: 50, text: '', setup: { layoutId: 'a' }, team: [{ id: 'micha' }] });
   assert.equal(cleanSummary(null).result, 'abort');
+});
+
+test('v14 Delta-Schnappschuss: Gast landet nach Deltas beim selben Stand wie mit vollen Schnappschüssen, Deltas klein, ein Teil', () => {
+  const m = MISSIONS[0], rng = seededRng(7), setup = pickSetup(m, rng);
+  const st = createQuest({ mission: m, setup, team: TEAM(), rng, maxUnits: 4 });
+  const viaDelta = createQuest({ mission: m, setup, team: TEAM(), rng: seededRng(7), maxUnits: 4 });
+  const viaFull = createQuest({ mission: m, setup, team: TEAM(), rng: seededRng(7), maxUnits: 4 });
+  const d = createDelta(), pr = seededRng(11); let bytes = 0, n = 0;
+  for (let k = 0; k < 200; k++) {
+    const cmds = k % 40 ? [] : st.units.map(u => ({ type: 'move', unit: u.i, to: { x: pr() * st.w, y: pr() * st.h }, by: u.owner }));
+    tick(st, 50, cmds);
+    if (k % 4) continue;
+    const full = questSnapshot(st), delta = JSON.parse(JSON.stringify(d.next(full)));
+    if (k) { bytes += JSON.stringify(delta).length; n++; assert.ok(JSON.stringify(delta).length < 4000, `Delta ${JSON.stringify(delta).length}`); }
+    applyQuestSnapshot(viaDelta, delta); applyQuestSnapshot(viaFull, JSON.parse(JSON.stringify(full)));
+  }
+  assert.deepEqual(questSnapshot(viaDelta), questSnapshot(viaFull));
+  assert.ok(bytes / n < 2500, `Delta im Schnitt ${Math.round(bytes / n)} B`);
+  d.reset();
+  assert.deepEqual(d.next(questSnapshot(st)), questSnapshot(st)); // nach reset wieder voll
+  const paused = createDelta(); paused.next(questSnapshot(st));
+  assert.equal('time' in paused.next(questSnapshot(st)), false); // steht die Zeit, fehlt time im Delta
 });
