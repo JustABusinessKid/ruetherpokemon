@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1793132117,
+ "lastMsgTime": 1793165191,
  "players": {
   "C-w_CUaEP-FRT271jxj2J9Fpmi7nZRiJBkW7o1pXg3I": {
    "nickname": "Adolf",
@@ -21,7 +21,7 @@
   "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
    "nickname": "BTC",
    "avatar": "christian",
-   "sats": 65411,
+   "sats": 65611,
    "dex": 20,
    "trophies": 65,
    "mastered": 5,
@@ -32,7 +32,7 @@
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1793131295812
+   "t": 1793165140728
   }
  },
  "arenas": {
@@ -88,6 +88,13 @@
   }
  },
  "events": [
+  {
+   "at": 1793165190721,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Viktor erschaffen!",
+   "m": "PVqXFXdxb1hlVr20"
+  },
   {
    "at": 1793131083092,
    "nickname": "BTC",
@@ -430,13 +437,6 @@
    "kind": "catch",
    "text": "hat einen legendären Viktor gefangen!",
    "m": "uF82CQSUUHM4l2ii"
-  },
-  {
-   "at": 1791662297848,
-   "nickname": "BTC",
-   "kind": "catch",
-   "text": "hat einen legendären Christian gefangen!",
-   "m": "LI5qNCgWIxAaKVvU"
   }
  ]
 }
