@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1793427532,
+ "lastMsgTime": 1793427778,
  "players": {
   "C-w_CUaEP-FRT271jxj2J9Fpmi7nZRiJBkW7o1pXg3I": {
    "nickname": "Adolf",
@@ -21,18 +21,18 @@
   "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
    "nickname": "BTC",
    "avatar": "christian",
-   "sats": 68671,
+   "sats": 68841,
    "dex": 20,
    "trophies": 67,
    "mastered": 5,
    "level": 30,
-   "xp": 3220,
+   "xp": 3780,
    "leader": {
     "id": "christian",
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1793427532070
+   "t": 1793427778208
   },
   "99CVQ1hInLLkgU9JuMNb6_a9_NtrRJ2ts_MMU0DEh2o": {
    "nickname": "Hagen",
@@ -100,6 +100,27 @@
   }
  },
  "events": [
+  {
+   "at": 1793427749046,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Viktor erschaffen!",
+   "m": "Wg_FyUcDqpAVF-q4"
+  },
+  {
+   "at": 1793427747367,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Viktor erschaffen!",
+   "m": "qEF1cuPF8m4Yr_P2"
+  },
+  {
+   "at": 1793427742411,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Onkel Micha erschaffen!",
+   "m": "XnmmiKfdyo7-QvnB"
+  },
   {
    "at": 1793165190721,
    "nickname": "BTC",
@@ -428,27 +449,6 @@
    "kind": "achievement",
    "text": "hat die Haunebu erbeutet und fliegt 10 Minuten lang frei zu jeder Arena!",
    "m": "togSS5KCw8znmJuF"
-  },
-  {
-   "at": 1791706216154,
-   "nickname": "BTC",
-   "kind": "arena",
-   "text": "hat Hüttenbergstraße erobert (Lv. 5) und Adolf rausgeworfen.",
-   "m": "FAYyWpVf4cWiT8Z1"
-  },
-  {
-   "at": 1791706216138,
-   "nickname": "BTC",
-   "kind": "achievement",
-   "text": "hat Hüttenbergstraße gemeistert!",
-   "m": "smY6eTwFicvn8wns"
-  },
-  {
-   "at": 1791662336901,
-   "nickname": "Adolf",
-   "kind": "catch",
-   "text": "hat einen legendären Viktor gefangen!",
-   "m": "uF82CQSUUHM4l2ii"
   }
  ]
 }
