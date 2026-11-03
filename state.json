@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1793714948,
+ "lastMsgTime": 1793717509,
  "players": {
   "C-w_CUaEP-FRT271jxj2J9Fpmi7nZRiJBkW7o1pXg3I": {
    "nickname": "Adolf",
@@ -32,7 +32,7 @@
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1793714948424
+   "t": 1793717492723
   },
   "99CVQ1hInLLkgU9JuMNb6_a9_NtrRJ2ts_MMU0DEh2o": {
    "nickname": "Hagen",
@@ -100,6 +100,27 @@
   }
  },
  "events": [
+  {
+   "at": 1793717508998,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Viktor erschaffen!",
+   "m": "ME8nkb6te5LpLJyW"
+  },
+  {
+   "at": 1793717504198,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Christian erschaffen!",
+   "m": "LD2gXujWDu_tudtV"
+  },
+  {
+   "at": 1793717502812,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Christian erschaffen!",
+   "m": "GUlQqhnn7C0ZLwSK"
+  },
   {
    "at": 1793427749046,
    "nickname": "BTC",
@@ -428,27 +449,6 @@
    "kind": "fusion",
    "text": "hat per Fusion einen epischen Hildegard erschaffen!",
    "m": "wJguKE5ZZcVz7hTg"
-  },
-  {
-   "at": 1791714128021,
-   "nickname": "BTC",
-   "kind": "fusion",
-   "text": "hat per Fusion einen epischen Christian erschaffen!",
-   "m": "MCxDcKsar0yJ0iw2"
-  },
-  {
-   "at": 1791714124354,
-   "nickname": "BTC",
-   "kind": "fusion",
-   "text": "hat per Fusion einen legendären Christian erschaffen!",
-   "m": "X4wVsF-JFwjk-_Ex"
-  },
-  {
-   "at": 1791713981824,
-   "nickname": "BTC",
-   "kind": "achievement",
-   "text": "hat die Haunebu erbeutet und fliegt 10 Minuten lang frei zu jeder Arena!",
-   "m": "togSS5KCw8znmJuF"
   }
  ]
 }
