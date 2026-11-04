@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1793796427,
+ "lastMsgTime": 1793820730,
  "players": {
   "C-w_CUaEP-FRT271jxj2J9Fpmi7nZRiJBkW7o1pXg3I": {
    "nickname": "Adolf",
@@ -21,18 +21,18 @@
   "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
    "nickname": "BTC",
    "avatar": "christian",
-   "sats": 74346,
+   "sats": 77266,
    "dex": 20,
-   "trophies": 68,
+   "trophies": 69,
    "mastered": 5,
    "level": 31,
-   "xp": 1020,
+   "xp": 1850,
    "leader": {
     "id": "christian",
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1793796426704
+   "t": 1793820729587
   },
   "99CVQ1hInLLkgU9JuMNb6_a9_NtrRJ2ts_MMU0DEh2o": {
    "nickname": "Hagen",
@@ -100,6 +100,13 @@
   }
  },
  "events": [
+  {
+   "at": 1793820642638,
+   "nickname": "BTC",
+   "kind": "achievement",
+   "text": "hat Rabino Empire gemeistert!",
+   "m": "qXHQtI6OpjNxYL75"
+  },
   {
    "at": 1793717508998,
    "nickname": "BTC",
@@ -442,13 +449,6 @@
    "kind": "fusion",
    "text": "hat per Fusion einen epischen Viktor erschaffen!",
    "m": "nIWmtXOJWgp98wQM"
-  },
-  {
-   "at": 1791714139224,
-   "nickname": "BTC",
-   "kind": "fusion",
-   "text": "hat per Fusion einen epischen Hildegard erschaffen!",
-   "m": "wJguKE5ZZcVz7hTg"
   }
  ]
 }
