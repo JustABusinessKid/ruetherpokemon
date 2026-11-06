@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1793982291,
+ "lastMsgTime": 1793982707,
  "players": {
   "C-w_CUaEP-FRT271jxj2J9Fpmi7nZRiJBkW7o1pXg3I": {
    "nickname": "Adolf",
@@ -45,6 +45,18 @@
    "xp": 0,
    "leader": null,
    "t": 1793176717709
+  },
+  "7m7Zljzy8dZMidCIB1asou38guPje42tTZlgStaRxaY": {
+   "nickname": "Tester",
+   "avatar": "christian",
+   "sats": 200,
+   "dex": 0,
+   "trophies": 0,
+   "mastered": 0,
+   "level": 1,
+   "xp": 0,
+   "leader": null,
+   "t": 1793982705905
   }
  },
  "arenas": {
