@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1794146042,
+ "lastMsgTime": 1794171227,
  "players": {
   "C-w_CUaEP-FRT271jxj2J9Fpmi7nZRiJBkW7o1pXg3I": {
    "nickname": "Adolf",
@@ -32,7 +32,7 @@
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1794146040763
+   "t": 1794171213022
   },
   "99CVQ1hInLLkgU9JuMNb6_a9_NtrRJ2ts_MMU0DEh2o": {
    "nickname": "Hagen",
@@ -112,6 +112,13 @@
   }
  },
  "events": [
+  {
+   "at": 1794171226955,
+   "nickname": "BTC",
+   "kind": "catch",
+   "text": "hat einen legendären Christian gefangen!",
+   "m": "J-5O0iY4nkvvgLek"
+  },
   {
    "at": 1794145768709,
    "nickname": "BTC",
@@ -454,13 +461,6 @@
    "kind": "quest",
    "text": "hat die Haunebu-Quest „Nie wieder duschen“ geschafft!",
    "m": "W5MvyJUkwehRJYHh"
-  },
-  {
-   "at": 1791714157997,
-   "nickname": "BTC",
-   "kind": "fusion",
-   "text": "hat per Fusion einen legendären Ramona Rüther erschaffen!",
-   "m": "u5xzaf7Tr7Un-ycf"
   }
  ]
 }
