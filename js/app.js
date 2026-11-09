@@ -1184,7 +1184,7 @@ $('#dbg-close').addEventListener('click', () => debug.classList.add('hidden'));
 // ---------- v11: Was ist neu / App-Update ----------
 // Einmal pro Version „Was ist neu“ (Web und App). Die App (APK) fragt dazu version.json im Repo ab und bietet eine
 // neuere APK zum Herunterladen an (der Link geht über Capacitor in den Browser, der lädt die Datei).
-const VERSION = 16;
+const VERSION = 17;
 const NEWS = [
   'Moshe Hillel arbeitet für dich: Räume Rabino Empire HQ dreimal aus, dann steht er im Quest-Team. Fünf Fähigkeiten im Ton seiner Anzeige, Stufen wie bei den Rüthern.',
   'Erwischt dich Moshe, läuft jetzt eins seiner echten Videos. Überspringen geht nach 20 Sekunden.',
@@ -1204,8 +1204,13 @@ function newsCheck() {
   if (!globalThis.Capacitor?.isNativePlatform?.()) return; // im Browser aktualisiert der Service Worker von selbst
   fetch(`${VERSION_URL}?t=${Date.now()}`, { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).then(async v => {
     if (!v || !(v.v > VERSION) || !/^https:\/\/github\.com\//.test(v.apk || '')) return;
-    const i = await popup({ title: 'Neue App-Version', icon: 'star', html: `<p>Version ${esc(String(v.v))} ist da. Herunterladen, öffnen und installieren, dein Spielstand bleibt.</p>${newsHtml(v.news || [])}`, buttons: [{ label: 'Später' }, { label: 'Herunterladen', primary: true }] });
-    if (i === 1) location.href = v.apk;
+    // v16: force in version.json = Pflicht-Update, ohne „Später“; das Popup kommt so lange wieder, bis der Download angetippt ist
+    const force = v.force === true || (Number.isFinite(v.minV) && VERSION < v.minV);
+    for (;;) {
+      const i = await popup({ title: force ? 'Update nötig' : 'Neue App-Version', icon: 'star', html: `<p>Version ${esc(String(v.v))} ist da. Herunterladen, öffnen und installieren, dein Spielstand bleibt.${force ? ' Ohne das Update geht es nicht weiter.' : ''}</p>${newsHtml(v.news || [])}`, buttons: force ? [{ label: 'Herunterladen', primary: true }] : [{ label: 'Später' }, { label: 'Herunterladen', primary: true }] });
+      if (force ? i === 0 : i === 1) { location.href = v.apk; if (!force) return; continue; }
+      return;
+    }
   }).catch(() => {}); // offline: nächstes Mal
 }
 

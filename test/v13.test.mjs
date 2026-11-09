@@ -230,7 +230,7 @@ test('v13 §0: Fähigkeitstexte, Erfolg, Versionsmeldung ohne verbotene Wörter;
   const v = JSON.parse(readFileSync(new URL('../version.json', import.meta.url), 'utf8'));
   texts.push(...v.news);
   for (const t of texts) assert.doesNotMatch(t, banned, t);
-  assert.equal(v.v, 16);
+  assert.equal(v.v, 17);
   assert.equal(v.news.length, 6);
   const app = readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
   for (const n of v.news) assert.ok(app.includes(`'${n}'`), `NEWS in app.js: ${n}`);
