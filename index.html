@@ -417,7 +417,16 @@
 
 <script src="vendor/leaflet/leaflet.js"></script>
 <!-- onerror: scheitert ein Modul beim Laden, kommt der error-Listener in app.js nie dran, der Splash hinge stumm -->
-<script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').then(r => r.update().catch(() => {})).catch(() => {});</script> <!-- vor den Modulen: Updates kommen auch an, wenn app.js beim Start stirbt -->
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').then(r => r.update().catch(() => {})).catch(() => {});
+  // v17: Wird eine neue Version aktiv, während die Seite gerade erst geladen hat (< 20 s), sofort neu laden, damit die neue
+  // Version (und z. B. die PIN) schon beim ersten Öffnen greift, nicht erst beim zweiten; einmal je Sitzung, nie mitten im Spiel
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    try { if (performance.now() < 20000 && !sessionStorage.getItem('rg-reloaded')) { sessionStorage.setItem('rg-reloaded', '1'); location.reload(); } } catch {}
+  });
+}
+</script> <!-- vor den Modulen: Updates kommen auch an, wenn app.js beim Start stirbt -->
 <script type="module" src="js/app.js" onerror="document.querySelector('#splash p').textContent='Fehler beim Laden. Bitte Seite neu laden.'"></script>
 </body>
 </html>
