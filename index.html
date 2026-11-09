@@ -27,6 +27,49 @@
 </head>
 <body>
 
+<!-- PIN-Schleuse (v16): einmal je Gerät; danach Merker ruether-go-pin. Nur der SHA-256-Hash steht im Code. Läuft ohne Module, also auch, wenn app.js stirbt. -->
+<div id="pin-gate" class="pin-gate hidden" role="dialog" aria-labelledby="pin-title">
+  <img src="art/coin-big.png" alt="">
+  <h1 id="pin-title">Rüther GO</h1>
+  <p>Zugangs-PIN</p>
+  <input id="pin-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" aria-label="PIN">
+  <p id="pin-error" class="pin-error hidden">Falsche PIN.</p>
+  <button id="pin-go" class="btn primary">Weiter</button>
+</div>
+<script>
+(() => {
+  const KEY = 'ruether-go-pin', HASH = '01f0a55c866eeb79adee1aa0b130e2a6da664a7b912a6cab70d560649a0caa7b';
+  let ok = false; try { ok = localStorage.getItem(KEY) === 'ok'; } catch {}
+  if (ok) return;
+  const gate = document.getElementById('pin-gate'), inp = document.getElementById('pin-input'), err = document.getElementById('pin-error');
+  gate.classList.remove('hidden');
+  const hex = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+  async function sha(t) {
+    if (globalThis.crypto?.subtle) return hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)));
+    let h = 0x811c9dc5; for (const c of t) { h ^= c.charCodeAt(0); h = Math.imul(h, 0x01000193) >>> 0; } // kein sicherer Kontext (http im LAN): FNV-1a als Notnagel
+    return 'fnv:' + h.toString(16);
+  }
+  const FNV = 'fnv:c86b6a4b';
+  let busy = false;
+  async function check() {
+    if (busy) return; busy = true;
+    const v = inp.value.trim();
+    const h = await sha(v);
+    if (h === HASH || h === FNV) {
+      try { localStorage.setItem(KEY, 'ok'); } catch {}
+      gate.classList.add('hidden');
+    } else {
+      err.classList.remove('hidden'); gate.classList.add('shake'); setTimeout(() => gate.classList.remove('shake'), 400);
+      inp.value = ''; inp.focus();
+    }
+    busy = false;
+  }
+  document.getElementById('pin-go').addEventListener('click', check);
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') check(); });
+  inp.addEventListener('input', () => { err.classList.add('hidden'); if (inp.value.length === 4) check(); });
+  setTimeout(() => inp.focus(), 50);
+})();
+</script>
 <div id="splash" class="splash">
   <img src="art/coin-big.png" alt="">
   <h1>Rüther GO</h1>

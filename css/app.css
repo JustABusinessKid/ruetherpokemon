@@ -472,3 +472,14 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .mp-room-code:focus { border-color: var(--teal); }
 .mp-wait-code { margin: 0; font: 700 34px/1.2 var(--font-pixel); letter-spacing: .25em; user-select: text; -webkit-user-select: text; }
 .mp-share { min-height: 48px; }
+
+/* v16: PIN-Schleuse, liegt über dem Splash */
+.pin-gate { position: fixed; inset: 0; z-index: 4000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px;
+  background-color: var(--night); background-image: var(--dither-night); background-size: 8px 8px; color: var(--paper); text-align: center; }
+.pin-gate.hidden { display: none; }
+.pin-gate img { width: 96px; image-rendering: pixelated; }
+.pin-gate h1 { margin: 0; font-family: var(--font-pixel); }
+#pin-input { width: 180px; min-height: 56px; text-align: center; letter-spacing: .5em; font: 700 28px/1 var(--font-pixel); color: var(--ink); background: var(--paper); border: 3px solid var(--ink); }
+.pin-error { color: var(--red, #e0533f); margin: 0; }
+.pin-gate.shake { animation: pin-shake .4s steps(6, end); }
+@keyframes pin-shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-10px); } 40%, 80% { transform: translateX(10px); } }

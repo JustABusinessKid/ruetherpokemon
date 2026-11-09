@@ -1184,13 +1184,14 @@ $('#dbg-close').addEventListener('click', () => debug.classList.add('hidden'));
 // ---------- v11: Was ist neu / App-Update ----------
 // Einmal pro Version „Was ist neu“ (Web und App). Die App (APK) fragt dazu version.json im Repo ab und bietet eine
 // neuere APK zum Herunterladen an (der Link geht über Capacitor in den Browser, der lädt die Datei).
-const VERSION = 15;
+const VERSION = 16;
 const NEWS = [
   'Moshe Hillel arbeitet für dich: Räume Rabino Empire HQ dreimal aus, dann steht er im Quest-Team. Fünf Fähigkeiten im Ton seiner Anzeige, Stufen wie bei den Rüthern.',
   'Erwischt dich Moshe, läuft jetzt eins seiner echten Videos. Überspringen geht nach 20 Sekunden.',
   'Zusammen spielen geht jetzt auch über Internet und im Browser: Raumcode teilen, fertig. Beide brauchen die neue Version.',
   'Haunebu repariert: Nach der Landung ging keine Arena auf und das Beamen im Cheat-Menü lief nicht. Beides geht wieder.',
   'Zusammen spielen in der Nähe ruckelt nicht mehr: Der Host schickt nur noch Änderungen statt des ganzen Spielstands. Nach einem Zurücksetzen oder Gerätewechsel holst du den alten Spielstand jetzt direkt beim Start zurück.',
+  'Zugangs-PIN: Einmal je Gerät eingeben, danach läuft alles wie gewohnt.',
 ];
 const VERSION_URL = 'https://raw.githubusercontent.com/JustABusinessKid/ruetherpokemon/main/version.json';
 const newsHtml = list => `<ul class="news">${list.map(n => `<li>${esc(n)}</li>`).join('')}</ul>`;
