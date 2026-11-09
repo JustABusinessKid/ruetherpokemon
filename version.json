@@ -10,5 +10,5 @@
     "Zugangs-PIN: Einmal je Gerät eingeben, danach läuft alles wie gewohnt."
   ],
   "minV": 17,
-  "force": false
+  "force": true
 }
