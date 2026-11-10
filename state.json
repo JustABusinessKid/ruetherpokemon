@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1794288998,
+ "lastMsgTime": 1794316562,
  "players": {
   "C-w_CUaEP-FRT271jxj2J9Fpmi7nZRiJBkW7o1pXg3I": {
    "nickname": "Adolf",
@@ -21,18 +21,18 @@
   "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
    "nickname": "BTC",
    "avatar": "christian",
-   "sats": 82926,
+   "sats": 83126,
    "dex": 20,
    "trophies": 72,
    "mastered": 5,
    "level": 32,
-   "xp": 940,
+   "xp": 1270,
    "leader": {
     "id": "christian",
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1794288997472
+   "t": 1794316561429
   },
   "99CVQ1hInLLkgU9JuMNb6_a9_NtrRJ2ts_MMU0DEh2o": {
    "nickname": "Hagen",
@@ -112,6 +112,20 @@
   }
  },
  "events": [
+  {
+   "at": 1794316545655,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Viktor erschaffen!",
+   "m": "rCv5w6l_TuT4tD9o"
+  },
+  {
+   "at": 1794316542578,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Christian erschaffen!",
+   "m": "SnsEZXTr1tPt4XGi"
+  },
   {
    "at": 1794171226955,
    "nickname": "BTC",
@@ -447,20 +461,6 @@
    "kind": "fusion",
    "text": "hat per Fusion einen legendären Christian erschaffen!",
    "m": "zLZ2EnPtxQ4xS2pn"
-  },
-  {
-   "at": 1791742045286,
-   "nickname": "Adolf",
-   "kind": "fusion",
-   "text": "hat per Fusion einen epischen Christian erschaffen!",
-   "m": "lKei0Gz238Xr05RU"
-  },
-  {
-   "at": 1791741700103,
-   "nickname": "Adolf",
-   "kind": "quest",
-   "text": "hat die Haunebu-Quest „Nie wieder duschen“ geschafft!",
-   "m": "W5MvyJUkwehRJYHh"
   }
  ]
 }
