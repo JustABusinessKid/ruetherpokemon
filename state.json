@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1794337552,
+ "lastMsgTime": 1794339380,
  "players": {
   "C-w_CUaEP-FRT271jxj2J9Fpmi7nZRiJBkW7o1pXg3I": {
    "nickname": "Adolf",
@@ -21,18 +21,18 @@
   "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
    "nickname": "BTC",
    "avatar": "christian",
-   "sats": 83126,
+   "sats": 83146,
    "dex": 20,
    "trophies": 72,
    "mastered": 5,
    "level": 32,
-   "xp": 1270,
+   "xp": 1310,
    "leader": {
     "id": "christian",
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1794337551452
+   "t": 1794339292674
   },
   "99CVQ1hInLLkgU9JuMNb6_a9_NtrRJ2ts_MMU0DEh2o": {
    "nickname": "Hagen",
@@ -112,6 +112,20 @@
   }
  },
  "events": [
+  {
+   "at": 1794339378932,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Ramona Rüther erschaffen!",
+   "m": "-Ysd1SHzNih956Gy"
+  },
+  {
+   "at": 1794339377264,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Ramona Rüther erschaffen!",
+   "m": "0Hr1rK2jI7lKyXP2"
+  },
   {
    "at": 1794316545655,
    "nickname": "BTC",
@@ -447,20 +461,6 @@
    "kind": "fusion",
    "text": "hat per Fusion einen epischen Viktor erschaffen!",
    "m": "mAhawTJlD7MmJCAE"
-  },
-  {
-   "at": 1791742068493,
-   "nickname": "Adolf",
-   "kind": "fusion",
-   "text": "hat per Fusion einen legendären Viktor erschaffen!",
-   "m": "OnZuuwRdUL5jgl2p"
-  },
-  {
-   "at": 1791742047663,
-   "nickname": "Adolf",
-   "kind": "fusion",
-   "text": "hat per Fusion einen legendären Christian erschaffen!",
-   "m": "zLZ2EnPtxQ4xS2pn"
   }
  ]
 }
