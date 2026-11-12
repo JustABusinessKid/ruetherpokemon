@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1794462140,
+ "lastMsgTime": 1794515009,
  "players": {
   "C-w_CUaEP-FRT271jxj2J9Fpmi7nZRiJBkW7o1pXg3I": {
    "nickname": "Adolf",
@@ -21,18 +21,18 @@
   "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
    "nickname": "BTC",
    "avatar": "christian",
-   "sats": 83986,
+   "sats": 83996,
    "dex": 20,
    "trophies": 72,
    "mastered": 5,
    "level": 32,
-   "xp": 1890,
+   "xp": 1910,
    "leader": {
     "id": "christian",
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1794462139371
+   "t": 1794515007587
   },
   "99CVQ1hInLLkgU9JuMNb6_a9_NtrRJ2ts_MMU0DEh2o": {
    "nickname": "Hagen",
