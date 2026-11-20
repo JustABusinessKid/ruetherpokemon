@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1795120322,
+ "lastMsgTime": 1795175430,
  "players": {
   "C-w_CUaEP-FRT271jxj2J9Fpmi7nZRiJBkW7o1pXg3I": {
    "nickname": "Adolf",
@@ -21,7 +21,7 @@
   "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
    "nickname": "BTC",
    "avatar": "christian",
-   "sats": 92516,
+   "sats": 92716,
    "dex": 20,
    "trophies": 75,
    "mastered": 5,
@@ -32,7 +32,7 @@
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1795120320714
+   "t": 1795175364450
   },
   "99CVQ1hInLLkgU9JuMNb6_a9_NtrRJ2ts_MMU0DEh2o": {
    "nickname": "Hagen",
@@ -112,6 +112,20 @@
   }
  },
  "events": [
+  {
+   "at": 1795175428282,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Christian erschaffen!",
+   "m": "0QulmQavnts_iApR"
+  },
+  {
+   "at": 1795175423258,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Christian erschaffen!",
+   "m": "sWYouqiKppesJB6k"
+  },
   {
    "at": 1795017706694,
    "nickname": "BTC",
@@ -447,20 +461,6 @@
    "kind": "arena",
    "text": "hat Hüttenbergstraße erobert (Lv. 5) und BTC rausgeworfen.",
    "m": "YgcdCo-Myk_lh7Jz"
-  },
-  {
-   "at": 1791742569179,
-   "nickname": "Adolf",
-   "kind": "achievement",
-   "text": "hat Hüttenbergstraße gemeistert!",
-   "m": "8bCM3ZTQRMnp45K7"
-  },
-  {
-   "at": 1791742487951,
-   "nickname": "Adolf",
-   "kind": "quest",
-   "text": "hat die Haunebu-Quest „Feuer im Bruch“ geschafft!",
-   "m": "yMkDcDw-BZR6DGNr"
   }
  ]
 }
