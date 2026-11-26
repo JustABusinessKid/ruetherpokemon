@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1795671277,
+ "lastMsgTime": 1795725580,
  "players": {
   "C-w_CUaEP-FRT271jxj2J9Fpmi7nZRiJBkW7o1pXg3I": {
    "nickname": "Adolf",
@@ -21,18 +21,18 @@
   "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
    "nickname": "BTC",
    "avatar": "christian",
-   "sats": 105076,
+   "sats": 105526,
    "dex": 20,
    "trophies": 79,
    "mastered": 5,
    "level": 34,
-   "xp": 690,
+   "xp": 1210,
    "leader": {
     "id": "hildegard",
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1795671277487
+   "t": 1795725579776
   },
   "99CVQ1hInLLkgU9JuMNb6_a9_NtrRJ2ts_MMU0DEh2o": {
    "nickname": "Hagen",
@@ -112,6 +112,27 @@
   }
  },
  "events": [
+  {
+   "at": 1795725525624,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Viktor erschaffen!",
+   "m": "OEEYNT_TQf6EhcU-"
+  },
+  {
+   "at": 1795725519071,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Christian erschaffen!",
+   "m": "c5Ws1G7dW5sAkl7n"
+  },
+  {
+   "at": 1795725517480,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Christian erschaffen!",
+   "m": "gRZmn2nmg_5kv20h"
+  },
   {
    "at": 1795175440798,
    "nickname": "BTC",
@@ -440,27 +461,6 @@
    "kind": "fusion",
    "text": "hat per Fusion einen epischen Viktor erschaffen!",
    "m": "nZkSdMBLCli1wsAT"
-  },
-  {
-   "at": 1792151708858,
-   "nickname": "BTC",
-   "kind": "fusion",
-   "text": "hat per Fusion einen epischen Christian erschaffen!",
-   "m": "1Jsf-Y-wd9WU5yLz"
-  },
-  {
-   "at": 1792151702936,
-   "nickname": "BTC",
-   "kind": "fusion",
-   "text": "hat per Fusion einen legendären Christian erschaffen!",
-   "m": "_zj0ZbMZLT1tmsCE"
-  },
-  {
-   "at": 1791921155932,
-   "nickname": "BTC",
-   "kind": "fusion",
-   "text": "hat per Fusion einen epischen Christian erschaffen!",
-   "m": "4REwQ7aaYLaA7yGQ"
   }
  ]
 }
