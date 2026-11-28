@@ -1,6 +1,6 @@
 {
  "v": 1,
- "lastMsgTime": 1795856668,
+ "lastMsgTime": 1795883481,
  "players": {
   "C-w_CUaEP-FRT271jxj2J9Fpmi7nZRiJBkW7o1pXg3I": {
    "nickname": "Adolf",
@@ -21,18 +21,18 @@
   "EEncJMJWY39dk2CYwQT_T-oEQwxYGuaNzPmndgaIb5k": {
    "nickname": "BTC",
    "avatar": "christian",
-   "sats": 108496,
+   "sats": 108796,
    "dex": 20,
    "trophies": 81,
    "mastered": 5,
    "level": 34,
-   "xp": 2780,
+   "xp": 3290,
    "leader": {
     "id": "hildegard",
     "rarity": "legendaer",
     "level": 20
    },
-   "t": 1795856667226
+   "t": 1795883480218
   },
   "99CVQ1hInLLkgU9JuMNb6_a9_NtrRJ2ts_MMU0DEh2o": {
    "nickname": "Hagen",
@@ -112,6 +112,20 @@
   }
  },
  "events": [
+  {
+   "at": 1795883459342,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen legendären Viktor erschaffen!",
+   "m": "77mMCqyKDdwoH4at"
+  },
+  {
+   "at": 1795883457769,
+   "nickname": "BTC",
+   "kind": "fusion",
+   "text": "hat per Fusion einen epischen Viktor erschaffen!",
+   "m": "gY8UgrAzBFJMZ7rS"
+  },
   {
    "at": 1795725525624,
    "nickname": "BTC",
@@ -447,20 +461,6 @@
    "kind": "achievement",
    "text": "hat PC Sale gemeistert!",
    "m": "rPxYbT3rDmQ5co5U"
-  },
-  {
-   "at": 1792151716743,
-   "nickname": "BTC",
-   "kind": "fusion",
-   "text": "hat per Fusion einen legendären Viktor erschaffen!",
-   "m": "f22xyCpArYC-2TWH"
-  },
-  {
-   "at": 1792151715058,
-   "nickname": "BTC",
-   "kind": "fusion",
-   "text": "hat per Fusion einen epischen Viktor erschaffen!",
-   "m": "nZkSdMBLCli1wsAT"
   }
  ]
 }
